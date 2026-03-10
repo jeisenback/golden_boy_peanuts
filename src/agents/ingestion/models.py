@@ -3,15 +3,16 @@ Pydantic models for the Ingestion Agent data boundary (ESOD Section 6).
 All external feed data must be validated through these models before
 any downstream processing.
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class InstrumentType(str, Enum):
+class InstrumentType(StrEnum):
     """Supported instrument types (PRD Section 3.1)."""
 
     CRUDE_FUTURES = "crude_futures"
@@ -20,7 +21,7 @@ class InstrumentType(str, Enum):
     OPTIONS_CHAIN = "options_chain"
 
 
-class OptionStructure(str, Enum):
+class OptionStructure(StrEnum):
     """Supported option structures for the MVP (PRD Section 3.2)."""
 
     LONG_STRADDLE = "long_straddle"

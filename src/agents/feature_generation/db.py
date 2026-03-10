@@ -2,6 +2,7 @@
 Database read/write for the Feature Generation Agent.
 PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 """
+
 from __future__ import annotations
 
 import logging
