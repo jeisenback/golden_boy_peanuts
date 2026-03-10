@@ -14,6 +14,7 @@ ESOD constraints: Python 3.11+, type hints on all public functions,
 no langchain.*/langgraph.* imports, tenacity on all external API calls,
 DATABASE_URL from environment.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,7 +26,7 @@ from src.agents.ingestion.models import MarketState, RawPriceRecord
 
 logging.basicConfig(
     format='{"time": "%(asctime)s", "level": "%(levelname)s", '
-           '"logger": "%(name)s", "message": "%(message)s"}',
+    '"logger": "%(name)s", "message": "%(message)s"}',
     level=os.environ.get("LOG_LEVEL", "INFO"),
 )
 logger = logging.getLogger(__name__)

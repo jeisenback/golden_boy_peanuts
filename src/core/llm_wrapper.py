@@ -12,6 +12,7 @@ Usage:
     response = wrapper.complete(prompt="Summarize this market data...")
     print(response.content)
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

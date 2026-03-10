@@ -6,6 +6,7 @@ Coverage goal (expand per GitHub Issue):
   - StrategyCandidate fields match PRD Section 9 schema exactly
   - compute_edge_score: returns float in [0.0, 1.0]
 """
+
 from datetime import UTC, datetime
 
 import pytest

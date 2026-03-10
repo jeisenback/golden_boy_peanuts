@@ -11,6 +11,7 @@ Responsibilities (Design Doc Section 4, PRD Section 4.2):
 ESOD constraints: Python 3.11+, type hints on all public functions,
 no langchain.*/langgraph.* imports, tenacity on all external API calls.
 """
+
 from __future__ import annotations
 
 import logging

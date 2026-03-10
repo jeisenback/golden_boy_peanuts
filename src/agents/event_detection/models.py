@@ -1,6 +1,7 @@
 """
 Pydantic models for the Event Detection Agent data boundary (ESOD Section 6).
 """
+
 from __future__ import annotations
 
 from datetime import datetime

@@ -7,6 +7,7 @@ Coverage goal (expand per GitHub Issue):
   - compute_volatility_gap: returns VolatilityGap with correct gap calculation
   - Partial signal failure populates feature_errors, does not raise
 """
+
 from datetime import UTC, datetime
 
 import pytest

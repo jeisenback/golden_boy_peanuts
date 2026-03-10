@@ -3,6 +3,7 @@ Pydantic models for the Ingestion Agent data boundary (ESOD Section 6).
 All external feed data must be validated through these models before
 any downstream processing.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

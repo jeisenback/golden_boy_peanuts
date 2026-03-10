@@ -4,6 +4,7 @@ Pydantic models for the Strategy Evaluation Agent.
 StrategyCandidate fields match PRD Section 9 output schema exactly:
   instrument, structure, expiration, edge_score, signals, generated_at
 """
+
 from __future__ import annotations
 
 from datetime import datetime
