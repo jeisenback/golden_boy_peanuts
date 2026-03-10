@@ -14,6 +14,7 @@ ESOD constraints: Python 3.11+, type hints on all public functions,
 no langchain.*/langgraph.* imports, static scoring rules only in Phase 1
 (ML-based weighting deferred per ESOD Section 8).
 """
+
 from __future__ import annotations
 
 import logging

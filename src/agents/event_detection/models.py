@@ -1,15 +1,16 @@
 """
 Pydantic models for the Event Detection Agent data boundary (ESOD Section 6).
 """
+
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     """Categories of energy market events."""
 
     SUPPLY_DISRUPTION = "supply_disruption"
@@ -20,7 +21,7 @@ class EventType(str, Enum):
     UNKNOWN = "unknown"
 
 
-class EventIntensity(str, Enum):
+class EventIntensity(StrEnum):
     """Intensity level assigned to a detected event."""
 
     LOW = "low"

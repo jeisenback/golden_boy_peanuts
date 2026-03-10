@@ -11,6 +11,7 @@ Responsibilities (Design Doc Section 4, PRD Section 4.2):
 ESOD constraints: Python 3.11+, type hints on all public functions,
 no langchain.*/langgraph.* imports, tenacity on all external API calls.
 """
+
 from __future__ import annotations
 
 import logging
@@ -18,7 +19,6 @@ import os
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from src.agents.event_detection.db import get_engine, write_detected_events
 from src.agents.event_detection.models import DetectedEvent
 
 logger = logging.getLogger(__name__)
