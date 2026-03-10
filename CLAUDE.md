@@ -28,6 +28,7 @@ Phases: Phase 1 (core signals) → Phase 2 (supply/event) → Phase 3 (alternati
 3. Read SESSION.md         → if it exists from a prior session, absorb its context
 4. git status              → confirm branch, confirm clean state
 5. pytest -m "not integration"  → must pass before writing any code
+6. Read docs/energy_options_adlc.md → identify task type (§4), select prompt template (§5), confirm DoD (§6)
 ```
 
 If `SESSION.md` does not exist: `cp SESSION.md.template SESSION.md`, then fill in Session Goal.
