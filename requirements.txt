@@ -1,0 +1,19 @@
+# requirements.txt — Runtime dependencies. Python 3.11+ required (ESOD Section 3).
+# Dev-only tools go in requirements-dev.txt.
+
+# Database
+psycopg2-binary>=2.9,<3.0
+SQLAlchemy>=2.0,<3.0
+
+# Data validation at module boundaries (ESOD Section 6)
+pydantic>=2.5,<3.0
+
+# API reliability: retry + exponential backoff (ESOD Section 6)
+tenacity>=8.2,<9.0
+
+# Environment / secrets management (ESOD Section 3)
+python-dotenv>=1.0,<2.0
+
+# Market data feeds
+requests>=2.31,<3.0
+yfinance>=0.2,<1.0

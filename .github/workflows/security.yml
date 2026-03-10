@@ -1,0 +1,53 @@
+name: Security Scan
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  bandit:
+    name: Bandit Source Code Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install "bandit>=1.7,<2.0"
+      # -ll: report MEDIUM and HIGH only; -r src/: scan production code only
+      - run: bandit -r src/ -ll -f json -o bandit-report.json || true
+      - name: Fail on HIGH severity findings
+        run: |
+          python -c "
+          import json, sys
+          with open('bandit-report.json') as f:
+              report = json.load(f)
+          high = [r for r in report.get('results', []) if r.get('issue_severity') == 'HIGH']
+          if high:
+              print(f'FAIL: {len(high)} HIGH severity finding(s):')
+              for r in high:
+                  print(f'  {r[\"filename\"]}:{r[\"line_number\"]} -- {r[\"issue_text\"]}')
+              sys.exit(1)
+          print('Bandit: No HIGH severity findings.')
+          "
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  pip-audit:
+    name: pip-audit Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install "pip-audit>=2.6,<3.0"
+      - run: pip install -r requirements.txt
+      # Audit runtime dependencies only; --desc includes vulnerability descriptions
+      - run: pip-audit -r requirements.txt --desc

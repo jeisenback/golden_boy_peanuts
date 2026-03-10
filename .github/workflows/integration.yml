@@ -1,0 +1,22 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+jobs:
+  integration-tests:
+    name: Integration Tests (Postgres via testcontainers)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - run: pip install -r requirements-dev.txt
+      # Tests manage their own Postgres container via testcontainers.
+      # DATABASE_URL is not needed here — each test spins up its own container.
+      - run: pytest tests/ -m integration --tb=short -v
