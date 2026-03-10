@@ -22,13 +22,9 @@ import os
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.agents.ingestion.db import get_engine, write_option_records, write_price_records
-from src.agents.ingestion.models import MarketState, RawPriceRecord
+from src.agents.ingestion.models import MarketState, OptionRecord, RawPriceRecord
 
-logging.basicConfig(
-    format='{"time": "%(asctime)s", "level": "%(levelname)s", '
-           '"logger": "%(name)s", "message": "%(message)s"}',
-    level=os.environ.get("LOG_LEVEL", "INFO"),
-)
+# Do NOT call logging.basicConfig() here — configuration belongs in the entry point.
 logger = logging.getLogger(__name__)
 
 
@@ -86,6 +82,36 @@ def fetch_etf_equity_prices() -> list[RawPriceRecord]:
     )
 
 
+@retry(
+    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
+    wait=wait_exponential(
+        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
+        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
+    ),
+    reraise=True,
+)
+def fetch_options_chain() -> list[OptionRecord]:
+    """
+    Fetch options chain data for USO, XLE, XOM, CVX from Yahoo Finance / Polygon.io.
+
+    Retries with exponential backoff (ESOD Section 6).
+    On persistent failure, re-raises — caller implements degraded-mode behavior.
+
+    Returns:
+        Validated OptionRecord objects for all configured instruments.
+
+    Raises:
+        NotImplementedError: Until implemented.
+    """
+    raise NotImplementedError(
+        "fetch_options_chain not yet implemented. "
+        "TODO: Fetch options chain for USO, XLE, XOM, CVX. "
+        "Sources: Yahoo Finance (yfinance) or Polygon.io. "
+        "Validate each record with OptionRecord before returning. "
+        "Results are written to DB via write_option_records."
+    )
+
+
 def run_ingestion() -> MarketState:
     """
     Execute one full ingestion cycle.
@@ -108,5 +134,6 @@ def run_ingestion() -> MarketState:
         "run_ingestion not yet implemented. "
         "TODO: Orchestrate fetch_crude_prices, fetch_etf_equity_prices, "
         "fetch_options_chain. Catch individual feed failures and continue. "
-        "Build MarketState. Persist to DB via write_price_records."
+        "Build MarketState. Persist to DB via write_price_records and "
+        "write_option_records."
     )
