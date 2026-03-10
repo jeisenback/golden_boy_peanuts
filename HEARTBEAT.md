@@ -24,24 +24,41 @@
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 1 | Initialize GitHub repository: labels, milestones, branch protection | Not Started | — | HUMAN task — must close first; gates all branch work |
-| 2 | Docker Compose for Postgres, venv, .env setup | Not Started | — | After #1 |
-| 26 | Fix ingestion_agent.py: fetch_options_chain stub, orphaned import, logging | Not Started | — | After #1 |
-| 27 | Add src/pipeline.py stub with run_pipeline() call sequence | Not Started | — | After #1 |
-| 28 | Specify event_id generation in classify_event() docstring | Not Started | — | HUMAN decides strategy first, then agent |
-| 29 | Add tests/conftest.py with shared Pydantic model fixtures | Not Started | — | After #1 |
-| 30 | Add pytest to local_check.sh quality gate | Not Started | — | After #1 |
-| 31 | Make post_session.sh active — invoke local_check.sh + git diff --stat | Not Started | — | After #1 |
-| 32 | Add ADLC startup step to CLAUDE.md session startup sequence | Not Started | — | After #1 |
-| 33 | Document non-interactive branch creation fallback in CLAUDE.md | Not Started | — | After #1 |
+| 1 | Initialize GitHub repository: labels, milestones, branch protection | Not Started | — | HUMAN task — must close first; gates all PR merges |
+| 2 | Docker Compose for Postgres, venv, .env setup | In Review | `chore/2-docker-compose` | Ready for PR |
+| 26 | Fix ingestion_agent.py: fetch_options_chain stub, orphaned import, logging | In Review | `fix/26-ingestion-scaffold` | Ready for PR |
+| 27 | Add src/pipeline.py stub with run_pipeline() call sequence | In Review | `chore/27-pipeline-stub` | Ready for PR |
+| 28 | Specify event_id generation in classify_event() docstring | Not Started | — | HUMAN decides strategy first — deterministic hash vs uuid4() |
+| 29 | Add tests/conftest.py with shared Pydantic model fixtures | In Review | `test/29-conftest-fixtures` | Ready for PR |
+| 30 | Add pytest to local_check.sh quality gate | In Review | `chore/30-pytest-local-check` | Ready for PR |
+| 31 | Make post_session.sh active — invoke local_check.sh + git diff --stat | In Review | `chore/31-post-session-active` | Ready for PR |
+| 32 | Add ADLC startup step to CLAUDE.md session startup sequence | In Review | `docs/32-adlc-startup-step` | Ready for PR |
+| 33 | Document non-interactive branch creation fallback in CLAUDE.md | In Review | `docs/33-noninteractive-branch` | Ready for PR |
 
 ## Current Active Branch
 
-`develop` — no active feature branch yet; create branches per issue via `bash scripts/new_branch.sh`
+All 8 agent-doable Sprint 1 branches committed. On `develop` between sessions.
+Open PRs (human action required) after #1 (branch protection) is configured.
 
 ## Blockers
 
-- None
+- **#1 (branch protection):** Human must configure GitHub repo settings (develop + main branch protection) before any Sprint 1 PR can merge. All 8 agent PRs are ready and waiting.
+- **#28 (event_id strategy):** Human decision required — deterministic hash (SHA256 prefix of headline+source+timestamp[:8]) vs uuid4(). Deterministic = idempotent re-runs; uuid4 = simpler, requires DB-level dedup.
+
+## Sprint Notes (2026-03-10)
+
+All 8 agent-doable issues committed on separate branches in a single session:
+
+- `#30` — pytest added as Stage 5 in local_check.sh
+- `#31` — post_session.sh now active: executes git diff, import scan, local_check before checklist. Exits non-zero on failure.
+- `#32` — ADLC step 6 added to CLAUDE.md Session Startup (read ADLC before coding)
+- `#33` — Non-interactive branch creation fallback documented in CLAUDE.md Git Rules
+- `#29` — tests/conftest.py added with 8 pytest fixtures across all 4 boundary models
+- `#26` — ingestion_agent.py fixed: fetch_options_chain() stub added, module-level basicConfig() removed, OptionRecord import added
+- `#27` — src/pipeline.py stub added documenting 4-agent call sequence; Phase 1 events=[] documented explicitly
+- `#2`  — docker-compose.yml added (timescale/timescaledb:latest-pg16, port 5432, named volume, health check); README Quickstart updated
+
+Key architecture observation documented: `run_event_detection()` takes no arguments (fetches own data from DB). This means Event Detection and Ingestion are currently decoupled at the function boundary — Phase 2 may need to revisit this.
 
 ## Last Merged PR
 
