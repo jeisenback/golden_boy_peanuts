@@ -13,22 +13,31 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 0 |
-| Sprint Name | Sprint 0 — Project Scaffolding |
-| Goal | All foundational scaffolding committed; ready to begin Sprint 1 planning |
-| Start Date | 2026-03-09 |
-| Target Close | 2026-03-16 |
-| Status | PLANNING — run `bash scripts/sprint_start.sh` to begin Sprint 1 |
+| Sprint Number | 1 |
+| Sprint Name | Sprint 1 — Repo & Agent Readiness |
+| Goal | GitHub repo protected; agents can work reliably on scaffold; tooling gates enforced; Docker running |
+| Start Date | 2026-03-10 |
+| Target Close | 2026-03-17 |
+| Status | ACTIVE |
 
 ## Sprint Issues
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| — | No sprint issues scheduled yet | — | — | Run sprint_start.sh to populate |
+| 1 | Initialize GitHub repository: labels, milestones, branch protection | Not Started | — | HUMAN task — must close first; gates all branch work |
+| 2 | Docker Compose for Postgres, venv, .env setup | Not Started | — | After #1 |
+| 26 | Fix ingestion_agent.py: fetch_options_chain stub, orphaned import, logging | Not Started | — | After #1 |
+| 27 | Add src/pipeline.py stub with run_pipeline() call sequence | Not Started | — | After #1 |
+| 28 | Specify event_id generation in classify_event() docstring | Not Started | — | HUMAN decides strategy first, then agent |
+| 29 | Add tests/conftest.py with shared Pydantic model fixtures | Not Started | — | After #1 |
+| 30 | Add pytest to local_check.sh quality gate | Not Started | — | After #1 |
+| 31 | Make post_session.sh active — invoke local_check.sh + git diff --stat | Not Started | — | After #1 |
+| 32 | Add ADLC startup step to CLAUDE.md session startup sequence | Not Started | — | After #1 |
+| 33 | Document non-interactive branch creation fallback in CLAUDE.md | Not Started | — | After #1 |
 
 ## Current Active Branch
 
-`develop` — no active feature branch; Sprint 0 scaffolding in progress
+`develop` — no active feature branch yet; create branches per issue via `bash scripts/new_branch.sh`
 
 ## Blockers
 
@@ -36,9 +45,10 @@
 
 ## Last Merged PR
 
-- None yet (scaffold committed directly to main/develop)
+- None yet this sprint
 
 ---
+
 
 ## Sprint 0 Retro Notes
 
