@@ -108,7 +108,8 @@ def fetch_options_chain() -> list[OptionRecord]:
         "TODO: Fetch options chain for USO, XLE, XOM, CVX. "
         "Sources: Yahoo Finance (yfinance) or Polygon.io. "
         "Validate each record with OptionRecord before returning. "
-        "Results are written to DB via write_option_records."
+        "Results are written to DB via write_option_records. "
+        "See .env.example for POLYGON_API_KEY."
     )
 
 
@@ -134,6 +135,7 @@ def run_ingestion() -> MarketState:
         "run_ingestion not yet implemented. "
         "TODO: Orchestrate fetch_crude_prices, fetch_etf_equity_prices, "
         "fetch_options_chain. Catch individual feed failures and continue. "
-        "Build MarketState. Persist to DB via write_price_records and "
-        "write_option_records."
+        "Build MarketState. Persist to DB via "
+        "src.agents.ingestion.db.write_price_records and "
+        "src.agents.ingestion.db.write_option_records."
     )
