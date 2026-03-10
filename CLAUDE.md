@@ -97,12 +97,21 @@ Full reference: `docs/git_workflow.md`
 |------|-------|
 | Branch base | Always from `develop` — never from `main` |
 | Branch format | `<type>/<issue>-<slug>` (e.g. `feature/8-fetch-crude-prices`) |
-| Create branch | `bash scripts/new_branch.sh` |
+| Create branch | `bash scripts/new_branch.sh` (interactive — see note below) |
 | Commit format | `<type>(<scope>): <description> (#<issue>)` |
 | Issue ref required | Yes — every commit, no exceptions |
 | Pre-PR gate | `bash scripts/local_check.sh` must exit 0 |
 | Merge to develop | Squash and Merge |
 | Merge to main | Merge Commit (human only) |
+
+> **Non-interactive branch creation (agent / CI context):**
+> `scripts/new_branch.sh` prompts for input and will hang in a non-interactive
+> shell. When running as an agent (Claude Code, Cursor, CI), create the branch
+> directly:
+> ```
+> git checkout -b <type>/<issue>-<slug> develop
+> ```
+> Example: `git checkout -b feature/8-fetch-crude-prices develop`
 
 ---
 
@@ -114,7 +123,7 @@ Full reference: `docs/sprint_framework.md`
 - **To pick up an issue:**
   1. Verify the issue is in the "Sprint Issues" table in HEARTBEAT.md with Status = Not Started or In Progress
   2. Verify issue meets Definition of Ready: `bash scripts/refine_issue.sh <N>`
-  3. Create branch: `bash scripts/new_branch.sh`
+  3. Create branch: `bash scripts/new_branch.sh` (or `git checkout -b <type>/<issue>-<slug> develop` if running non-interactively)
   4. Update HEARTBEAT issue table row: Status → "In Progress", Branch → your branch name
   5. Open (or update) `SESSION.md` with the issue goal
 - **To refine a backlog issue:** `bash scripts/refine_issue.sh <N>` (pre-sprint only)
