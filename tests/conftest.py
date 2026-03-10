@@ -15,7 +15,7 @@ to compose their own parent models.
 All datetime values use timezone-aware UTC timestamps.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -41,8 +41,8 @@ from src.agents.strategy_evaluation.models import StrategyCandidate
 # Shared timestamp
 # ---------------------------------------------------------------------------
 
-_TS = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
-_TS_EXP = datetime(2026, 4, 17, 0, 0, 0, tzinfo=timezone.utc)  # ~90 days out
+_TS = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+_TS_EXP = datetime(2026, 4, 17, 0, 0, 0, tzinfo=UTC)  # ~90 days out
 
 
 # ---------------------------------------------------------------------------
