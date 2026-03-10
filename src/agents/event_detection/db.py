@@ -2,6 +2,7 @@
 Database read/write for the Event Detection Agent.
 PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 """
+
 from __future__ import annotations
 
 import logging

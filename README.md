@@ -34,6 +34,7 @@ scripts/
 src/
   core/
     llm_wrapper.py      # Provider-agnostic LLM interface (ESOD 5.3 — use this, not SDKs)
+  pipeline.py           # Entry point: wires all four agents into one run_pipeline() call
   agents/
     ingestion/          # Fetch + normalize prices, options chains → MarketState
     event_detection/    # News/geo feeds → DetectedEvent list
@@ -42,8 +43,10 @@ src/
 
 tests/
   agents/<name>/        # Unit tests (xfail stubs) and integration tests per agent
+  conftest.py           # Shared pytest fixtures for all four boundary models
 
 .env.example            # All required environment variables
+docker-compose.yml      # Local development database (TimescaleDB on port 5432)
 requirements.txt        # Runtime dependencies
 requirements-dev.txt    # Dev/CI dependencies
 pyproject.toml          # ruff, black, mypy, pytest configuration
@@ -59,16 +62,20 @@ pip install -r requirements-dev.txt
 
 # 2. Copy and configure environment
 cp .env.example .env
-# Edit .env — set DATABASE_URL and any API keys you have
+# Edit .env — set API keys. DATABASE_URL default matches docker-compose.yml.
 
-# 3. Verify no banned imports exist in src/
+# 3. Start the local database (TimescaleDB on port 5432)
+docker compose up -d
+# Wait for "healthy" status: docker compose ps
+
+# 4. Verify no banned imports exist in src/
 python .github/scripts/check_runtime_imports.py
 
-# 4. Run the test suite
+# 5. Run the test suite
 pytest tests/ -m "not integration" -v
 # Expected: all tests XFAIL until agents are implemented
 
-# 5. Run integration tests (requires Docker for testcontainers)
+# 6. Run integration tests (requires Docker — uses testcontainers, not docker-compose)
 pytest tests/ -m integration -v
 ```
 

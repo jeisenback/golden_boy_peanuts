@@ -1,0 +1,90 @@
+# SESSION.md — [YYYY-MM-DD] — [Tool: Claude Code / Cursor / Copilot]
+# -----------------------------------------------------------------------
+# EPHEMERAL. This file is GITIGNORED. It is your local session scratchpad.
+# DO NOT commit SESSION.md. DO NOT push SESSION.md.
+# At session end: promote Key Decisions to HEARTBEAT.md, then discard/reset.
+# -----------------------------------------------------------------------
+#
+# To create a session file:
+#   cp SESSION.md.template SESSION.md
+# Then fill in the sections below.
+# -----------------------------------------------------------------------
+
+## Session Goal
+
+- **Working issue(s):** #[number] — [title]
+- **Sprint:** Sprint [N] — [sprint name from HEARTBEAT.md]
+- **Expected output:** [one sentence: what "done" looks like at the end of THIS session]
+- **Active branch:** [branch name — or "creating new via new_branch.sh"]
+
+---
+
+## Before-You-Start Checklist
+
+- [ ] Read `HEARTBEAT.md` — verified current sprint, active branch, and any blockers
+- [ ] Ran `gh issue view [N]` — read all acceptance criteria
+- [ ] Confirmed branch exists and is clean (`git status`), or created via `bash scripts/new_branch.sh`
+- [ ] Ran `pytest tests/ -m "not integration"` — all passing before this session started
+- [ ] Identified which ADLC prompt template applies (`docs/prompts/`)
+
+---
+
+## Decisions Made This Session
+
+<!-- Rules:
+  - "Escalated? = No" means: Claude decided per Decision Authority in CLAUDE.md
+  - "Escalated? = Yes" means: human was consulted; record their answer here
+  - If unsure whether to escalate, see CLAUDE.md § Decision Authority table -->
+
+| Decision | Rationale | Escalated to Human? |
+|----------|-----------|---------------------|
+| _example: chose class-based approach for X_ | _fits existing pattern in module Y_ | No |
+
+---
+
+## Completed This Session
+
+- [ ] [specific deliverable 1 — file path + function/class name]
+- [ ] [specific deliverable 2]
+
+---
+
+## In Progress (uncommitted or incomplete)
+
+<!-- Describe the exact state of any work that did not reach a clean commit.
+     Be specific enough that a different agent instance can pick up where you left off. -->
+
+- **File:** [path] — [what's done vs. what's left to implement]
+
+---
+
+## Open Questions / Blockers
+
+<!-- Things that require human input before the next session can proceed.
+     If blocked: update HEARTBEAT.md blockers section before closing this session. -->
+
+- **Question:** [what you need to know]
+- **Blocker:** [dependency, missing data, or unclear requirement in the issue]
+
+---
+
+## Handoff Notes
+
+<!-- Write as if handing to a completely different agent instance with no memory of this session. -->
+
+- **Current branch:** [branch name]
+- **Last commit:** [commit message]
+- **What's done:** [summary]
+- **What's next:** [concrete next step — specific function or file]
+- **Watch out for:** [gotchas, edge cases, or architectural constraints discovered this session]
+- **Files changed:** [list each modified file]
+
+---
+
+## Key Decisions to Promote to HEARTBEAT.md
+
+<!-- At session end: copy these into HEARTBEAT.md sprint notes.
+     Then commit: `git commit -m "chore: update HEARTBEAT after session [YYYY-MM-DD] (#issue)"` -->
+
+- [decision / discovery 1]
+- [decision / discovery 2]

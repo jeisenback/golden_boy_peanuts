@@ -2,13 +2,13 @@
 # local_check.sh
 #
 # Runs the full local quality gate before pushing a branch.
-# Mirrors the CI pipeline stages: ruff, black, mypy, runtime import scan.
+# Mirrors the CI pipeline stages: ruff, black, mypy, runtime import scan, pytest.
 #
 # Exits 0 only if ALL stages pass.
 # Exits 1 if any stage fails (with a clear summary).
 #
 # Usage: bash scripts/local_check.sh
-# Requirements: ruff, black, mypy, python >= 3.11 — all in active venv
+# Requirements: ruff, black, mypy, pytest, python >= 3.11 — all in active venv
 
 set -uo pipefail
 
@@ -41,6 +41,9 @@ run_stage "mypy (strict)" mypy src/
 
 # Stage 4: runtime import scan (the ESOD architectural rule enforcer)
 run_stage "runtime import scan" python .github/scripts/check_runtime_imports.py
+
+# Stage 5: unit tests (integration tests require Docker; run separately)
+run_stage "Unit tests" pytest -m "not integration" -q
 
 # --- Summary ---
 echo ""
