@@ -6,6 +6,7 @@ Coverage goal (expand per GitHub Issue):
   - classify_event: correct EventType and intensity for known headlines
   - fetch_news_events: retry behavior on API failure
 """
+
 import pytest
 
 from src.agents.event_detection.event_detection_agent import run_event_detection

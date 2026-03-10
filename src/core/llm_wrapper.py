@@ -12,11 +12,12 @@ Usage:
     response = wrapper.complete(prompt="Summarize this market data...")
     print(response.content)
 """
+
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 import logging
 import os
-from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -63,7 +64,7 @@ class LLMWrapper:
         self.model_id = model_id
         self.provider = os.environ.get("LLM_PROVIDER", "anthropic").lower()
 
-    def complete(self, prompt: str, **kwargs: Any) -> LLMResponse:
+    def complete(self, prompt: str, **kwargs: object) -> LLMResponse:
         """
         Send a prompt to the configured LLM provider and return a normalized response.
 
