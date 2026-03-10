@@ -5,6 +5,7 @@ PostgreSQL via SQLAlchemy. Schema is TimescaleDB-compatible (ESOD Section 4.3):
 all time-series tables use a 'timestamp' column for future hypertable partitioning.
 DATABASE_URL read exclusively from environment variable.
 """
+
 from __future__ import annotations
 
 import logging
@@ -70,8 +71,7 @@ def write_option_records(records: list[OptionRecord], engine: Engine) -> int:
         NotImplementedError: Until implemented.
     """
     raise NotImplementedError(
-        "write_option_records not yet implemented. "
-        "TODO: Batch INSERT into options_chain table."
+        "write_option_records not yet implemented. " "TODO: Batch INSERT into options_chain table."
     )
 
 

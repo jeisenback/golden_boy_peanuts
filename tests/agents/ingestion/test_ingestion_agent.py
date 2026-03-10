@@ -9,6 +9,7 @@ Coverage goal (expand per GitHub Issue):
   - fetch_etf_equity_prices: retry behavior, Pydantic validation
   - run_ingestion: partial feed failure returns partial MarketState cleanly
 """
+
 import pytest
 
 from src.agents.ingestion.ingestion_agent import run_ingestion
