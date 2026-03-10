@@ -43,7 +43,7 @@ run_stage "mypy (strict)" mypy src/
 run_stage "runtime import scan" python .github/scripts/check_runtime_imports.py
 
 # Stage 5: unit tests (integration tests require Docker; run separately)
-run_stage "unit tests" pytest -m "not integration" --tb=short -q
+run_stage "Unit tests" pytest -m "not integration" -q
 
 # --- Summary ---
 echo ""
