@@ -1,12 +1,63 @@
 #!/usr/bin/env bash
 # post_session.sh
 #
-# Prints the ADLC post-session checklist (Section 7.3).
+# Runs automated post-session quality checks, then prints the ADLC
+# post-session checklist (Section 7.3).
 # Run this immediately after every Claude Code or Cursor agent session.
+#
+# Automated steps (fail fast):
+#   1. git diff --stat HEAD       — warns on unstaged changes
+#   2. check_runtime_imports.py   — no langchain.* in src/
+#   3. scripts/local_check.sh     — ruff, black, mypy, import scan, pytest
+#
+# Exits non-zero if any automated step fails.
+# Idempotent — safe to run multiple times.
 #
 # Usage: bash scripts/post_session.sh
 
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+fail() {
+  echo ""
+  echo "  !! Post-session check failed at: $1"
+  echo "     Fix before committing."
+  echo ""
+  exit 1
+}
+
 echo ""
+echo "============================================================"
+echo "  ADLC Post-Session Checks  (automated)"
+echo "============================================================"
+echo ""
+
+# Step 1: unstaged changes warning
+echo "  [1/3] Checking for unstaged changes (git diff --stat HEAD)..."
+if ! git -C "${REPO_ROOT}" diff --stat HEAD; then
+  fail "git diff --stat HEAD"
+fi
+echo ""
+
+# Step 2: runtime import scan
+echo "  [2/3] Running runtime import scan..."
+if ! python "${REPO_ROOT}/.github/scripts/check_runtime_imports.py"; then
+  fail "check_runtime_imports.py"
+fi
+echo ""
+
+# Step 3: full local quality gate
+echo "  [3/3] Running full local quality gate (local_check.sh)..."
+if ! bash "${SCRIPT_DIR}/local_check.sh"; then
+  fail "local_check.sh"
+fi
+echo ""
+
+echo "  All automated checks passed."
+echo ""
+
 echo "============================================================"
 echo "  ADLC Post-Session Checklist  (Section 7.3)"
 echo "============================================================"
