@@ -2,6 +2,7 @@
 Database read/write for the Strategy Evaluation Agent.
 PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 """
+
 from __future__ import annotations
 
 import logging
@@ -28,9 +29,7 @@ def get_engine() -> Engine:
     return create_engine(database_url, pool_pre_ping=True)
 
 
-def write_strategy_candidates(
-    candidates: list[StrategyCandidate], engine: Engine
-) -> int:
+def write_strategy_candidates(candidates: list[StrategyCandidate], engine: Engine) -> int:
     """
     Persist ranked strategy candidates to strategy_candidates table.
 

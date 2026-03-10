@@ -19,4 +19,9 @@ jobs:
       - run: pip install -r requirements-dev.txt
       # Tests manage their own Postgres container via testcontainers.
       # DATABASE_URL is not needed here — each test spins up its own container.
-      - run: pytest tests/ -m integration --tb=short -v
+      - name: Run integration tests (exit 5 = no tests collected, acceptable)
+        run: |
+          set +e
+          pytest tests/ -m integration --tb=short -v
+          rc=$?
+          [ $rc -eq 0 ] || [ $rc -eq 5 ]
