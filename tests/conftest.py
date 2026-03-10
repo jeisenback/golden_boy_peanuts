@@ -15,7 +15,7 @@ to compose their own parent models.
 All datetime values use timezone-aware UTC timestamps.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -41,8 +41,8 @@ from src.agents.strategy_evaluation.models import StrategyCandidate
 # Shared timestamp
 # ---------------------------------------------------------------------------
 
-_TS = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
-_TS_EXP = datetime(2026, 4, 17, 0, 0, 0, tzinfo=UTC)  # ~90 days out
+_TS = datetime.now(UTC).replace(microsecond=0)
+_TS_EXP = _TS + timedelta(days=90)
 
 
 # ---------------------------------------------------------------------------
@@ -52,11 +52,11 @@ _TS_EXP = datetime(2026, 4, 17, 0, 0, 0, tzinfo=UTC)  # ~90 days out
 
 @pytest.fixture()
 def sample_raw_price_record() -> RawPriceRecord:
-    """A single WTI crude futures price record."""
+    """A single USO ETF price record."""
     return RawPriceRecord(
-        instrument="WTI",
-        instrument_type=InstrumentType.CRUDE_FUTURES,
-        price=78.45,
+        instrument="USO",
+        instrument_type=InstrumentType.ETF,
+        price=80.0,
         volume=120_000,
         timestamp=_TS,
         source="test",
@@ -104,12 +104,20 @@ def sample_market_state(
     """
     A populated MarketState representing a clean ingestion run.
 
-    Contains one price record (WTI) and one option record (USO call),
-    with no ingestion errors.
+    Contains two price records (USO ETF + WTI crude) and one option record
+    (USO call), with no ingestion errors.
     """
+    wti_price_record = RawPriceRecord(
+        instrument="WTI",
+        instrument_type=InstrumentType.CRUDE_FUTURES,
+        price=78.45,
+        volume=95_000,
+        timestamp=_TS,
+        source="test",
+    )
     return MarketState(
         snapshot_time=_TS,
-        prices=[sample_raw_price_record],
+        prices=[sample_raw_price_record, wti_price_record],
         options=[sample_option_record],
         ingestion_errors=[],
     )
@@ -118,7 +126,7 @@ def sample_market_state(
 @pytest.fixture()
 def sample_detected_event() -> DetectedEvent:
     """
-    A SUPPLY_DISRUPTION event with HIGH intensity and 0.85 confidence.
+    A SUPPLY_DISRUPTION event with HIGH intensity and 0.8 confidence.
 
     Affects WTI and USO. Includes a raw_headline for tests that validate
     the optional field path.
@@ -128,7 +136,7 @@ def sample_detected_event() -> DetectedEvent:
         event_type=EventType.SUPPLY_DISRUPTION,
         description="Libyan pipeline outage reduces export capacity by 300k bpd.",
         source="test",
-        confidence_score=0.85,
+        confidence_score=0.8,
         intensity=EventIntensity.HIGH,
         detected_at=_TS,
         affected_instruments=["WTI", "USO"],
@@ -159,16 +167,16 @@ def sample_feature_set(sample_volatility_gap: VolatilityGap) -> FeatureSet:
 @pytest.fixture()
 def sample_strategy_candidate() -> StrategyCandidate:
     """
-    A high-confidence long straddle on USO expiring in 90 days.
+    A long straddle on USO expiring in 90 days.
 
-    edge_score of 0.78 places it above the 0.7 threshold used in
-    strategy evaluation tests.
+    Uses the canonical edge_score=0.6 from Issue #29 AC — a minimum valid
+    object that does not encode any assumed threshold.
     """
     return StrategyCandidate(
         instrument="USO",
         structure=OptionStructure.LONG_STRADDLE,
         expiration=90,
-        edge_score=0.78,
+        edge_score=0.6,
         signals={
             "volatility_gap": "positive",
             "supply_shock_probability": "high",
