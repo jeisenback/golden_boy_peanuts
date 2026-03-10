@@ -6,7 +6,7 @@
 # Run this immediately after every Claude Code or Cursor agent session.
 #
 # Automated steps (fail fast):
-#   1. git diff --stat HEAD       — warns on unstaged changes
+#   1. git diff --stat            — warns on unstaged/untracked changes
 #   2. check_runtime_imports.py   — no langchain.* in src/
 #   3. scripts/local_check.sh     — ruff, black, mypy, import scan
 #
@@ -33,14 +33,22 @@ echo "  ADLC Post-Session Checks  (automated)"
 echo "============================================================"
 echo ""
 
-# Step 1: unstaged changes warning
-echo "  [1/3] Checking for unstaged changes (git diff --stat HEAD)..."
-git -C "${REPO_ROOT}" diff --stat HEAD
-if ! git -C "${REPO_ROOT}" diff --quiet HEAD --; then
+# Preflight: verify we are inside a git work tree with a valid HEAD
+if ! git -C "${REPO_ROOT}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  fail "git preflight: not inside a git work tree"
+fi
+if ! git -C "${REPO_ROOT}" rev-parse --verify HEAD >/dev/null 2>&1; then
+  fail "git preflight: no valid HEAD commit found"
+fi
+
+# Step 1: unstaged/untracked changes warning
+echo "  [1/3] Checking for unstaged/untracked changes..."
+git -C "${REPO_ROOT}" diff --stat --
+if ! git -C "${REPO_ROOT}" diff --quiet -- || [ -n "$(git -C "${REPO_ROOT}" ls-files --others --exclude-standard)" ]; then
   echo ""
-  echo "  Working tree has changes relative to HEAD."
-  echo "  Review the diff above, then commit or stash before proceeding."
-  fail "unstaged or uncommitted changes relative to HEAD"
+  echo "  Working tree has unstaged or untracked changes."
+  echo "  Review the diff above (and any untracked files), then commit or stash before proceeding."
+  fail "unstaged or untracked changes in working tree"
 fi
 echo ""
 
@@ -51,8 +59,8 @@ if ! (cd "${REPO_ROOT}" && python ".github/scripts/check_runtime_imports.py"); t
 fi
 echo ""
 
-# Step 3: full local quality gate
-echo "  [3/3] Running full local quality gate (local_check.sh)..."
+# Step 3: local quality gate (ruff, black, mypy, import scan)
+echo "  [3/3] Running local quality gate — ruff, black, mypy, import scan (local_check.sh)..."
 if ! (cd "${REPO_ROOT}" && bash "scripts/local_check.sh"); then
   fail "local_check.sh"
 fi
