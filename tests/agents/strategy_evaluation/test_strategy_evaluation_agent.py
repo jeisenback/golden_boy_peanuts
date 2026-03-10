@@ -6,7 +6,7 @@ Coverage goal (expand per GitHub Issue):
   - StrategyCandidate fields match PRD Section 9 schema exactly
   - compute_edge_score: returns float in [0.0, 1.0]
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -21,7 +21,7 @@ class TestEvaluateStrategies:
     @pytest.mark.xfail(reason="Not yet implemented", strict=True)
     def test_evaluate_strategies_returns_list(self) -> None:
         """evaluate_strategies() must return a list of StrategyCandidate."""
-        feature_set = FeatureSet(snapshot_time=datetime.now(tz=timezone.utc))
+        feature_set = FeatureSet(snapshot_time=datetime.now(tz=UTC))
         result = evaluate_strategies(feature_set)
         assert isinstance(result, list)
         for item in result:
@@ -30,7 +30,7 @@ class TestEvaluateStrategies:
     @pytest.mark.xfail(reason="Not yet implemented", strict=True)
     def test_candidates_sorted_by_edge_score_desc(self) -> None:
         """evaluate_strategies() output must be sorted by edge_score descending."""
-        feature_set = FeatureSet(snapshot_time=datetime.now(tz=timezone.utc))
+        feature_set = FeatureSet(snapshot_time=datetime.now(tz=UTC))
         result = evaluate_strategies(feature_set)
         scores = [c.edge_score for c in result]
         assert scores == sorted(scores, reverse=True)
@@ -41,7 +41,7 @@ class TestEvaluateStrategies:
         StrategyCandidate must have all PRD Section 9 output schema fields:
         instrument, structure, expiration, edge_score, signals, generated_at
         """
-        feature_set = FeatureSet(snapshot_time=datetime.now(tz=timezone.utc))
+        feature_set = FeatureSet(snapshot_time=datetime.now(tz=UTC))
         result = evaluate_strategies(feature_set)
         if result:
             candidate = result[0]

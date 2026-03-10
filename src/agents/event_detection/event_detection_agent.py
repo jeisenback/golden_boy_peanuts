@@ -18,7 +18,6 @@ import os
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from src.agents.event_detection.db import get_engine, write_detected_events
 from src.agents.event_detection.models import DetectedEvent
 
 logger = logging.getLogger(__name__)

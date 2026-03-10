@@ -21,7 +21,6 @@ import os
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from src.agents.ingestion.db import get_engine, write_option_records, write_price_records
 from src.agents.ingestion.models import MarketState, RawPriceRecord
 
 logging.basicConfig(

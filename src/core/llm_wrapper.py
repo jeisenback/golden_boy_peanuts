@@ -13,7 +13,6 @@ Usage:
     print(response.content)
 """
 from __future__ import annotations
-
 import logging
 import os
 from dataclasses import dataclass, field
@@ -63,7 +62,7 @@ class LLMWrapper:
         self.model_id = model_id
         self.provider = os.environ.get("LLM_PROVIDER", "anthropic").lower()
 
-    def complete(self, prompt: str, **kwargs: Any) -> LLMResponse:
+    def complete(self, prompt: str, **kwargs: object) -> LLMResponse:
         """
         Send a prompt to the configured LLM provider and return a normalized response.
 

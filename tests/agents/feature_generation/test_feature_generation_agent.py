@@ -7,7 +7,7 @@ Coverage goal (expand per GitHub Issue):
   - compute_volatility_gap: returns VolatilityGap with correct gap calculation
   - Partial signal failure populates feature_errors, does not raise
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -23,7 +23,7 @@ class TestRunFeatureGeneration:
     @pytest.mark.xfail(reason="Not yet implemented", strict=True)
     def test_run_feature_generation_returns_feature_set(self) -> None:
         """run_feature_generation() must return a FeatureSet instance."""
-        market_state = MarketState(snapshot_time=datetime.now(tz=timezone.utc))
+        market_state = MarketState(snapshot_time=datetime.now(tz=UTC))
         events: list[DetectedEvent] = []
         result = run_feature_generation(market_state, events)
         assert isinstance(result, FeatureSet)
@@ -34,7 +34,7 @@ class TestRunFeatureGeneration:
         If one signal computation fails, run_feature_generation() must return a
         partial FeatureSet with the error in feature_errors, not raise an exception.
         """
-        market_state = MarketState(snapshot_time=datetime.now(tz=timezone.utc))
+        market_state = MarketState(snapshot_time=datetime.now(tz=UTC))
         events: list[DetectedEvent] = []
         result = run_feature_generation(market_state, events)
         assert isinstance(result.feature_errors, list)
