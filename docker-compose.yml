@@ -1,0 +1,36 @@
+# docker-compose.yml
+#
+# Development database for the Energy Options Opportunity Agent.
+# Provides a local PostgreSQL instance with the TimescaleDB extension
+# pre-installed, matching the production database profile.
+#
+# Usage:
+#   docker compose up -d      # Start in background
+#   docker compose down       # Stop (data persists in volume)
+#   docker compose down -v    # Stop AND delete all data
+#
+# Credentials match the defaults in .env.example.
+# Copy .env.example to .env before running the application.
+
+services:
+  db:
+    image: timescale/timescaledb:2.15.2-pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: energy_options
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - energy_options_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d energy_options"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  energy_options_pgdata:
+    driver: local
