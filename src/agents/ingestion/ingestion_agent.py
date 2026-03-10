@@ -22,6 +22,7 @@ import os
 
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from src.agents.ingestion.db import write_option_records  # noqa: F401
 from src.agents.ingestion.models import MarketState, OptionRecord, RawPriceRecord
 
 # Do NOT call logging.basicConfig() here — configuration belongs in the entry point.
