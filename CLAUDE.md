@@ -26,8 +26,10 @@ Phases: Phase 1 (core signals) → Phase 2 (supply/event) → Phase 3 (alternati
 1. Read HEARTBEAT.md       → find active sprint, active branch, blockers, current issue
 2. gh issue view <N>       → read ALL acceptance criteria for the issue you are working
 3. Read SESSION.md         → if it exists from a prior session, absorb its context
-4. git status              → confirm branch, confirm clean state
-5. pytest -m "not integration"  → must pass before writing any code
+4. Read docs/energy_options_adlc.md → identify task type, select prompt template (§5.1–§5.5), confirm DoD (§6)
+     §5.1 New Agent Module · §5.2 Feature · §5.3 Bug Fix · §5.4 Test Coverage · §5.5 Refactor
+5. git status              → confirm branch, confirm clean state
+6. pytest -m "not integration"  → must pass before writing any code
 ```
 
 If `SESSION.md` does not exist: `cp SESSION.md.template SESSION.md`, then fill in Session Goal.
@@ -207,7 +209,7 @@ NEVER  silently skip a failing test or acceptance criterion — document and esc
 | Product scope, output schema, phases | `docs/energy_options_prd.md` |
 | All technical constraints (non-negotiable) | `docs/energy_options_esod.md` |
 | System architecture, data flow, module boundaries | `docs/energy_options_agent_design_doc.md` |
-| 10-step ADLC loop, Claude Code prompt templates | `docs/energy_options_adlc.md` |
+| 10-step ADLC loop, Claude Code prompt templates — **required reading before every implementation session** | `docs/energy_options_adlc.md` |
 | Branching rules, CI pipeline, sprint cadence | `docs/energy_options_sdlc.md` |
 | Pre-push quality gate | `bash scripts/local_check.sh` |
 | Create a branch for an issue | `bash scripts/new_branch.sh` |
