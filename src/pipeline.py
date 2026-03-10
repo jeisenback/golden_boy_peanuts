@@ -23,18 +23,23 @@ Phase notes (from PRD Section 3):
 ESOD constraints: Python 3.11+, type hints on all public functions,
 no langchain.*/langgraph.* imports, DATABASE_URL from environment.
 """
+
 from __future__ import annotations
 
 import logging
 
-from src.agents.event_detection.event_detection_agent import run_event_detection
-from src.agents.feature_generation.feature_generation_agent import run_feature_generation
-from src.agents.ingestion.ingestion_agent import run_ingestion
-from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies
-from src.agents.ingestion.models import MarketState
-from src.agents.event_detection.models import DetectedEvent
-from src.agents.feature_generation.models import FeatureSet
+from src.agents.event_detection.event_detection_agent import run_event_detection  # noqa: F401
+from src.agents.event_detection.models import DetectedEvent  # noqa: F401
+from src.agents.feature_generation.feature_generation_agent import (  # noqa: F401
+    run_feature_generation,
+)
+from src.agents.feature_generation.models import FeatureSet  # noqa: F401
+from src.agents.ingestion.ingestion_agent import run_ingestion  # noqa: F401
+from src.agents.ingestion.models import MarketState  # noqa: F401
 from src.agents.strategy_evaluation.models import StrategyCandidate
+from src.agents.strategy_evaluation.strategy_evaluation_agent import (  # noqa: F401
+    evaluate_strategies,
+)
 
 logger = logging.getLogger(__name__)
 
