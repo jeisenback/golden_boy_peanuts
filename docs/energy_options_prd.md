@@ -326,10 +326,9 @@ core value while deferring complexity to later iterations.
 
 **12. Issue Map**
 
-Cross-reference between PRD requirements and GitHub Issues. Each issue
-is listed with its number, milestone, and implementation status. Use
-this section to verify coverage and identify gaps before starting a
-sprint.
+Cross-reference between PRD requirements and GitHub Issues. Sections
+are ordered by issue number. Sprint milestones reflect execution wave
+order — Sprint 1 runs first, Sprint 5 last.
 
 +-----------------------------------------------------------------------+
 | **Start Here — Issue #1 First**                                       |
@@ -340,204 +339,191 @@ sprint.
 | should open a branch until #1 is closed.                              |
 +-----------------------------------------------------------------------+
 
-**12.1 Phase -1 — Agent Workflow Readiness (Milestone 7)**
+**12.1 Sprint 1 — Repo & Agent Readiness (issues #1–2, #26–33)**
 
-Prerequisites for agents to execute sprint work reliably. Must complete
-before or alongside Phase 0. All issues in this section depend on #1.
+Goal: GitHub repo is protected; agents can work reliably on the
+scaffold; tooling gates are enforced; Docker Compose is running.
 
-  ---------------------------------------------------------------------------
-  **Issue**   **Title**                                         **Owner**
-  ----------- ------------------------------------------------- ------------
-  #26         Fix ingestion_agent.py scaffold — add             Agent
-              fetch_options_chain() stub, orphaned import,
-              module-level logging
-
-  #27         Add src/pipeline.py stub with run_pipeline()      Agent
-              call sequence
-
-  #28         Specify event_id generation in classify_event()   Human decides
-              docstring                                         strategy first,
-                                                               then Agent
-
-  #29         Add tests/conftest.py with shared Pydantic        Agent
-              model fixtures
-
-  #30         Add pytest to local_check.sh quality gate         Agent
-
-  #31         Make post_session.sh active — invoke              Agent
-              local_check.sh + git diff --stat
-
-  #32         Add ADLC startup step to CLAUDE.md session        Agent
-              startup sequence
-
-  #33         Document non-interactive branch creation          Agent
-              fallback in CLAUDE.md and new_branch.sh
-
-  #34         Replace inline @retry with @with_retry()          Agent
-              after Issue #4 (BLOCKED by #4)
-  ---------------------------------------------------------------------------
-
-**12.2 Phase 0 — Project Setup (Milestone 1)**
-
-Implements PRD §5 (resilience NFRs via shared retry), §6.1 (PostgreSQL
-baseline), §11 (local deployment). All issues depend on #1.
+*#1 closes first. #2 and #26–#33 are parallel after #1.*
 
   ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #1          Initialize GitHub repository            §11 Operational
-              ← MUST COMPLETE BEFORE ALL OTHER ISSUES
+  **Issue**   **Title**                                   **PRD Section**
+  ----------- ------------------------------------------- -------------------
+  #1          Initialize GitHub repository                §11 Operational
+              ← MUST CLOSE FIRST
 
-  #2          Docker Compose for Postgres, venv,      §6.1 Data Storage
+  #2          Docker Compose for Postgres, venv,          §6.1 Data Storage
               .env setup
 
-  #3          Extract shared get_engine() to          §6.1 Data Storage,
-              src/core/db.py                          §5 Modularity
+  #26         Fix ingestion_agent.py scaffold —           §4.1, §5
+              fetch_options_chain() stub, orphaned
+              import, module-level logging
 
-  #4          Extract shared retry config to          §5 Resilience,
-              src/core/retry.py                       §7 Agent Tooling
+  #27         Add src/pipeline.py stub with               §4.1–4.4
+              run_pipeline() call sequence
 
-  #5          CI pipeline verification                §7 Agent Tooling
+  #28         Specify event_id generation in              §4.2
+              classify_event() docstring
+              (Human decides strategy first)
+
+  #29         Add tests/conftest.py with shared           §5 Modularity
+              Pydantic model fixtures
+
+  #30         Add pytest to local_check.sh                §7 Agent Tooling
+              quality gate
+
+  #31         Make post_session.sh active                 §7 Agent Tooling
+
+  #32         Add ADLC startup step to CLAUDE.md          §7 Agent Tooling
+
+  #33         Document non-interactive branch             §7 Agent Tooling
+              creation fallback
   ---------------------------------------------------------------------------
 
-**12.3 Phase 1 — Core Market Signals & Options (Milestone 2)**
+**12.2 Sprint 2 — Core Infrastructure (issues #3–7, #34)**
 
-Implements PRD §4.1 (ingestion), §4.3 (volatility + dispersion),
-§4.4 (strategy generation), §4.5 (output schema), §8 (crude/ETF/options
-data sources), §9 (candidate output schema).
+Goal: Shared utilities in src/core/; CI all-green; PostgreSQL schema
+for all four agents in place. Blocks all feature implementation.
 
-*Schema (must complete before any agent implementation):*
+*#3, #4, #5 are parallel. #6, #7 blocked until #2, #3 close.
+#34 blocked until #4 closes.*
 
   ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #6          PostgreSQL schema: market_prices and    §4.1, §6.1, §8
+  **Issue**   **Title**                                   **PRD Section**
+  ----------- ------------------------------------------- -------------------
+  #3          Extract shared get_engine() to              §6.1, §5 Modularity
+              src/core/db.py
+
+  #4          Extract shared retry config to              §5 Resilience,
+              src/core/retry.py                           §7 Agent Tooling
+
+  #5          CI pipeline verification                    §7 Agent Tooling
+
+  #6          PostgreSQL schema: market_prices and        §4.1, §6.1, §8
               options_chain tables
 
-  #7          PostgreSQL schema: feature_sets and     §4.3, §4.4, §6.1
+  #7          PostgreSQL schema: feature_sets and         §4.3, §4.4, §6.1
               strategy_candidates tables
+
+  #34         Replace inline @retry with @with_retry()   §5 Resilience
+              (BLOCKED by #4)
   ---------------------------------------------------------------------------
 
-*Ingestion Agent — blocked until #2, #3, #6 close:*
+**12.3 Sprint 3 — Data Pipeline (issues #8–11, #13–15)**
+
+Goal: Live crude, ETF/equity, and options data flowing into Postgres;
+volatility gap and sector dispersion signals computed.
+
+*#8, #9, #10, #13, #14 are parallel (all blocked until #6, #7, #34
+close). #11 blocked until #8, #9, #10 close. #15 blocked until
+#13, #14 close.*
 
   ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #8          Implement fetch_crude_prices —          §4.1, §8 Crude
-              Alpha Vantage (WTI, Brent)              Prices
+  **Issue**   **Title**                                   **PRD Section**
+  ----------- ------------------------------------------- -------------------
+  #8          Implement fetch_crude_prices —              §4.1, §8 Crude
+              Alpha Vantage (WTI, Brent)
 
-  #9          Implement fetch_etf_equity_prices —     §4.1, §8 ETF/Equity
-              yfinance (USO, XLE, XOM, CVX)           Prices
+  #9          Implement fetch_etf_equity_prices —         §4.1, §8 ETF/Equity
+              yfinance (USO, XLE, XOM, CVX)
 
-  #10         Implement fetch_options_chain —         §4.1, §8 Options
-              yfinance / Polygon                      Data
+  #10         Implement fetch_options_chain —             §4.1, §8 Options
+              yfinance / Polygon
 
-  #11         Implement run_ingestion —               §4.1, §5 Resilience
-              orchestration, MarketState, DB persist
+  #11         Implement run_ingestion — orchestration,    §4.1, §5 Resilience
+              MarketState, DB persist
 
-  #12         QA: Ingestion Agent — integration       §4.1, §5 Retention
-              test and coverage sign-off
-  ---------------------------------------------------------------------------
+  #13         Implement compute_volatility_gap —          §4.3 Volatility
+              realized vs. implied volatility
 
-*Feature Generation Agent — blocked until #3, #6, #7 close:*
+  #14         Implement compute_sector_dispersion —       §4.3 Sector
+              price spread across XOM, CVX, USO, XLE      Dispersion
 
-  ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #13         Implement compute_volatility_gap —      §4.3 Volatility
-              realized vs. implied volatility         Gaps
-
-  #14         Implement compute_sector_dispersion —   §4.3 Sector
-              price spread across XOM, CVX, USO, XLE  Dispersion
-
-  #15         Implement run_feature_generation —      §4.3, §5 Resilience
-              Phase 1 orchestration
-
-  #16         QA: Feature Generation Agent            §4.3
+  #15         Implement run_feature_generation —          §4.3, §5 Resilience
+              Phase 1 orchestration (events=[])
   ---------------------------------------------------------------------------
 
 +-----------------------------------------------------------------------+
-| **Phase 1 Gap — Futures Curve Steepness**                            |
-|                                                                       |
-| PRD §4.3 lists futures curve steepness as a required signal.         |
-| FeatureSet.futures_curve_steepness exists as an optional field        |
-| (None acceptable in Phase 1). No Phase 1 implementation issue        |
-| exists. Confirm with human lead: defer to Phase 2, or add a          |
-| Phase 1 issue to compute slope from WTI spot vs. near-month          |
-| futures prices available via Alpha Vantage.                           |
-+-----------------------------------------------------------------------+
-
-+-----------------------------------------------------------------------+
-| **Phase 1 Note — Event Detection**                                   |
+| **Sprint 3 Note — Event Detection**                                  |
 |                                                                       |
 | run_feature_generation() accepts events: list[DetectedEvent] but     |
-| event detection is Phase 2 scope (PRD §10). In Phase 1, Issue #15    |
-| must pass events=[] explicitly. This must be documented in the        |
-| Issue #15 acceptance criteria to prevent agent confusion.             |
+| event detection is Phase 2 scope (PRD §10). Issue #15 must           |
+| document in its AC: pass events=[] in Phase 1. The pipeline          |
+| stub in #27 must also reflect this.                                  |
 +-----------------------------------------------------------------------+
 
-*Strategy Evaluation Agent — blocked until #7, #15 close:*
++-----------------------------------------------------------------------+
+| **Sprint 3 Gap — Futures Curve Steepness**                           |
+|                                                                       |
+| PRD §4.3 requires futures curve steepness. FeatureSet has the field  |
+| (None-able). No implementation issue exists. Human lead decision:    |
+| add a Sprint 3 issue (compute from WTI spot vs. near-month via Alpha |
+| Vantage) or defer to Sprint 6+ with None in Phase 1.                 |
++-----------------------------------------------------------------------+
+
+**12.4 Sprint 4 — Signal Quality (issues #12, #16–19)**
+
+Goal: All three agents have passing integration tests; strategy
+evaluation ranks candidates by edge score.
+
+*#12 blocked until #11 closes. #16 blocked until #15 closes.
+#17 blocked until #15 closes. #18 blocked until #17 closes.
+#19 blocked until #18 closes.*
 
   ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #17         Implement compute_edge_score — Phase 1  §4.4, §9
+  **Issue**   **Title**                                   **PRD Section**
+  ----------- ------------------------------------------- -------------------
+  #12         QA: Ingestion Agent — integration test      §4.1, §5 Retention
+              and coverage sign-off
+
+  #16         QA: Feature Generation Agent —              §4.3
+              integration test and coverage sign-off
+
+  #17         Implement compute_edge_score — Phase 1      §4.4, §9
               static heuristic scoring
 
-  #18         Implement evaluate_strategies —         §4.4, §3.2, §9
+  #18         Implement evaluate_strategies —             §4.4, §3.2, §9
               long straddle, call spread, put spread
 
-  #19         QA: Strategy Evaluation Agent           §4.4, §9
+  #19         QA: Strategy Evaluation Agent               §4.4, §9
   ---------------------------------------------------------------------------
 
-*Integration and Release — blocked until #12, #16, #19 close:*
+**12.5 Sprint 5 — Phase 1 Delivery (issues #20–22)**
+
+Goal: Full pipeline runs end-to-end; live data validated; v0.1.0
+tagged.
+
+*#20 blocked until #12, #16, #19, #27 close. #21 blocked until
+#20 closes. #22 blocked until #21 closes.*
 
   ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #20         Full pipeline integration test +        §4.5, §9, §5
+  **Issue**   **Title**                                   **PRD Section**
+  ----------- ------------------------------------------- -------------------
+  #20         Full pipeline integration test +            §4.5, §9, §5
               golden dataset validation
 
-  #21         UAT: Phase 1 end-to-end validation      §4.5, §11
+  #21         UAT: Phase 1 end-to-end validation          §4.5, §11
               against live market data
 
-  #22         Phase 1 release: tag v0.1.0             §10 Phase 1
+  #22         Phase 1 release: tag v0.1.0                 §10 Phase 1
   ---------------------------------------------------------------------------
 
-**12.4 Phase 2 — Supply & Event Augmentation (Milestone 3)**
+**12.6 Roadmap Backlog (issues #23–25)**
 
-Implements PRD §4.2 (event detection), §4.3 (supply shock probability),
-§8 (EIA, GDELT/NewsAPI data sources). Issues to be defined in #23.
-
-  ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #23         Phase 2 planning: define issues         §4.2, §8 Supply,
-                                                      §10 Phase 2
-  ---------------------------------------------------------------------------
-
-**12.5 Phase 3 — Alternative / Contextual Signals (Milestone 4)**
-
-Implements PRD §4.3 (insider conviction, narrative velocity), §8
-(EDGAR, Reddit/Stocktwits, MarineTraffic). Issues to be defined in #24.
+Planning issues with no sprint assignment. To be refined before each
+phase begins.
 
   ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #24         Phase 3 planning: define issues         §4.3, §8 Insider/
-                                                      Shipping/Narrative,
-                                                      §10 Phase 3
-  ---------------------------------------------------------------------------
+  **Issue**   **Title**                                   **PRD Section**
+  ----------- ------------------------------------------- -------------------
+  #23         Phase 2 planning: define issues             §4.2, §8 Supply,
+                                                          §10 Phase 2
 
-**12.6 Phase 4 — Optional Enhancements (Milestone 5)**
+  #24         Phase 3 planning: define issues             §4.3, §8 Insider/
+                                                          Shipping/Narrative,
+                                                          §10 Phase 3
 
-Implements PRD §3.3 (out-of-scope, deferred). Issues to be defined
-in #25.
-
-  ---------------------------------------------------------------------------
-  **Issue**   **Title**                               **PRD Section**
-  ----------- --------------------------------------- -----------------------
-  #25         Phase 4 planning: define issues         §3.3, §10 Phase 4
+  #25         Phase 4 planning: define issues             §3.3, §10 Phase 4
   ---------------------------------------------------------------------------
 
 **12.7 Coverage Gaps**
@@ -547,15 +533,16 @@ Requirements in the PRD with no implementation issue:
   ---------------------------------------------------------------------------
   **Gap**                    **PRD Section**   **Recommended Action**
   -------------------------- ----------------- ------------------------------
-  Futures curve steepness    §4.3              Add Phase 1 issue or
-  signal — no Phase 1 issue                    explicitly defer to Phase 2
-                                               with a note in Issue #15
+  Futures curve steepness    §4.3              Add Sprint 3 issue or set
+  signal — no issue                            None in Phase 1 and defer.
+                                               Human lead decides.
 
-  Event detection phase in   §4.2, §10         Add explicit note to Issue
-  Phase 1 pipeline — events                    #15 AC: pass events=[] in
-  parameter has no source                      Phase 1 run_pipeline()
+  Issue #15 AC missing       §4.2, §10         Add to Issue #15 AC:
+  events=[] note for Phase 1                   run_feature_generation must
+                                               be called with events=[] in
+                                               Phase 1 pipeline.
 
   TimescaleDB migration       §6.2             No migration plan issue
-  path documentation —                         exists. Add before Phase 2
-  required before Phase 2                      closes.
+  path — no issue                              exists. Add before Phase 2
+                                               sprint begins.
   ---------------------------------------------------------------------------
