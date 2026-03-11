@@ -24,26 +24,32 @@
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 1 | Initialize GitHub repository: labels, milestones, branch protection | Not Started | — | HUMAN task — must close first; gates all PR merges |
-| 2 | Docker Compose for Postgres, venv, .env setup | In Review | `chore/2-docker-compose` | Ready for PR |
-| 26 | Fix ingestion_agent.py: fetch_options_chain stub, orphaned import, logging | In Review | `fix/26-ingestion-scaffold` | Ready for PR |
-| 27 | Add src/pipeline.py stub with run_pipeline() call sequence | In Review | `chore/27-pipeline-stub` | Ready for PR |
-| 28 | Specify event_id generation in classify_event() docstring | Not Started | — | HUMAN decides strategy first — deterministic hash vs uuid4() |
-| 29 | Add tests/conftest.py with shared Pydantic model fixtures | In Review | `test/29-conftest-fixtures` | Ready for PR |
-| 30 | Add pytest to local_check.sh quality gate | In Review | `chore/30-pytest-local-check` | Ready for PR |
-| 31 | Make post_session.sh active — invoke local_check.sh + git diff --stat | In Review | `chore/31-post-session-active` | Ready for PR |
-| 32 | Add ADLC startup step to CLAUDE.md session startup sequence | In Review | `docs/32-adlc-startup-step` | Ready for PR |
-| 33 | Document non-interactive branch creation fallback in CLAUDE.md | In Review | `docs/33-noninteractive-branch` | Ready for PR |
+| 1 | Initialize GitHub repository: labels, milestones, branch protection | Merged | `chore/1-codeowners` | PR #50 merged |
+| 2 | Docker Compose for Postgres, venv, .env setup | Merged | `chore/2-docker-compose` | PR #36 merged |
+| 26 | Fix ingestion_agent.py: fetch_options_chain stub, orphaned import, logging | Merged | `fix/26-ingestion-scaffold` | PR #51 merged |
+| 27 | Add src/pipeline.py stub with run_pipeline() call sequence | Merged | `chore/27-pipeline-stub` | PR #38 merged |
+| 28 | Specify event_id generation in classify_event() docstring | Merged | — | Closed — deterministic UUID5/SHA256 approach adopted |
+| 29 | Add tests/conftest.py with shared Pydantic model fixtures | Merged | `test/29-conftest-fixtures` | PR #39 merged |
+| 30 | Add pytest to local_check.sh quality gate | Merged | `chore/30-pytest-local-check` | PR #35 merged |
+| 31 | Make post_session.sh active — invoke local_check.sh + git diff --stat | Merged | `chore/31-post-session-active` | PR #40 merged |
+| 32 | Add ADLC startup step to CLAUDE.md session startup sequence | Merged | `docs/32-adlc-startup-step` | PR #41 merged |
+| 33 | Document non-interactive branch creation fallback in CLAUDE.md | Merged | `docs/33-noninteractive-branch` | PR #42 merged |
 
 ## Current Active Branch
 
-All 8 agent-doable Sprint 1 branches committed. On `develop` between sessions.
-Open PRs (human action required) after #1 (branch protection) is configured.
+`develop` — all Sprint 1 issues merged and closed. Ready for human to run `bash scripts/sprint_close.sh`.
 
 ## Blockers
 
-- **#1 (branch protection):** Human must configure GitHub repo settings (develop + main branch protection) before any Sprint 1 PR can merge. All 8 agent PRs are ready and waiting.
-- **#28 (event_id strategy):** Human decision required — deterministic hash (SHA256 prefix of headline+source+timestamp[:8]) vs uuid4(). Deterministic = idempotent re-runs; uuid4 = simpler, requires DB-level dedup.
+- None — all Sprint 1 blockers resolved.
+
+## Sprint Notes (2026-03-11)
+
+All Sprint 1 PRs confirmed merged. Issue table updated to reflect merged state. No open blockers. Sprint ready for human to close via `bash scripts/sprint_close.sh`. Next sprint candidates: #3, #4, #5, #6, #7, #8 (Phase 0 / Phase 1 infra).
+
+## Sprint Notes (2026-03-10, session 2)
+
+- `#26` follow-up: restores `write_option_records` import (with `# noqa: F401`) to satisfy AC item 3; PR #51 open for review
 
 ## Sprint Notes (2026-03-10)
 
@@ -62,7 +68,7 @@ Key architecture observation documented: `run_event_detection()` takes no argume
 
 ## Last Merged PR
 
-- None yet this sprint
+- PR #53 (develop ← develop merge), PR #52/#51 (#26 ingestion fix), PR #50 (#1 CODEOWNERS), PR #48 (#31 post_session), PR #45 (#27 pipeline), PR #42 (#33), PR #41 (#32), PR #40 (#31), PR #39 (#29), PR #38 (#27), PR #37 (#26), PR #36 (#2), PR #35 (#30) — all Sprint 1 PRs merged 2026-03-10
 
 ---
 
