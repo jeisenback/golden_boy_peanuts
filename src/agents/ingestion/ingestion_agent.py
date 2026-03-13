@@ -53,6 +53,12 @@ _ETF_EQUITY_INSTRUMENTS: list[tuple[str, InstrumentType]] = [
 # Number of nearest expiry dates fetched per instrument for options chain (PRD §4.1)
 _OPTIONS_EXPIRY_LIMIT: int = 2
 
+# Milliseconds per second — used to convert timedelta.total_seconds() to ms
+_MS_PER_SECOND: int = 1000
+
+# Ticker symbols derived from the ETF/equity universe; passed to fetch_options_chain()
+_ETF_EQUITY_SYMBOLS: list[str] = [symbol for symbol, _ in _ETF_EQUITY_INSTRUMENTS]
+
 
 def _nan_to_none_float(val: object) -> float | None:
     """Return None if val is None or NaN; otherwise return float(val)."""
@@ -259,7 +265,9 @@ def run_ingestion() -> MarketState:
 
     Returns:
         MarketState with prices, options, and ingestion_errors populated.
-        ingestion_errors lists all feed/DB failures encountered this cycle.
+        ingestion_errors is the ESOD-4 structured error response: callers MUST
+        inspect it to distinguish feed timeouts from DB outages. An empty list
+        indicates a fully successful cycle.
         Never raises — even total feed failure returns an empty-but-valid state.
     """
     start_time = datetime.now(UTC)
@@ -280,7 +288,7 @@ def run_ingestion() -> MarketState:
         logger.exception("fetch_etf_equity_prices failed")
         errors.append(f"fetch_etf_equity_prices: {exc}")
 
-    instruments = [symbol for symbol, _ in _ETF_EQUITY_INSTRUMENTS]
+    instruments = _ETF_EQUITY_SYMBOLS
     try:
         options.extend(fetch_options_chain(instruments))
     except Exception as exc:
@@ -319,7 +327,7 @@ def run_ingestion() -> MarketState:
     )
 
     # --- Structured cycle log ---
-    duration_ms = int((snapshot_time - start_time).total_seconds() * 1000)
+    duration_ms = int((snapshot_time - start_time).total_seconds() * _MS_PER_SECOND)
     logger.info(
         json.dumps(
             {
