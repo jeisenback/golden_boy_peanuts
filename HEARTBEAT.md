@@ -24,31 +24,30 @@
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 3 | Refactor: extract shared get_engine() to src/core/db.py | In Review | `refactor/3-extract-get-engine` | PR #54 open |
-| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | In Review | `refactor/4-extract-retry-config` | PR open — awaiting human merge |
-| 5 | CI pipeline verification: confirm all 4 workflows run green | Not Started | — | — |
+| 3 | Refactor: extract shared get_engine() to src/core/db.py | Merged | `refactor/3-extract-get-engine` | PR #54 merged |
+| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | In Review | `refactor/4-extract-retry-config` | PR #55 open |
+| 5 | CI pipeline verification: confirm all 4 workflows run green | Closed | `chore/5-ci-verification` | All 4 workflows verified green — no code changes |
 | 6 | PostgreSQL schema: market_prices and options_chain tables | Not Started | — | — |
 | 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
 | 34 | chore: replace inline @retry decorators with @with_retry() | Not Started | — | Blocked by #4 |
 
 ## Current Active Branch
 
-`refactor/4-extract-retry-config` — issue #4 complete, PR open for review.
+`chore/5-ci-verification` — issue #5 verified and closed. No code changes.
 
 ## Blockers
 
 - None.
 
+## Sprint Notes (2026-03-12, session 2)
+
+Issue #5 closed: all 4 GitHub Actions workflows verified green against existing run history. No code changes required.
+- `ci.yml` — push to develop run 22946745279 ✓; PR run 22927190645 ✓
+- `runtime-check.yml` — push to develop run 22946745272 ✓; PR run 22927190654 ✓
+- `integration.yml` — PR runs 23026165853, 23027379749 ✓ (exit code 5: 0 tests collected; acceptable per issue notes)
+- `security.yml` — PR runs 23026165882, 23027379759 ✓ (no HIGH bandit findings; pip-audit clean)
+
 ## Sprint Notes (2026-03-12)
-
-Issue #4 complete on `refactor/4-extract-retry-config`: `src/core/retry.py` created with `with_retry()` decorator factory; adds `before_sleep` WARNING logging absent from the inline versions; ingestion_agent.py (3 sites) and event_detection_agent.py (1 site) updated. All checks green: pytest 9 xfailed/0 fail, ruff pass, mypy 22 files clean, runtime-import scan pass.
-
-## Sprint Notes (2026-03-11, Sprint 2 start)
-
-Sprint 2 started (human-approved). Sprint 1 retro + close deferred to human via `bash scripts/sprint_close.sh`.
-- `#3` complete on `refactor/3-extract-get-engine`: `src/core/db.py` created with single `get_engine()` implementation; all 4 agent `db.py` files updated.
-
-## Sprint Notes (2026-03-11)
 
 All Sprint 1 PRs confirmed merged. Issue table updated to reflect merged state. No open blockers. Sprint ready for human to close via `bash scripts/sprint_close.sh`. Next sprint candidates: #3, #4, #5, #6, #7, #8 (Phase 0 / Phase 1 infra).
 
