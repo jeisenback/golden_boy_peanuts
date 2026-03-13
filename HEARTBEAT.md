@@ -13,35 +13,42 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 1 |
-| Sprint Name | Sprint 1 — Repo & Agent Readiness |
-| Goal | GitHub repo protected; agents can work reliably on scaffold; tooling gates enforced; Docker running |
-| Start Date | 2026-03-10 |
-| Target Close | 2026-03-17 |
+| Sprint Number | 2 |
+| Sprint Name | Sprint 2 — Core Infrastructure |
+| Goal | Shared db/retry core modules extracted; CI green; Phase 1 DB schema applied and verified |
+| Start Date | 2026-03-12 |
+| Target Close | 2026-03-19 |
 | Status | ACTIVE |
 
 ## Sprint Issues
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 1 | Initialize GitHub repository: labels, milestones, branch protection | Merged | `chore/1-codeowners` | PR #50 merged |
-| 2 | Docker Compose for Postgres, venv, .env setup | Merged | `chore/2-docker-compose` | PR #36 merged |
-| 26 | Fix ingestion_agent.py: fetch_options_chain stub, orphaned import, logging | Merged | `fix/26-ingestion-scaffold` | PR #51 merged |
-| 27 | Add src/pipeline.py stub with run_pipeline() call sequence | Merged | `chore/27-pipeline-stub` | PR #38 merged |
-| 28 | Specify event_id generation in classify_event() docstring | Merged | — | Closed — deterministic UUID5/SHA256 approach adopted |
-| 29 | Add tests/conftest.py with shared Pydantic model fixtures | Merged | `test/29-conftest-fixtures` | PR #39 merged |
-| 30 | Add pytest to local_check.sh quality gate | Merged | `chore/30-pytest-local-check` | PR #35 merged |
-| 31 | Make post_session.sh active — invoke local_check.sh + git diff --stat | Merged | `chore/31-post-session-active` | PR #40 merged |
-| 32 | Add ADLC startup step to CLAUDE.md session startup sequence | Merged | `docs/32-adlc-startup-step` | PR #41 merged |
-| 33 | Document non-interactive branch creation fallback in CLAUDE.md | Merged | `docs/33-noninteractive-branch` | PR #42 merged |
+| 3 | Refactor: extract shared get_engine() to src/core/db.py | Merged | `refactor/3-extract-get-engine` | PR #54 merged |
+| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | In Review | `refactor/4-extract-retry-config` | PR #55 open |
+| 5 | CI pipeline verification: confirm all 4 workflows run green | Closed | `chore/5-ci-verification` | All 4 workflows verified green; issue closed |
+| 6 | PostgreSQL schema: market_prices and options_chain tables | In Review | `feature/6-schema-market-prices` | PR open; schema verified with psql |
+| 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
+| 34 | Replace remaining inline @retry decorators with @with_retry() | Not Started | — | Blocked until PR #55 merges |
 
 ## Current Active Branch
 
-`develop` — all Sprint 1 issues merged and closed. Ready for human to run `bash scripts/sprint_close.sh`.
+`feature/6-schema-market-prices`
 
 ## Blockers
 
-- None — all Sprint 1 blockers resolved.
+- None currently. Issue #34 is sequentially dependent on PR #55 merge.
+
+## Sprint Notes (2026-03-12)
+
+Sprint 2 kicked off. Issues #3, #4, #5, #6 completed in single session:
+
+- `#3` — `src/core/db.py` created with canonical `get_engine()`; all 4 agent `db.py` files updated to re-export via `# noqa: F401`. PR #54 merged.
+- `#4` — `src/core/retry.py` created with `with_retry()` decorator factory; TypeVar-typed, `before_sleep_log` WARNING logging, env-configurable retries. Both agent files updated. PR #55 open.
+- `#5` — CI verification: all 4 workflows (ci.yml, runtime-check.yml, integration.yml, security.yml) confirmed green against PR #54/#55. No code changes needed. Issue closed.
+- `#6` — `db/schema.sql` created: `market_prices` and `options_chain` DDL with TIMESTAMPTZ columns, composite indexes, TimescaleDB hypertable migration comments (PRD §6.2). Applied to local Postgres (timescale/timescaledb:2.15.2-pg15) and verified with `\d`. PR open.
+
+Decision: `db/schema.sql` uses `IF NOT EXISTS` guards throughout — idempotent, safe to re-run.
 
 ## Sprint Notes (2026-03-11)
 
