@@ -26,19 +26,27 @@
 |---|-------|--------|--------|-------|
 | 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
 | 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | Merged | `feature/9-fetch-etf-equity-prices` | PR #67 merged |
-| 10 | Implement fetch_options_chain — yfinance / Polygon | In Review | `feature/10-fetch-options-chain` | PR #68 open |
-| 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Not Started | — | Depends on #8, #9, #10 |
+| 10 | Implement fetch_options_chain — yfinance / Polygon | Merged | `feature/10-fetch-options-chain` | PR #68 merged |
+| 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | In Review | `feature/11-run-ingestion` | PR open |
 | 13 | Implement compute_volatility_gap — realized vs. implied volatility | Not Started | — | — |
 | 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | Not Started | — | — |
 | 15 | Implement run_feature_generation — Phase 1 orchestration | Not Started | — | Depends on #13, #14 |
 
 ## Current Active Branch
 
-`feature/10-fetch-options-chain`
+`feature/11-run-ingestion`
 
 ## Blockers
 
 - None.
+
+## Sprint Notes (2026-03-13, session 4)
+
+Issue #11 implemented and PR open:
+- `run_ingestion()`: Each of the 3 fetch functions in independent `try/except`; errors accumulated in `ingestion_errors`; DB engine acquired separately with its own try/except; `Engine | None` pattern gates persistence calls; structured JSON cycle log via `logger.info(json.dumps({...}))`; never raises — total feed failure returns empty-but-valid `MarketState`.
+- `TestRunIngestion` rewritten: replaced 2 `xfail strict=True` tests with 3 properly-mocked tests covering all-success, partial failure, and total failure paths.
+- mypy fix: `get_engine` imported directly from `src.core.db` (not re-exported `src.agents.ingestion.db`) — `# noqa: F401` re-exports are not explicit exports under mypy strict.
+- Gate: all 5 stages pass (110 passed, 7 xfailed).
 
 ## Sprint Notes (2026-03-13, session 3)
 
