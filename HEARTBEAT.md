@@ -27,14 +27,14 @@
 | 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
 | 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | Merged | `feature/9-fetch-etf-equity-prices` | PR #67 merged |
 | 10 | Implement fetch_options_chain — yfinance / Polygon | Merged | `feature/10-fetch-options-chain` | PR #68 merged |
-| 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | In Review | `feature/11-run-ingestion` | PR #70 open |
+| 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Merged | `feature/11-run-ingestion` | PR #70 merged |
 | 13 | Implement compute_volatility_gap — realized vs. implied volatility | Not Started | — | — |
 | 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | Not Started | — | — |
 | 15 | Implement run_feature_generation — Phase 1 orchestration | Not Started | — | Depends on #13, #14 |
 
 ## Current Active Branch
 
-`feature/11-run-ingestion`
+`—` (no active branch; #11 merged, next: #13 or #14)
 
 ## Blockers
 
