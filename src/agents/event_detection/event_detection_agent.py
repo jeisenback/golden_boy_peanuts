@@ -15,23 +15,14 @@ no langchain.*/langgraph.* imports, tenacity on all external API calls.
 from __future__ import annotations
 
 import logging
-import os
-
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.agents.event_detection.models import DetectedEvent
+from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
 
-@retry(
-    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
-    wait=wait_exponential(
-        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
-        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
-    ),
-    reraise=True,
-)
+@with_retry()
 def fetch_news_events() -> list[DetectedEvent]:
     """
     Fetch and parse energy-relevant events from NewsAPI.
