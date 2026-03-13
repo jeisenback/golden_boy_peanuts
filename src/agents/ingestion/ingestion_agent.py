@@ -18,20 +18,23 @@ DATABASE_URL from environment.
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import json
 import logging
 import math
 import os
 
 import requests
+from sqlalchemy.engine import Engine
 import yfinance as yf
 
-from src.agents.ingestion.db import write_option_records  # noqa: F401
+from src.agents.ingestion.db import write_option_records, write_price_records
 from src.agents.ingestion.models import (
     InstrumentType,
     MarketState,
     OptionRecord,
     RawPriceRecord,
 )
+from src.core.db import get_engine
 from src.core.retry import with_retry
 
 # Do NOT call logging.basicConfig() here — configuration belongs in the entry point.
@@ -49,6 +52,12 @@ _ETF_EQUITY_INSTRUMENTS: list[tuple[str, InstrumentType]] = [
 
 # Number of nearest expiry dates fetched per instrument for options chain (PRD §4.1)
 _OPTIONS_EXPIRY_LIMIT: int = 2
+
+# Milliseconds per second — used to convert timedelta.total_seconds() to ms
+_MS_PER_SECOND: int = 1000
+
+# Ticker symbols derived from the ETF/equity universe; passed to fetch_options_chain()
+_ETF_EQUITY_SYMBOLS: list[str] = [symbol for symbol, _ in _ETF_EQUITY_INSTRUMENTS]
 
 
 def _nan_to_none_float(val: object) -> float | None:
@@ -246,25 +255,89 @@ def run_ingestion() -> MarketState:
     """
     Execute one full ingestion cycle.
 
-    Fetches all configured data sources, validates via Pydantic,
-    normalizes into a MarketState, and persists to PostgreSQL.
+    Calls fetch_crude_prices(), fetch_etf_equity_prices(), and fetch_options_chain()
+    in independent try/except blocks so one feed failure does not abort the others.
+    Persists all successfully fetched records to PostgreSQL; DB write failures are
+    also caught and recorded rather than propagated.
 
-    On partial failure (one feed unavailable), continues with available data
-    and logs the failure. The pipeline must not stop on a single feed failure
-    (ESOD Section 6 — degraded-mode output).
+    Emits a structured JSON log at cycle end with price_records, option_records,
+    error_count, and duration_ms.
 
     Returns:
-        MarketState representing the current market snapshot.
-        ingestion_errors contains details of any failed/quarantined records.
-
-    Raises:
-        RuntimeError: If DATABASE_URL is not set.
+        MarketState with prices, options, and ingestion_errors populated.
+        ingestion_errors is the ESOD-4 structured error response: callers MUST
+        inspect it to distinguish feed timeouts from DB outages. An empty list
+        indicates a fully successful cycle.
+        Never raises — even total feed failure returns an empty-but-valid state.
     """
-    raise NotImplementedError(
-        "run_ingestion not yet implemented. "
-        "TODO: Orchestrate fetch_crude_prices, fetch_etf_equity_prices, "
-        "fetch_options_chain. Catch individual feed failures and continue. "
-        "Build MarketState. Persist to DB via "
-        "src.agents.ingestion.db.write_price_records and "
-        "src.agents.ingestion.db.write_option_records."
+    start_time = datetime.now(UTC)
+    prices: list[RawPriceRecord] = []
+    options: list[OptionRecord] = []
+    errors: list[str] = []
+
+    # --- Fetch feeds (each isolated so one failure cannot abort the others) ---
+    try:
+        prices.extend(fetch_crude_prices())
+    except Exception as exc:
+        logger.exception("fetch_crude_prices failed")
+        errors.append(f"fetch_crude_prices: {exc}")
+
+    try:
+        prices.extend(fetch_etf_equity_prices())
+    except Exception as exc:
+        logger.exception("fetch_etf_equity_prices failed")
+        errors.append(f"fetch_etf_equity_prices: {exc}")
+
+    instruments = _ETF_EQUITY_SYMBOLS
+    try:
+        options.extend(fetch_options_chain(instruments))
+    except Exception as exc:
+        logger.exception("fetch_options_chain failed")
+        errors.append(f"fetch_options_chain: {exc}")
+
+    # --- Persist to PostgreSQL ---
+    _engine: Engine | None = None
+    try:
+        _engine = get_engine()
+    except Exception as exc:
+        logger.exception("Failed to acquire DB engine — skipping persistence")
+        errors.append(f"get_engine: {exc}")
+
+    if _engine is not None and prices:
+        try:
+            write_price_records(prices, _engine)
+        except Exception as exc:
+            logger.exception("write_price_records failed; price records not persisted")
+            errors.append(f"write_price_records: {exc}")
+
+    if _engine is not None and options:
+        try:
+            write_option_records(options, _engine)
+        except Exception as exc:
+            logger.exception("write_option_records failed; option records not persisted")
+            errors.append(f"write_option_records: {exc}")
+
+    # --- Assemble MarketState ---
+    snapshot_time = datetime.now(UTC)
+    state = MarketState(
+        snapshot_time=snapshot_time,
+        prices=prices,
+        options=options,
+        ingestion_errors=errors,
     )
+
+    # --- Structured cycle log ---
+    duration_ms = int((snapshot_time - start_time).total_seconds() * _MS_PER_SECOND)
+    logger.info(
+        json.dumps(
+            {
+                "event": "ingestion_cycle_complete",
+                "price_records": len(prices),
+                "option_records": len(options),
+                "error_count": len(errors),
+                "duration_ms": duration_ms,
+            }
+        )
+    )
+
+    return state
