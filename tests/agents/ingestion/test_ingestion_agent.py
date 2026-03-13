@@ -14,7 +14,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agents.ingestion.ingestion_agent import fetch_crude_prices, run_ingestion
+from src.agents.ingestion.ingestion_agent import (
+    fetch_crude_prices,
+    fetch_etf_equity_prices,
+    run_ingestion,
+)
 from src.agents.ingestion.models import InstrumentType, MarketState
 
 
@@ -103,6 +107,80 @@ class TestFetchCrudePrices:
         with patch("time.sleep"):
             with pytest.raises(RuntimeError, match="ALPHA_VANTAGE_API_KEY"):
                 fetch_crude_prices()
+
+
+class TestFetchEtfEquityPrices:
+    """Tests for fetch_etf_equity_prices() — yfinance price fetcher."""
+
+    def _make_ticker_mock(self, price: float = 75.50, volume: int = 1_234_567) -> MagicMock:
+        fast_info = MagicMock()
+        fast_info.last_price = price
+        fast_info.last_volume = volume
+        ticker = MagicMock()
+        ticker.fast_info = fast_info
+        return ticker
+
+    def test_successful_response_returns_four_records(self) -> None:
+        """Returns one RawPriceRecord per symbol (USO, XLE, XOM, CVX)."""
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=self._make_ticker_mock(),
+        ):
+            result = fetch_etf_equity_prices()
+
+        assert len(result) == 4
+        assert [r.instrument for r in result] == ["USO", "XLE", "XOM", "CVX"]
+        assert all(r.source == "yfinance" for r in result)
+        assert all(r.price == pytest.approx(75.50) for r in result)
+
+    def test_instrument_types_set_correctly(self) -> None:
+        """USO and XLE are InstrumentType.ETF; XOM and CVX are InstrumentType.EQUITY."""
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=self._make_ticker_mock(),
+        ):
+            result = fetch_etf_equity_prices()
+
+        assert result[0].instrument_type == InstrumentType.ETF  # USO
+        assert result[1].instrument_type == InstrumentType.ETF  # XLE
+        assert result[2].instrument_type == InstrumentType.EQUITY  # XOM
+        assert result[3].instrument_type == InstrumentType.EQUITY  # CVX
+
+    def test_timestamp_is_utc_and_shared_across_records(self) -> None:
+        """timestamp is UTC time of the fetch; all records share the same fetch_time."""
+        from datetime import UTC
+
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=self._make_ticker_mock(),
+        ):
+            result = fetch_etf_equity_prices()
+
+        assert result[0].timestamp.tzinfo == UTC
+        assert all(r.timestamp == result[0].timestamp for r in result)
+
+    def test_none_price_raises_value_error(self) -> None:
+        """ValueError raised when yfinance returns last_price=None."""
+        mock_ticker = self._make_ticker_mock()
+        mock_ticker.fast_info.last_price = None
+
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=mock_ticker,
+        ):
+            with patch("time.sleep"):  # suppress tenacity backoff waits
+                with pytest.raises(ValueError, match="Invalid price from yfinance"):
+                    fetch_etf_equity_prices()
+
+    def test_yfinance_exception_is_reraised(self) -> None:
+        """Exceptions from yfinance are logged and re-raised; caller handles degraded mode."""
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            side_effect=ConnectionError("network timeout"),
+        ):
+            with patch("time.sleep"):  # suppress tenacity backoff waits
+                with pytest.raises(ConnectionError):
+                    fetch_etf_equity_prices()
 
 
 class TestRunIngestion:

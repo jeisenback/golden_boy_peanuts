@@ -24,8 +24,8 @@
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | In Review | `feature/8-fetch-crude-prices` | PR open |
-| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | Not Started | — | — |
+| 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
+| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | In Review | `feature/9-fetch-etf-equity-prices` | PR #67 open |
 | 10 | Implement fetch_options_chain — yfinance / Polygon | Not Started | — | — |
 | 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Not Started | — | Depends on #8, #9, #10 |
 | 13 | Implement compute_volatility_gap — realized vs. implied volatility | Not Started | — | — |
@@ -34,7 +34,7 @@
 
 ## Current Active Branch
 
-`feature/8-fetch-crude-prices`
+`feature/9-fetch-etf-equity-prices`
 
 ## Blockers
 
@@ -42,11 +42,11 @@
 
 ## Sprint Notes (2026-03-13)
 
-Sprint 3 started. Issue #8 (fetch_crude_prices) implemented and in review:
-- Alpha Vantage GLOBAL_QUOTE for CL=F (WTI) and BZ=F (Brent)
-- RuntimeError on missing ALPHA_VANTAGE_API_KEY; ValueError on malformed response
-- timestamp = UTC fetch time; 5 unit tests; all 67 tests pass
-- Pre-existing ruff/black/mypy lint errors (from PR #60) fixed to pass gate
+Sprint 3 started. Issues #8 and #9 implemented; #8 merged, #9 in review:
+- `#8` — `fetch_crude_prices()`: Alpha Vantage GLOBAL_QUOTE for CL=F (WTI) and BZ=F (Brent); RuntimeError on missing key; ValueError on malformed response; timestamp = UTC fetch time; `_HTTP_TIMEOUT_SECONDS` constant; 5 unit tests. PR #63 merged.
+- `#9` — `fetch_etf_equity_prices()`: yfinance fast_info for USO/XLE (ETF) and XOM/CVX (EQUITY); no API key required; per-ticker exceptions logged and re-raised; 5 unit tests. PR #67 open.
+- Pre-existing ruff/black/mypy lint errors from PR #60 fixed on both branches to pass gate.
+- PR #64 merged: chore/fix-workflow-pythonpath — adds PYTHONPATH=. to pr-review and issue-refinement CI workflows.
 
 ## Sprint Notes (2026-03-12)
 

@@ -22,6 +22,7 @@ import logging
 import os
 
 import requests
+import yfinance as yf
 
 from src.agents.ingestion.db import write_option_records  # noqa: F401
 from src.agents.ingestion.models import (
@@ -36,6 +37,14 @@ from src.core.retry import with_retry
 logger = logging.getLogger(__name__)
 
 _HTTP_TIMEOUT_SECONDS: int = 10  # seconds; applies to all outbound HTTP requests
+
+# Canonical ETF/equity universe for Sprint 3 ingestion (PRD §4.1); update alongside issue #11
+_ETF_EQUITY_INSTRUMENTS: list[tuple[str, InstrumentType]] = [
+    ("USO", InstrumentType.ETF),
+    ("XLE", InstrumentType.ETF),
+    ("XOM", InstrumentType.EQUITY),
+    ("CVX", InstrumentType.EQUITY),
+]
 
 
 @with_retry()
@@ -100,19 +109,55 @@ def fetch_crude_prices() -> list[RawPriceRecord]:
 @with_retry()
 def fetch_etf_equity_prices() -> list[RawPriceRecord]:
     """
-    Fetch current prices for USO, XLE, XOM, CVX from Yahoo Finance via yfinance.
+    Fetch current prices for USO, XLE, XOM, and CVX from Yahoo Finance via yfinance.
+
+    Uses yfinance.Ticker.fast_info for minimal-latency price retrieval.
+    Timestamp is set to the UTC time of the fetch call, not the market data timestamp.
+
+    If any individual ticker fetch fails, the exception is logged then re-raised.
+    Degraded-mode behavior (continuing with remaining tickers) is the responsibility
+    of the caller (run_ingestion), not this function.
 
     Returns:
-        Validated RawPriceRecord objects for all four instruments.
+        Validated RawPriceRecord objects for USO, XLE, XOM, and CVX.
 
     Raises:
-        NotImplementedError: Until implemented.
+        ValueError: If a ticker returns a missing or non-positive price.
+        Exception: Propagates the last exception after all retry attempts are
+            exhausted (reraise=True via with_retry).
     """
-    raise NotImplementedError(
-        "fetch_etf_equity_prices not yet implemented. "
-        "TODO: Use yfinance.download() for USO, XLE, XOM, CVX. "
-        "Validate each record with RawPriceRecord before returning."
-    )
+    records: list[RawPriceRecord] = []
+    fetch_time = datetime.now(UTC)
+
+    for symbol, instrument_type in _ETF_EQUITY_INSTRUMENTS:
+        try:
+            fast_info = yf.Ticker(symbol).fast_info
+            price = fast_info.last_price
+            if price is None or price <= 0:
+                raise ValueError(f"Invalid price from yfinance for {symbol}: {price!r}")
+            raw_vol = getattr(fast_info, "last_volume", None)
+            volume: int | None = int(raw_vol) if raw_vol is not None else None
+            records.append(
+                RawPriceRecord(
+                    instrument=symbol,
+                    instrument_type=instrument_type,
+                    price=float(price),
+                    volume=volume,
+                    timestamp=fetch_time,
+                    source="yfinance",
+                )
+            )
+        except Exception:
+            logger.exception("Failed to fetch price for %s via yfinance", symbol)
+            if records:
+                logger.warning(
+                    "Discarding %d already-fetched record(s) due to failure on %s",
+                    len(records),
+                    symbol,
+                )
+            raise
+
+    return records
 
 
 @with_retry()
