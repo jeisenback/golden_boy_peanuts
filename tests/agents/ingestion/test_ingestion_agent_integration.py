@@ -20,11 +20,13 @@ import os
 # container's port mapping is unavailable. Must be set before any testcontainers import.
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
+from collections.abc import Generator
 from datetime import UTC, datetime
 from unittest.mock import patch
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 
 from src.agents.ingestion.db import write_option_records, write_price_records
 from src.agents.ingestion.ingestion_agent import run_ingestion
@@ -74,7 +76,7 @@ CREATE TABLE IF NOT EXISTS options_chain (
 
 
 @pytest.fixture(scope="module")
-def pg_engine():
+def pg_engine() -> Generator[Engine, None, None]:
     """Start a PostgresContainer, apply schema, yield engine, stop container."""
     from testcontainers.postgres import PostgresContainer
 

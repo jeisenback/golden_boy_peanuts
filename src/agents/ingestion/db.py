@@ -29,6 +29,10 @@ def write_price_records(records: list[RawPriceRecord], engine: Engine) -> int:
 
     Returns:
         Number of records successfully written.
+
+    Raises:
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
+            connection failure after logging the exception.
     """
     if not records:
         return 0
@@ -48,8 +52,12 @@ def write_price_records(records: list[RawPriceRecord], engine: Engine) -> int:
         }
         for r in records
     ]
-    with engine.begin() as conn:
-        conn.execute(sql, rows)
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, rows)
+    except Exception:
+        logger.exception("write_price_records failed; %d record(s) not persisted", len(records))
+        raise
 
     logger.info("Wrote %d price record(s) to market_prices", len(records))
     return len(records)
@@ -65,6 +73,10 @@ def write_option_records(records: list[OptionRecord], engine: Engine) -> int:
 
     Returns:
         Number of records successfully written.
+
+    Raises:
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
+            connection failure after logging the exception.
     """
     if not records:
         return 0
@@ -85,14 +97,20 @@ def write_option_records(records: list[OptionRecord], engine: Engine) -> int:
             "implied_volatility": r.implied_volatility,
             "open_interest": r.open_interest,
             "volume": r.volume,
+            # option_type is a plain str field on OptionRecord (validated by Pydantic
+            # pattern "^(call|put)$"), not an enum — no .value conversion needed.
             "option_type": r.option_type,
             "source": r.source,
             "timestamp": r.timestamp,
         }
         for r in records
     ]
-    with engine.begin() as conn:
-        conn.execute(sql, rows)
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, rows)
+    except Exception:
+        logger.exception("write_option_records failed; %d record(s) not persisted", len(records))
+        raise
 
     logger.info("Wrote %d option record(s) to options_chain", len(records))
     return len(records)
