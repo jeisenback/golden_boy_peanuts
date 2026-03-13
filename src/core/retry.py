@@ -44,8 +44,8 @@ def with_retry() -> Callable[[_F], _F]:
         Configured tenacity retry decorator. Apply as ``@with_retry()``.
 
     Raises:
-        RuntimeError: Re-raises the original exception after all attempts are
-            exhausted (reraise=True).
+        Exception: Propagates the last exception raised by the wrapped
+            function after all retry attempts are exhausted (reraise=True).
 
     Example::
 
