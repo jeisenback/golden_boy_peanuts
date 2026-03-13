@@ -48,7 +48,7 @@ _BRANCH_RE = re.compile(
 _COMMIT_ISSUE_RE = re.compile(r"#\d+")
 _LANGCHAIN_RE = re.compile(r"^\s*(import|from)\s+(langchain|langgraph)", re.MULTILINE)
 _TYPE_HINT_DEF_RE = re.compile(
-    r"^def\s+[a-z_][a-zA-Z0-9_]*\s*\([^)]*\)\s*(?!->)", re.MULTILINE
+    r"^def\s+[a-z_][a-zA-Z0-9_]*\s*\([^)]*\)(?!\s*->)", re.MULTILINE
 )
 
 # Model used for LLM-assisted review (LLMWrapper.complete — ESOD Section 5.3)
@@ -155,7 +155,7 @@ def _check_langchain_imports(metadata: PRMetadata) -> list[ReviewFinding]:
     for line_num, line in enumerate(metadata.diff.splitlines(), start=1):
         if not line.startswith("+"):
             continue
-        if _LANGCHAIN_RE.search(line):
+        if _LANGCHAIN_RE.search(line[1:]):
             findings.append(
                 ReviewFinding(
                     file_path="(diff line)",
