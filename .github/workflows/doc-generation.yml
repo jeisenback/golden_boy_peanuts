@@ -1,0 +1,53 @@
+name: Doc Generation Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "src/**"
+      - "docs/energy_options*.md"
+      - "db/schema.sql"
+
+jobs:
+  doc-generation:
+    name: Auto-generate documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write       # needed to commit generated docs back to branch
+      pull-requests: read   # needed to read PR metadata
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0    # full history so git push works cleanly
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Doc Generation Agent
+        env:
+          LLM_PROVIDER: anthropic
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python scripts/run_doc_generation.py \
+            --subject "full pipeline" \
+            --context-file docs/energy_options_agent_design_doc.md \
+            --output-dir docs/generated
+
+      - name: Commit generated docs to PR branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/generated/
+          git diff --cached --quiet \
+            && echo "No doc changes — skipping commit." \
+            || (
+              git commit -m "docs: regenerate user guide [skip ci]" \
+              && git push origin HEAD:${{ github.head_ref }}
+            )
