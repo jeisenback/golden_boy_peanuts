@@ -25,7 +25,7 @@
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
 | 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
-| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | In Review | `feature/9-fetch-etf-equity-prices` | PR #67 open |
+| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | Merged | `feature/9-fetch-etf-equity-prices` | PR #67 merged |
 | 10 | Implement fetch_options_chain — yfinance / Polygon | Not Started | — | — |
 | 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Not Started | — | Depends on #8, #9, #10 |
 | 13 | Implement compute_volatility_gap — realized vs. implied volatility | Not Started | — | — |
@@ -34,11 +34,19 @@
 
 ## Current Active Branch
 
-`feature/9-fetch-etf-equity-prices`
+`develop` (sprint issues #8 and #9 both merged; next: #10)
 
 ## Blockers
 
 - None.
+
+## Sprint Notes (2026-03-13, session 2)
+
+PR sweep and infrastructure cleanup:
+- PR #67 merged: `fetch_etf_equity_prices()` (issue #9) — partial-data-loss warning log, `_ETF_EQUITY_INSTRUMENTS` comment improved.
+- PR #65 merged: Doc Generation Agent (`src/agents/doc_generation/`) + `scripts/run_doc_generation.py` + `docs/generated/` workflow. Fixed `ModuleNotFoundError` (`PYTHONPATH` added to `doc-generation.yml`); extracted `_SEPARATOR_WIDTH` constant (was magic `70`).
+- PR #66 merged: Issue Refinement workflow batch processing (`workflow_dispatch` + matrix strategy). Removed redundant inline `PYTHONPATH=.` from `pr-review.yml`; documented `--limit 100` cap in `issue-refinement.yml`. Branch-name LLM blocker dismissed (bot-generated branch, not a feature branch).
+- All sprint infra branches now merged to develop. Issues #8 and #9 both fully done.
 
 ## Sprint Notes (2026-03-13)
 
@@ -92,7 +100,7 @@ Key architecture observation documented: `run_event_detection()` takes no argume
 
 ## Last Merged PR
 
-- PR #53 (develop ← develop merge), PR #52/#51 (#26 ingestion fix), PR #50 (#1 CODEOWNERS), PR #48 (#31 post_session), PR #45 (#27 pipeline), PR #42 (#33), PR #41 (#32), PR #40 (#31), PR #39 (#29), PR #38 (#27), PR #37 (#26), PR #36 (#2), PR #35 (#30) — all Sprint 1 PRs merged 2026-03-10
+- PR #67 (#9 fetch_etf_equity_prices), PR #66 (issue-refinement batch), PR #65 (doc_generation agent), PR #63 (#8 fetch_crude_prices), PR #64 (PYTHONPATH CI fix)
 
 ---
 
