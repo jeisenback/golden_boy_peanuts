@@ -1,0 +1,43 @@
+name: PR Review Agent
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  pr-review:
+    name: Automated PR Review
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write   # needed to post PR comments via gh pr comment
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # full history needed for diff fetching
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install gh CLI
+        run: |
+          type gh || (
+            sudo apt-get update -qq &&
+            sudo apt-get install -y gh
+          )
+
+      - name: Run PR Review Agent
+        env:
+          LLM_PROVIDER: anthropic
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python scripts/run_pr_review.py \
+            --pr ${{ github.event.pull_request.number }} \
+            --post-comment
