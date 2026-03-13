@@ -108,7 +108,15 @@ def compute_edge_score(instrument: str, feature_set: FeatureSet) -> float:
 
 
 def _vol_gap_label(instrument: str, feature_set: FeatureSet) -> str:
-    """Return human-readable volatility gap label for the signals dict."""
+    """Return human-readable volatility gap label for the signals dict.
+
+    Args:
+        instrument: Ticker symbol to look up in feature_set.volatility_gaps.
+        feature_set: Current FeatureSet from Feature Generation Agent.
+
+    Returns:
+        'positive' if gap > 0, 'negative' if gap <= 0, 'neutral' if no record.
+    """
     vg = next((v for v in feature_set.volatility_gaps if v.instrument == instrument), None)
     if vg is None:
         return "neutral"
@@ -116,7 +124,15 @@ def _vol_gap_label(instrument: str, feature_set: FeatureSet) -> str:
 
 
 def _dispersion_label(feature_set: FeatureSet) -> str:
-    """Return human-readable sector dispersion label for the signals dict."""
+    """Return human-readable sector dispersion label for the signals dict.
+
+    Args:
+        feature_set: Current FeatureSet from Feature Generation Agent.
+
+    Returns:
+        'high' if CV > _DISPERSION_HIGH_THRESHOLD, 'medium' if CV > _DISPERSION_MEDIUM_THRESHOLD,
+        'low' otherwise or if sector_dispersion is None.
+    """
     disp = feature_set.sector_dispersion
     if disp is None:
         return "low"
@@ -171,7 +187,9 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
 
     candidates.sort(key=lambda c: c.edge_score, reverse=True)
 
-    # Persist to DB — failures are logged but do not propagate (degraded-mode)
+    # Persist to DB — failures are logged but do not propagate (degraded-mode).
+    # This mirrors the run_ingestion() pattern: a DB outage must not suppress
+    # the candidate list from the caller. Candidates are always returned.
     if candidates:
         try:
             engine = get_engine()
