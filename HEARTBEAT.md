@@ -13,37 +13,41 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 1 |
-| Sprint Name | Sprint 1 — Repo & Agent Readiness |
-| Goal | GitHub repo protected; agents can work reliably on scaffold; tooling gates enforced; Docker running |
-| Start Date | 2026-03-10 |
-| Target Close | 2026-03-17 |
+| Sprint Number | 2 |
+| Sprint Name | Sprint 2 — Core Infrastructure |
+| Goal | Shared utilities (get_engine, retry), CI green, PostgreSQL schema for all four agents. Blocks all feature implementation. |
+| Start Date | 2026-03-11 |
+| Target Close | TBD |
 | Status | ACTIVE |
 
 ## Sprint Issues
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 1 | Initialize GitHub repository: labels, milestones, branch protection | Merged | `chore/1-codeowners` | PR #50 merged |
-| 2 | Docker Compose for Postgres, venv, .env setup | Merged | `chore/2-docker-compose` | PR #36 merged |
-| 26 | Fix ingestion_agent.py: fetch_options_chain stub, orphaned import, logging | Merged | `fix/26-ingestion-scaffold` | PR #51 merged |
-| 27 | Add src/pipeline.py stub with run_pipeline() call sequence | Merged | `chore/27-pipeline-stub` | PR #38 merged |
-| 28 | Specify event_id generation in classify_event() docstring | Merged | — | Closed — deterministic UUID5/SHA256 approach adopted |
-| 29 | Add tests/conftest.py with shared Pydantic model fixtures | Merged | `test/29-conftest-fixtures` | PR #39 merged |
-| 30 | Add pytest to local_check.sh quality gate | Merged | `chore/30-pytest-local-check` | PR #35 merged |
-| 31 | Make post_session.sh active — invoke local_check.sh + git diff --stat | Merged | `chore/31-post-session-active` | PR #40 merged |
-| 32 | Add ADLC startup step to CLAUDE.md session startup sequence | Merged | `docs/32-adlc-startup-step` | PR #41 merged |
-| 33 | Document non-interactive branch creation fallback in CLAUDE.md | Merged | `docs/33-noninteractive-branch` | PR #42 merged |
+| 3 | Refactor: extract shared get_engine() to src/core/db.py | Merged | `refactor/3-extract-get-engine` | PR #54 merged |
+| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | In Review | `refactor/4-extract-retry-config` | PR #55 open |
+| 5 | CI pipeline verification: confirm all 4 workflows run green | Closed | `chore/5-ci-verification` | All 4 workflows verified green — no code changes |
+| 6 | PostgreSQL schema: market_prices and options_chain tables | Not Started | — | — |
+| 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
+| 34 | chore: replace inline @retry decorators with @with_retry() | Not Started | — | Blocked by #4 |
 
 ## Current Active Branch
 
-`develop` — all Sprint 1 issues merged and closed. Ready for human to run `bash scripts/sprint_close.sh`.
+`chore/5-ci-verification` — issue #5 verified and closed. No code changes.
 
 ## Blockers
 
-- None — all Sprint 1 blockers resolved.
+- None.
 
-## Sprint Notes (2026-03-11)
+## Sprint Notes (2026-03-12, session 2)
+
+Issue #5 closed: all 4 GitHub Actions workflows verified green against existing run history. No code changes required.
+- `ci.yml` — push to develop run 22946745279 ✓; PR run 22927190645 ✓
+- `runtime-check.yml` — push to develop run 22946745272 ✓; PR run 22927190654 ✓
+- `integration.yml` — PR runs 23026165853, 23027379749 ✓ (exit 5 = 0 tests collected; acceptable per issue notes)
+- `security.yml` — PR runs 23026165882, 23027379759 ✓ (no HIGH bandit findings; pip-audit clean)
+
+## Sprint Notes (2026-03-12)
 
 All Sprint 1 PRs confirmed merged. Issue table updated to reflect merged state. No open blockers. Sprint ready for human to close via `bash scripts/sprint_close.sh`. Next sprint candidates: #3, #4, #5, #6, #7, #8 (Phase 0 / Phase 1 infra).
 
