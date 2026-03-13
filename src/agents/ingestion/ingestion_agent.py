@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 _HTTP_TIMEOUT_SECONDS: int = 10  # seconds; applies to all outbound HTTP requests
 
-# Instrument classification for the ETF/equity feed
+# Canonical ETF/equity universe for Sprint 3 ingestion (PRD §4.1); update alongside issue #11
 _ETF_EQUITY_INSTRUMENTS: list[tuple[str, InstrumentType]] = [
     ("USO", InstrumentType.ETF),
     ("XLE", InstrumentType.ETF),
@@ -149,6 +149,12 @@ def fetch_etf_equity_prices() -> list[RawPriceRecord]:
             )
         except Exception:
             logger.exception("Failed to fetch price for %s via yfinance", symbol)
+            if records:
+                logger.warning(
+                    "Discarding %d already-fetched record(s) due to failure on %s",
+                    len(records),
+                    symbol,
+                )
             raise
 
     return records
