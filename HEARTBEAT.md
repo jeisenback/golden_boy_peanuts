@@ -13,9 +13,9 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 3 |
-| Sprint Name | Sprint 3 — Data Pipeline |
-| Goal | Phase 1 fetch functions implemented; ingestion pipeline wired end-to-end; feature generation scaffolded |
+| Sprint Number | 4 |
+| Sprint Name | Sprint 4 — Signal Quality |
+| Goal | QA for ingestion and feature generation; implement compute_edge_score and evaluate_strategies; QA for strategy evaluation |
 | Start Date | 2026-03-13 |
 | Target Close | 2026-03-20 |
 | Status | ACTIVE |
@@ -24,13 +24,11 @@
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
-| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | Merged | `feature/9-fetch-etf-equity-prices` | PR #67 merged |
-| 10 | Implement fetch_options_chain — yfinance / Polygon | Merged | `feature/10-fetch-options-chain` | PR #68 merged |
-| 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Merged | `feature/11-run-ingestion` | PR #70 merged |
-| 13 | Implement compute_volatility_gap — realized vs. implied volatility | Merged | `feature/13-compute-volatility-gap` | PR #71 merged |
-| 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | Merged | `feature/14-compute-sector-dispersion` | PR #74 merged |
-| 15 | Implement run_feature_generation — Phase 1 orchestration | Not Started | — | Depends on #13, #14 |
+| 12 | QA: Ingestion Agent — integration test and coverage sign-off | Not Started | — | — |
+| 16 | QA: Feature Generation Agent — integration test and coverage sign-off | Not Started | — | — |
+| 17 | Implement compute_edge_score — Phase 1 static heuristic scoring | Not Started | — | — |
+| 18 | Implement evaluate_strategies — long straddle, call spread, put spread candidates | Not Started | — | — |
+| 19 | QA: Strategy Evaluation Agent — integration test and coverage sign-off | Not Started | — | Depends on #17, #18 |
 
 ## Current Active Branch
 
@@ -39,6 +37,28 @@ none
 ## Blockers
 
 - None.
+
+---
+
+## Sprint 3 Summary — Closed 2026-03-13
+
+| Field | Value |
+|-------|-------|
+| Goal | Phase 1 fetch functions implemented; ingestion pipeline wired end-to-end; feature generation scaffolded |
+| Start | 2026-03-13 |
+| Closed | 2026-03-13 |
+| Issues Closed | 7 (#8, #9, #10, #11, #13, #14, #15) |
+| Carry-overs | None |
+
+### Sprint 3 Retro Notes
+
+| | |
+|---|---|
+| What went well | All 7 issues delivered in a single day; full ingestion pipeline + feature generation scaffolded; audit clean (87% coverage, 0 bandit HIGH, mypy strict passed) |
+| What was slow | Interactive sprint scripts can't run in agent context; minor Windows python3 alias issue in audit script |
+| What to change | — |
+
+---
 
 ## Sprint Notes (2026-03-13, session 6)
 
