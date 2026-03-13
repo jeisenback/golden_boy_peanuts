@@ -47,6 +47,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 _DEFAULT_OUTPUT_DIR = Path("docs/generated")
+_SEPARATOR_WIDTH: int = 70
 
 
 def _slugify(text: str) -> str:
@@ -182,14 +183,14 @@ def main() -> int:
         return 1
 
     # Print summary
-    print("\n" + "=" * 70)  # noqa: T201
+    print("\n" + "=" * _SEPARATOR_WIDTH)  # noqa: T201
     print(f"Doc Generation — subject: '{request.subject}'")  # noqa: T201
-    print("=" * 70)  # noqa: T201
+    print("=" * _SEPARATOR_WIDTH)  # noqa: T201
     print(result.summary)  # noqa: T201
     print(f"\nArtifacts written ({len(written_paths)}):")  # noqa: T201
     for path in written_paths:
         print(f"  {path}")  # noqa: T201
-    print("=" * 70 + "\n")  # noqa: T201
+    print("=" * _SEPARATOR_WIDTH + "\n")  # noqa: T201
 
     return 0
 
