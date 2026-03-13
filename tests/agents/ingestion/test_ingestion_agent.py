@@ -21,7 +21,7 @@ from src.agents.ingestion.ingestion_agent import (
     fetch_options_chain,
     run_ingestion,
 )
-from src.agents.ingestion.models import InstrumentType, MarketState
+from src.agents.ingestion.models import InstrumentType, MarketState, OptionRecord, RawPriceRecord
 
 
 class TestFetchCrudePrices:
@@ -317,20 +317,94 @@ class TestFetchOptionsChain:
 class TestRunIngestion:
     """Tests for run_ingestion() orchestration function."""
 
-    @pytest.mark.xfail(reason="Not yet implemented", strict=True)
-    def test_run_ingestion_returns_market_state(self) -> None:
-        """run_ingestion() must return a MarketState instance."""
-        result = run_ingestion()
-        assert isinstance(result, MarketState)
+    # Patch targets for all dependencies called by run_ingestion
+    _PATCH_CRUDE = "src.agents.ingestion.ingestion_agent.fetch_crude_prices"
+    _PATCH_ETF = "src.agents.ingestion.ingestion_agent.fetch_etf_equity_prices"
+    _PATCH_OPTIONS = "src.agents.ingestion.ingestion_agent.fetch_options_chain"
+    _PATCH_ENGINE = "src.agents.ingestion.ingestion_agent.get_engine"
+    _PATCH_WRITE_PRICES = "src.agents.ingestion.ingestion_agent.write_price_records"
+    _PATCH_WRITE_OPTIONS = "src.agents.ingestion.ingestion_agent.write_option_records"
 
-    @pytest.mark.xfail(reason="Not yet implemented", strict=True)
-    def test_run_ingestion_tolerates_single_feed_failure(self) -> None:
-        """
-        run_ingestion() must not raise if a single feed fails.
+    def _make_price_record(self, instrument: str = "CL=F") -> RawPriceRecord:
+        from datetime import UTC, datetime
 
-        Errors appear in MarketState.ingestion_errors, not as exceptions
-        (ESOD Section 6 — degraded-mode output).
-        """
-        result = run_ingestion()
+        return RawPriceRecord(
+            instrument=instrument,
+            instrument_type=InstrumentType.CRUDE_FUTURES,
+            price=75.0,
+            volume=1000,
+            timestamp=datetime.now(UTC),
+            source="test",
+        )
+
+    def _make_option_record(self) -> OptionRecord:
+        from datetime import UTC, datetime
+
+        return OptionRecord(
+            instrument="USO",
+            strike=100.0,
+            expiration_date=datetime.now(UTC),
+            implied_volatility=0.25,
+            open_interest=500,
+            volume=200,
+            option_type="call",
+            timestamp=datetime.now(UTC),
+            source="test",
+        )
+
+    def test_all_feeds_success_returns_full_market_state(self) -> None:
+        """Returns MarketState with all records when every feed succeeds."""
+        crude_records = [self._make_price_record("CL=F"), self._make_price_record("BZ=F")]
+        etf_records = [self._make_price_record("USO"), self._make_price_record("XLE")]
+        option_records = [self._make_option_record()]
+
+        with (
+            patch(self._PATCH_CRUDE, return_value=crude_records),
+            patch(self._PATCH_ETF, return_value=etf_records),
+            patch(self._PATCH_OPTIONS, return_value=option_records),
+            patch(self._PATCH_ENGINE, return_value=MagicMock()),
+            patch(self._PATCH_WRITE_PRICES, return_value=len(crude_records + etf_records)),
+            patch(self._PATCH_WRITE_OPTIONS, return_value=len(option_records)),
+        ):
+            result = run_ingestion()
+
         assert isinstance(result, MarketState)
-        assert isinstance(result.ingestion_errors, list)
+        assert len(result.prices) == 4
+        assert len(result.options) == 1
+        assert result.ingestion_errors == []
+
+    def test_one_feed_failure_appends_error_and_continues(self) -> None:
+        """One failing feed appends to ingestion_errors; other feeds still populate state."""
+        etf_records = [self._make_price_record("USO")]
+        option_records = [self._make_option_record()]
+
+        with (
+            patch(self._PATCH_CRUDE, side_effect=RuntimeError("API key missing")),
+            patch(self._PATCH_ETF, return_value=etf_records),
+            patch(self._PATCH_OPTIONS, return_value=option_records),
+            patch(self._PATCH_ENGINE, return_value=MagicMock()),
+            patch(self._PATCH_WRITE_PRICES, return_value=1),
+            patch(self._PATCH_WRITE_OPTIONS, return_value=1),
+        ):
+            result = run_ingestion()
+
+        assert isinstance(result, MarketState)
+        assert len(result.prices) == 1  # only ETF records
+        assert len(result.options) == 1
+        assert len(result.ingestion_errors) == 1
+        assert "fetch_crude_prices" in result.ingestion_errors[0]
+
+    def test_all_feeds_failure_returns_empty_state_without_raising(self) -> None:
+        """Total feed failure returns empty-but-valid MarketState; never raises."""
+        with (
+            patch(self._PATCH_CRUDE, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_ETF, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_OPTIONS, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_ENGINE, side_effect=OSError("DATABASE_URL not set")),
+        ):
+            result = run_ingestion()
+
+        assert isinstance(result, MarketState)
+        assert result.prices == []
+        assert result.options == []
+        assert len(result.ingestion_errors) >= 3
