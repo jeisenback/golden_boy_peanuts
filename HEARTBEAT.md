@@ -25,19 +25,30 @@
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
 | 3 | Refactor: extract shared get_engine() to src/core/db.py | Merged | `refactor/3-extract-get-engine` | PR #54 merged |
-| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | In Review | `refactor/4-extract-retry-config` | PR #55 open |
+| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | Merged | `refactor/4-extract-retry-config` | PR #55 merged |
 | 5 | CI pipeline verification: confirm all 4 workflows run green | Closed | `chore/5-ci-verification` | All 4 workflows verified green; issue closed |
-| 6 | PostgreSQL schema: market_prices and options_chain tables | In Review | `feature/6-schema-market-prices` | PR open; schema verified with psql |
-| 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
-| 34 | Replace remaining inline @retry decorators with @with_retry() | Not Started | — | Blocked until PR #55 merges |
+| 6 | PostgreSQL schema: market_prices and options_chain tables | Merged | `feature/6-schema-market-prices` | PR #59 merged |
+| 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Closed | — | Closed on GitHub; work landed via develop |
+| 34 | Replace remaining inline @retry decorators with @with_retry() | Closed | — | Done in PR #55; issue closed |
 
 ## Current Active Branch
 
-`feature/6-schema-market-prices`
+`develop` — all Sprint 2 issues closed. Ready for human to run `bash scripts/sprint_close.sh`.
 
 ## Blockers
 
-- None currently. Issue #34 is sequentially dependent on PR #55 merge.
+- None.
+
+## Sprint Notes (2026-03-13)
+
+Sprint 2 complete. All issues closed:
+- `#3`, `#4`, `#6` — closed after confirming PR merges (#54, #55, #59)
+- `#5` — closed after CI verification (no code changes needed)
+- `#7` — was already closed on GitHub (work landed via develop)
+- `#34` — closed; work completed as part of PR #55 (all inline @retry replaced)
+
+Tests: 62 passed, 9 xfailed. local_check.sh: all stages pass. Develop is clean.
+Ready for human to run `bash scripts/sprint_close.sh` and start Sprint 3.
 
 ## Sprint Notes (2026-03-12)
 
