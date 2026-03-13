@@ -41,7 +41,7 @@ def _get_api_key() -> str:
     """
     key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
-        raise EnvironmentError(
+        raise OSError(
             "ANTHROPIC_API_KEY environment variable is not set. "
             "Set it before using the Anthropic provider."
         )
@@ -60,7 +60,7 @@ def complete(
     model_id: str,
     prompt: str,
     max_tokens: int = _DEFAULT_MAX_TOKENS,
-    **kwargs: Any,
+    **kwargs: Any,  # noqa: ANN401
 ) -> dict[str, Any]:
     """
     Send a prompt to the Anthropic Messages API and return the raw response dict.
@@ -107,9 +107,7 @@ def complete(
         response.raise_for_status()
 
     if not response.ok:
-        logger.error(
-            "Anthropic API error %d: %s", response.status_code, response.text[:500]
-        )
+        logger.error("Anthropic API error %d: %s", response.status_code, response.text[:500])
         response.raise_for_status()
 
     data: dict[str, Any] = response.json()
