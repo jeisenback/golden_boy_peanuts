@@ -26,9 +26,9 @@ no langchain.*/langgraph.* imports, LLM calls via LLMWrapper only.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 import re
-from datetime import datetime, timezone
 
 from src.agents.issue_refinement.models import (
     DoRFinding,
@@ -128,9 +128,7 @@ def _check_milestone(metadata: IssueMetadata) -> list[DoRFinding]:
                     "No milestone assigned. Issues must be assigned to a phase milestone "
                     "before entering a sprint (DoR item 3)."
                 ),
-                suggestion=(
-                    "Assign a milestone: Phase 0 / Phase 1 / Phase 2 / Phase 3 / Phase 4."
-                ),
+                suggestion=("Assign a milestone: Phase 0 / Phase 1 / Phase 2 / Phase 3 / Phase 4."),
             )
         ]
     return []
@@ -308,7 +306,7 @@ def refine_issue(
             metadata.issue_number,
             len(llm_findings),
         )
-    except (NotImplementedError, EnvironmentError) as exc:
+    except (OSError, NotImplementedError) as exc:
         logger.warning(
             "Issue #%d: LLM review unavailable (%s) — static checks still apply.",
             metadata.issue_number,
@@ -342,7 +340,7 @@ def refine_issue(
 
     result = IssueRefinementResult(
         issue_number=metadata.issue_number,
-        refined_at=datetime.now(tz=timezone.utc),
+        refined_at=datetime.now(tz=UTC),
         findings=findings,
         summary=" ".join(summary_parts),
         ready=ready,

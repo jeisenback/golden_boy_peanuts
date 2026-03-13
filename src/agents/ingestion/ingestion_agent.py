@@ -17,80 +17,150 @@ DATABASE_URL from environment.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 import os
 
-from tenacity import retry, stop_after_attempt, wait_exponential
+import requests
+import yfinance as yf
 
 from src.agents.ingestion.db import write_option_records  # noqa: F401
-from src.agents.ingestion.models import MarketState, OptionRecord, RawPriceRecord
+from src.agents.ingestion.models import (
+    InstrumentType,
+    MarketState,
+    OptionRecord,
+    RawPriceRecord,
+)
+from src.core.retry import with_retry
 
 # Do NOT call logging.basicConfig() here — configuration belongs in the entry point.
 logger = logging.getLogger(__name__)
 
+_HTTP_TIMEOUT_SECONDS: int = 10  # seconds; applies to all outbound HTTP requests
 
-@retry(
-    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
-    wait=wait_exponential(
-        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
-        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
-    ),
-    reraise=True,
-)
+# Canonical ETF/equity universe for Sprint 3 ingestion (PRD §4.1); update alongside issue #11
+_ETF_EQUITY_INSTRUMENTS: list[tuple[str, InstrumentType]] = [
+    ("USO", InstrumentType.ETF),
+    ("XLE", InstrumentType.ETF),
+    ("XOM", InstrumentType.EQUITY),
+    ("CVX", InstrumentType.EQUITY),
+]
+
+
+@with_retry()
 def fetch_crude_prices() -> list[RawPriceRecord]:
     """
     Fetch current WTI and Brent crude prices from Alpha Vantage.
 
-    Retries with exponential backoff (ESOD Section 6).
-    On persistent failure, re-raises — caller implements degraded-mode behavior.
+    Calls the GLOBAL_QUOTE endpoint for CL=F (WTI) and BZ=F (Brent).
+    Timestamp is set to UTC time of the fetch, not the API's reported quote time.
 
     Returns:
         Validated RawPriceRecord objects for WTI (CL=F) and Brent (BZ=F).
 
     Raises:
-        NotImplementedError: Until implemented.
+        RuntimeError: If ALPHA_VANTAGE_API_KEY env var is not set.
+        ValueError: If any API response is missing required price fields.
+        Exception: Propagates the last exception after all retry attempts
+            are exhausted (reraise=True).
     """
-    raise NotImplementedError(
-        "fetch_crude_prices not yet implemented. "
-        "TODO: Call Alpha Vantage for WTI (CL=F) and Brent (BZ=F). "
-        "Validate each record with RawPriceRecord before returning. "
-        "See .env.example for ALPHA_VANTAGE_API_KEY."
-    )
+    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+    if not api_key:
+        raise RuntimeError("ALPHA_VANTAGE_API_KEY environment variable is not set.")
+
+    symbols = ["CL=F", "BZ=F"]
+    records: list[RawPriceRecord] = []
+    fetch_time = datetime.now(UTC)
+
+    for symbol in symbols:
+        response = requests.get(
+            "https://www.alphavantage.co/query",
+            params={"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": api_key},
+            timeout=_HTTP_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        data: dict[str, object] = response.json()
+
+        quote = data.get("Global Quote", {})
+        price_str = quote.get("05. price") if isinstance(quote, dict) else None
+        if not price_str:
+            raise ValueError(f"Malformed Alpha Vantage response for {symbol}: {data}")
+
+        volume_str = quote.get("06. volume") if isinstance(quote, dict) else None
+        volume: int | None = int(volume_str) if volume_str else None
+
+        try:
+            records.append(
+                RawPriceRecord(
+                    instrument=symbol,
+                    instrument_type=InstrumentType.CRUDE_FUTURES,
+                    price=float(price_str),
+                    volume=volume,
+                    timestamp=fetch_time,
+                    source="alpha_vantage",
+                )
+            )
+        except Exception as exc:
+            raise ValueError(f"Malformed Alpha Vantage response for {symbol}: {data}") from exc
+
+    return records
 
 
-@retry(
-    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
-    wait=wait_exponential(
-        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
-        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
-    ),
-    reraise=True,
-)
+@with_retry()
 def fetch_etf_equity_prices() -> list[RawPriceRecord]:
     """
-    Fetch current prices for USO, XLE, XOM, CVX from Yahoo Finance via yfinance.
+    Fetch current prices for USO, XLE, XOM, and CVX from Yahoo Finance via yfinance.
+
+    Uses yfinance.Ticker.fast_info for minimal-latency price retrieval.
+    Timestamp is set to the UTC time of the fetch call, not the market data timestamp.
+
+    If any individual ticker fetch fails, the exception is logged then re-raised.
+    Degraded-mode behavior (continuing with remaining tickers) is the responsibility
+    of the caller (run_ingestion), not this function.
 
     Returns:
-        Validated RawPriceRecord objects for all four instruments.
+        Validated RawPriceRecord objects for USO, XLE, XOM, and CVX.
 
     Raises:
-        NotImplementedError: Until implemented.
+        ValueError: If a ticker returns a missing or non-positive price.
+        Exception: Propagates the last exception after all retry attempts are
+            exhausted (reraise=True via with_retry).
     """
-    raise NotImplementedError(
-        "fetch_etf_equity_prices not yet implemented. "
-        "TODO: Use yfinance.download() for USO, XLE, XOM, CVX. "
-        "Validate each record with RawPriceRecord before returning."
-    )
+    records: list[RawPriceRecord] = []
+    fetch_time = datetime.now(UTC)
+
+    for symbol, instrument_type in _ETF_EQUITY_INSTRUMENTS:
+        try:
+            fast_info = yf.Ticker(symbol).fast_info
+            price = fast_info.last_price
+            if price is None or price <= 0:
+                raise ValueError(f"Invalid price from yfinance for {symbol}: {price!r}")
+            raw_vol = getattr(fast_info, "last_volume", None)
+            volume: int | None = int(raw_vol) if raw_vol is not None else None
+            records.append(
+                RawPriceRecord(
+                    instrument=symbol,
+                    instrument_type=instrument_type,
+                    price=float(price),
+                    volume=volume,
+                    timestamp=fetch_time,
+                    source="yfinance",
+                )
+            )
+        except Exception:
+            logger.exception("Failed to fetch price for %s via yfinance", symbol)
+            if records:
+                logger.warning(
+                    "Discarding %d already-fetched record(s) due to failure on %s",
+                    len(records),
+                    symbol,
+                )
+            raise
+
+    return records
 
 
-@retry(
-    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
-    wait=wait_exponential(
-        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
-        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
-    ),
-    reraise=True,
-)
+@with_retry()
 def fetch_options_chain() -> list[OptionRecord]:
     """
     Fetch options chain data for USO, XLE, XOM, CVX from Yahoo Finance / Polygon.io.

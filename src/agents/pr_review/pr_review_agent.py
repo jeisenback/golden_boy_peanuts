@@ -27,9 +27,9 @@ no langchain.*/langgraph.* imports, LLM calls via LLMWrapper only.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 import re
-from datetime import datetime, timezone
 
 from src.agents.pr_review.models import (
     PRMetadata,
@@ -42,14 +42,10 @@ from src.core.llm_wrapper import LLMWrapper
 logger = logging.getLogger(__name__)
 
 # Regex patterns for static rule checks (git_workflow.md)
-_BRANCH_RE = re.compile(
-    r"^(feature|fix|refactor|chore|test|docs)/\d+-[a-z0-9-]+$"
-)
+_BRANCH_RE = re.compile(r"^(feature|fix|refactor|chore|test|docs)/\d+-[a-z0-9-]+$")
 _COMMIT_ISSUE_RE = re.compile(r"#\d+")
 _LANGCHAIN_RE = re.compile(r"^\s*(import|from)\s+(langchain|langgraph)", re.MULTILINE)
-_TYPE_HINT_DEF_RE = re.compile(
-    r"^def\s+[a-z_][a-zA-Z0-9_]*\s*\([^)]*\)(?!\s*->)", re.MULTILINE
-)
+_TYPE_HINT_DEF_RE = re.compile(r"^def\s+[a-z_][a-zA-Z0-9_]*\s*\([^)]*\)(?!\s*->)", re.MULTILINE)
 
 # Model used for LLM-assisted review (LLMWrapper.complete — ESOD Section 5.3)
 _REVIEW_MODEL_ID = "claude-sonnet-4-6"
@@ -62,7 +58,8 @@ Key standards to check:
 1. Pydantic models must validate all data at every module boundary (inbound data, API responses).
 2. All LLM calls must go through src.core.llm_wrapper.LLMWrapper — no direct provider SDK usage.
 3. SQL writes must use parameterized queries — never f-string or %-formatted SQL.
-4. Exceptions must not be silently swallowed — logging + re-raise or structured error response required.
+4. Exceptions must not be silently swallowed — logging + re-raise or
+   structured error response required.
 5. No magic numbers — constants must be named and documented.
 6. Public functions must have docstrings explaining purpose, args, and return values.
 
@@ -341,9 +338,7 @@ def review_pull_request(
                 metadata.pr_number,
             )
     else:
-        logger.warning(
-            "PR #%d: no diff provided — skipping LLM review pass.", metadata.pr_number
-        )
+        logger.warning("PR #%d: no diff provided — skipping LLM review pass.", metadata.pr_number)
 
     # Sort: blockers first, then warnings, then suggestions
     severity_order = {
@@ -362,7 +357,9 @@ def review_pull_request(
         f"{suggestion_count} suggestion(s).",
     ]
     if approved:
-        summary_parts.append("No blockers found — PR is eligible for merge (human approval required).")
+        summary_parts.append(
+            "No blockers found — PR is eligible for merge (human approval required)."
+        )
     else:
         summary_parts.append(
             f"{blocker_count} blocker(s) must be resolved before this PR can be merged."
@@ -370,7 +367,7 @@ def review_pull_request(
 
     result = PRReviewResult(
         pr_number=metadata.pr_number,
-        reviewed_at=datetime.now(tz=timezone.utc),
+        reviewed_at=datetime.now(tz=UTC),
         findings=findings,
         summary=" ".join(summary_parts),
         approved=approved,

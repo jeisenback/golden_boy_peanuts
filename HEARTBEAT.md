@@ -13,38 +13,61 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 2 |
-| Sprint Name | Sprint 2 — Core Infrastructure |
-| Goal | Shared utilities (get_engine, retry), CI green, PostgreSQL schema for all four agents. Blocks all feature implementation. |
-| Start Date | 2026-03-11 |
-| Target Close | TBD |
+| Sprint Number | 3 |
+| Sprint Name | Sprint 3 — Data Pipeline |
+| Goal | Phase 1 fetch functions implemented; ingestion pipeline wired end-to-end; feature generation scaffolded |
+| Start Date | 2026-03-13 |
+| Target Close | 2026-03-20 |
 | Status | ACTIVE |
 
 ## Sprint Issues
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 3 | Refactor: extract shared get_engine() to src/core/db.py | In Review | `refactor/3-extract-get-engine` | PR open — awaiting human merge |
-| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | Not Started | — | — |
-| 5 | CI pipeline verification: confirm all 4 workflows run green | Not Started | — | — |
-| 6 | PostgreSQL schema: market_prices and options_chain tables | Not Started | — | — |
-| 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
-| 34 | chore: replace inline @retry decorators with @with_retry() | Not Started | — | Blocked by #4 |
+| 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
+| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | In Review | `feature/9-fetch-etf-equity-prices` | PR #67 open |
+| 10 | Implement fetch_options_chain — yfinance / Polygon | Not Started | — | — |
+| 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Not Started | — | Depends on #8, #9, #10 |
+| 13 | Implement compute_volatility_gap — realized vs. implied volatility | Not Started | — | — |
+| 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | Not Started | — | — |
+| 15 | Implement run_feature_generation — Phase 1 orchestration | Not Started | — | Depends on #13, #14 |
 
 ## Current Active Branch
 
-`refactor/3-extract-get-engine` — issue #3 complete, PR open for review.
+`feature/9-fetch-etf-equity-prices`
 
 ## Blockers
 
 - None.
 
-## Sprint Notes (2026-03-11, Sprint 2 start)
+## Sprint Notes (2026-03-13)
 
-Sprint 2 started (human-approved). Sprint 1 retro + close deferred to human via `bash scripts/sprint_close.sh`.
-- `#3` complete on `refactor/3-extract-get-engine`: `src/core/db.py` created with single `get_engine()` implementation; all 4 agent `db.py` files updated to import from `src.core.db` (re-exported with `# noqa: F401`). All checks green: pytest 9 xfailed/0 fail, ruff pass, mypy 22 files clean, runtime-import scan pass.
+Sprint 3 started. Issues #8 and #9 implemented; #8 merged, #9 in review:
+- `#8` — `fetch_crude_prices()`: Alpha Vantage GLOBAL_QUOTE for CL=F (WTI) and BZ=F (Brent); RuntimeError on missing key; ValueError on malformed response; timestamp = UTC fetch time; `_HTTP_TIMEOUT_SECONDS` constant; 5 unit tests. PR #63 merged.
+- `#9` — `fetch_etf_equity_prices()`: yfinance fast_info for USO/XLE (ETF) and XOM/CVX (EQUITY); no API key required; per-ticker exceptions logged and re-raised; 5 unit tests. PR #67 open.
+- Pre-existing ruff/black/mypy lint errors from PR #60 fixed on both branches to pass gate.
+- PR #64 merged: chore/fix-workflow-pythonpath — adds PYTHONPATH=. to pr-review and issue-refinement CI workflows.
 
-## Sprint Notes (2026-03-11)
+## Sprint Notes (2026-03-12)
+
+Sprint 2 kicked off. Issues #3, #4, #5, #6 completed in single session:
+
+- `#3` — `src/core/db.py` created with canonical `get_engine()`; all 4 agent `db.py` files updated to re-export via `# noqa: F401`. PR #54 merged.
+- `#4` — `src/core/retry.py` created with `with_retry()` decorator factory; TypeVar-typed, `before_sleep_log` WARNING logging, env-configurable retries. Both agent files updated. PR #55 open.
+- `#5` — CI verification: all 4 workflows (ci.yml, runtime-check.yml, integration.yml, security.yml) confirmed green against PR #54/#55. No code changes needed. Issue closed.
+- `#6` — `db/schema.sql` created: `market_prices` and `options_chain` DDL with TIMESTAMPTZ columns, composite indexes, TimescaleDB hypertable migration comments (PRD §6.2). Applied to local Postgres (timescale/timescaledb:2.15.2-pg15) and verified with `\d`. PR open.
+
+Decision: `db/schema.sql` uses `IF NOT EXISTS` guards throughout — idempotent, safe to re-run.
+
+## Sprint Notes (2026-03-12, session 2)
+
+Issue #5 closed: all 4 GitHub Actions workflows verified green against existing run history. No code changes required.
+- `ci.yml` — push to develop run 22946745279 ✓; PR run 22927190645 ✓
+- `runtime-check.yml` — push to develop run 22946745272 ✓; PR run 22927190654 ✓
+- `integration.yml` — PR runs 23026165853, 23027379749 ✓ (exit code 5: 0 tests collected; acceptable per issue notes)
+- `security.yml` — PR runs 23026165882, 23027379759 ✓ (no HIGH bandit findings; pip-audit clean)
+
+## Sprint Notes (2026-03-12)
 
 All Sprint 1 PRs confirmed merged. Issue table updated to reflect merged state. No open blockers. Sprint ready for human to close via `bash scripts/sprint_close.sh`. Next sprint candidates: #3, #4, #5, #6, #7, #8 (Phase 0 / Phase 1 infra).
 
