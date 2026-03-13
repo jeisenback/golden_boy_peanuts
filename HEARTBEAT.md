@@ -25,8 +25,8 @@
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
 | 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
-| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | In Review | `feature/9-fetch-etf-equity-prices` | PR #67 open |
-| 10 | Implement fetch_options_chain — yfinance / Polygon | Not Started | — | — |
+| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | Merged | `feature/9-fetch-etf-equity-prices` | PR #67 merged |
+| 10 | Implement fetch_options_chain — yfinance / Polygon | In Review | `feature/10-fetch-options-chain` | PR #68 open |
 | 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Not Started | — | Depends on #8, #9, #10 |
 | 13 | Implement compute_volatility_gap — realized vs. implied volatility | Not Started | — | — |
 | 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | Not Started | — | — |
@@ -34,11 +34,19 @@
 
 ## Current Active Branch
 
-`feature/9-fetch-etf-equity-prices`
+`feature/10-fetch-options-chain`
 
 ## Blockers
 
 - None.
+
+## Sprint Notes (2026-03-13, session 3)
+
+Issue #10 implemented and PR opened:
+- `fetch_options_chain(instruments: list[str])`: yfinance `.options` + `.option_chain()`, nearest 2 expiries, calls+puts, NaN IV → None, POLYGON_API_KEY absent → WARNING + yfinance fallback. 5 unit tests. PR #68 open.
+- Private helpers: `_nan_to_none_float`, `_nan_to_none_int`, `_OPTIONS_EXPIRY_LIMIT = 2`
+- PRs #65 (doc generation agent) and #66 (issue refinement batch) merged to develop earlier in session.
+- Issue #9 PR #67 confirmed merged; issues #8 and #9 both done.
 
 ## Sprint Notes (2026-03-13)
 
