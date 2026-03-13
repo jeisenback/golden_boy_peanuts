@@ -29,7 +29,7 @@
 | 10 | Implement fetch_options_chain — yfinance / Polygon | Merged | `feature/10-fetch-options-chain` | PR #68 merged |
 | 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Merged | `feature/11-run-ingestion` | PR #70 merged |
 | 13 | Implement compute_volatility_gap — realized vs. implied volatility | Merged | `feature/13-compute-volatility-gap` | PR #71 merged |
-| 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | In Progress | `feature/14-compute-sector-dispersion` | — |
+| 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | In Review | `feature/14-compute-sector-dispersion` | PR #74 open |
 | 15 | Implement run_feature_generation — Phase 1 orchestration | Not Started | — | Depends on #13, #14 |
 
 ## Current Active Branch
@@ -39,6 +39,14 @@
 ## Blockers
 
 - None.
+
+## Sprint Notes (2026-03-13, session 6)
+
+Issue #14 implemented and PR #74 open:
+- `compute_sector_dispersion()`: filters `market_state.prices` to `_SECTOR_INSTRUMENTS = {XOM, CVX, USO, XLE}`; returns `None` + WARNING if < 2 present; CV = `statistics.stdev(prices) / statistics.mean(prices)`; capped at `_CV_CAP = 1.0`.
+- Constants: `_SECTOR_INSTRUMENTS`, `_MIN_SECTOR_INSTRUMENTS = 2`, `_CV_CAP = 1.0`.
+- `TestComputeSectorDispersion`: 6 tests — zero dispersion, outlier, formula check, CV cap, insufficient instruments, non-sector filtering.
+- Gate: all 5 stages pass (122 passed, 7 xfailed).
 
 ## Sprint Notes (2026-03-13, session 5)
 
