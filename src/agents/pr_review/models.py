@@ -3,50 +3,22 @@ Pydantic models for the PR Review Agent data boundary (ESOD Section 6).
 
 All PR data ingested from GitHub must be validated through these models
 before any LLM-based review processing.
+
+Finding types are shared with other lifecycle agents via src.core.findings.
+ReviewSeverity and ReviewFinding are re-exported here for backwards compatibility.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
-from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
+from src.core.findings import Finding, FindingSeverity
 
-class ReviewSeverity(StrEnum):
-    """Severity level for a single review finding."""
-
-    BLOCKER = "blocker"       # Must be fixed before merge (ESOD violation, test missing)
-    WARNING = "warning"       # Should be addressed; reviewer judgment required
-    SUGGESTION = "suggestion" # Optional improvement; low priority
-
-
-class ReviewFinding(BaseModel):
-    """
-    Single finding produced during a PR review pass.
-
-    Each finding maps to one or more changed lines and cites the
-    ESOD / code standard rule that was evaluated.
-    """
-
-    file_path: str = Field(..., description="Relative path of the file containing the finding")
-    line_number: int | None = Field(
-        default=None,
-        description="Line number within file_path, if applicable",
-    )
-    severity: ReviewSeverity
-    rule: str = Field(
-        ...,
-        description=(
-            "Short rule identifier, e.g. 'ESOD:no-langchain', "
-            "'ESOD:type-hints', 'ESOD:pydantic-boundary', 'commit-format'"
-        ),
-    )
-    message: str = Field(..., description="Human-readable explanation of the finding")
-    suggestion: str | None = Field(
-        default=None,
-        description="Optional concrete fix suggestion for the author",
-    )
+# Re-export shared types under the names used by this agent and its tests.
+ReviewSeverity = FindingSeverity
+ReviewFinding = Finding
 
 
 class PRMetadata(BaseModel):
@@ -82,7 +54,7 @@ class PRReviewResult(BaseModel):
 
     pr_number: int = Field(..., gt=0)
     reviewed_at: datetime = Field(..., description="UTC timestamp when the review completed")
-    findings: list[ReviewFinding] = Field(
+    findings: list[Finding] = Field(
         default_factory=list,
         description="All findings sorted by severity (blockers first)",
     )

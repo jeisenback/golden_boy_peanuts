@@ -96,7 +96,7 @@ def _check_branch_name(metadata: PRMetadata) -> list[ReviewFinding]:
     if not _BRANCH_RE.match(metadata.head_branch):
         return [
             ReviewFinding(
-                file_path=".git/HEAD",
+                location=".git/HEAD",
                 severity=ReviewSeverity.BLOCKER,
                 rule="git-workflow:branch-name",
                 message=(
@@ -125,7 +125,7 @@ def _check_target_branch(metadata: PRMetadata) -> list[ReviewFinding]:
     if metadata.base_branch == "main":
         return [
             ReviewFinding(
-                file_path=".github/PR",
+                location=".github/PR",
                 severity=ReviewSeverity.BLOCKER,
                 rule="git-workflow:no-direct-to-main",
                 message=(
@@ -158,7 +158,7 @@ def _check_langchain_imports(metadata: PRMetadata) -> list[ReviewFinding]:
         if _LANGCHAIN_RE.search(line[1:]):
             findings.append(
                 ReviewFinding(
-                    file_path="(diff line)",
+                    location="(diff line)",
                     line_number=line_num,
                     severity=ReviewSeverity.BLOCKER,
                     rule="ESOD:no-langchain",
@@ -210,7 +210,7 @@ def _check_type_hints(metadata: PRMetadata) -> list[ReviewFinding]:
             continue
         findings.append(
             ReviewFinding(
-                file_path=current_file,
+                location=current_file,
                 severity=ReviewSeverity.WARNING,
                 rule="ESOD:type-hints",
                 message=(
@@ -250,7 +250,7 @@ def _parse_llm_findings(
     # a formal JSON schema to the LLM prompt for machine-readable output.
     return [
         ReviewFinding(
-            file_path="(llm-review)",
+            location="(llm-review)",
             severity=ReviewSeverity.SUGGESTION,
             rule="llm:narrative-review",
             message=llm_text.strip()[:2000],

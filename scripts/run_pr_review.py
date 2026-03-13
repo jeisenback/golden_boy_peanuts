@@ -160,7 +160,7 @@ def findings_to_markdown(result: "PRReviewResult") -> str:  # type: ignore[name-
     ]
     for f in result.findings:
         emoji = _SEVERITY_EMOJI.get(f.severity, "")
-        loc = f.file_path
+        loc = f.location
         if f.line_number:
             loc = f"{loc}:{f.line_number}"
         msg = f.message.replace("|", "\\|")
@@ -228,7 +228,7 @@ def main() -> int:
         print(f"\nFindings ({len(result.findings)}):")
         for f in result.findings:
             emoji = _SEVERITY_EMOJI.get(f.severity, "")
-            loc = f.file_path + (f":{f.line_number}" if f.line_number else "")
+            loc = f.location + (f":{f.line_number}" if f.line_number else "")
             print(f"  {emoji} [{f.severity.value.upper()}] {f.rule} @ {loc}")
             print(f"     {f.message}")
             if f.suggestion:
