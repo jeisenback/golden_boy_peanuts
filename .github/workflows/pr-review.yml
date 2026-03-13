@@ -39,6 +39,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PYTHONPATH: ${{ github.workspace }}
         run: |
-          PYTHONPATH=. python scripts/run_pr_review.py \
+          python scripts/run_pr_review.py \
             --pr ${{ github.event.pull_request.number }} \
             --post-comment

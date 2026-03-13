@@ -36,6 +36,7 @@ jobs:
             echo "issues=[${{ github.event.inputs.issue_number }}]" >> "$GITHUB_OUTPUT"
           else
             # Manual trigger: no number supplied — run against all open issues
+            # --limit 100 caps the batch to avoid very large matrix jobs; raise if needed
             NUMS=$(gh issue list --state open --limit 100 --json number --jq '[.[].number]')
             echo "issues=$NUMS" >> "$GITHUB_OUTPUT"
           fi
