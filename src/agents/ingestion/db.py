@@ -9,30 +9,13 @@ DATABASE_URL read exclusively from environment variable.
 from __future__ import annotations
 
 import logging
-import os
 
-from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
 from src.agents.ingestion.models import MarketState, OptionRecord, RawPriceRecord
+from src.core.db import get_engine  # noqa: F401
 
 logger = logging.getLogger(__name__)
-
-
-def get_engine() -> Engine:
-    """
-    Create a SQLAlchemy engine from DATABASE_URL environment variable.
-
-    Returns:
-        SQLAlchemy Engine connected to the configured PostgreSQL database.
-
-    Raises:
-        RuntimeError: If DATABASE_URL is not set.
-    """
-    database_url = os.environ.get("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL environment variable is not set.")
-    return create_engine(database_url, pool_pre_ping=True)
 
 
 def write_price_records(records: list[RawPriceRecord], engine: Engine) -> int:

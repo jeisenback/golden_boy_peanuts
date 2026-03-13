@@ -6,27 +6,13 @@ PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 from __future__ import annotations
 
 import logging
-import os
 
-from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
 from src.agents.strategy_evaluation.models import StrategyCandidate
+from src.core.db import get_engine  # noqa: F401
 
 logger = logging.getLogger(__name__)
-
-
-def get_engine() -> Engine:
-    """
-    Create a SQLAlchemy engine from DATABASE_URL environment variable.
-
-    Raises:
-        RuntimeError: If DATABASE_URL is not set.
-    """
-    database_url = os.environ.get("DATABASE_URL")
-    if not database_url:
-        raise RuntimeError("DATABASE_URL environment variable is not set.")
-    return create_engine(database_url, pool_pre_ping=True)
 
 
 def write_strategy_candidates(candidates: list[StrategyCandidate], engine: Engine) -> int:

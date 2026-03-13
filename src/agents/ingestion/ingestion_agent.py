@@ -18,25 +18,16 @@ DATABASE_URL from environment.
 from __future__ import annotations
 
 import logging
-import os
-
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.agents.ingestion.db import write_option_records  # noqa: F401
 from src.agents.ingestion.models import MarketState, OptionRecord, RawPriceRecord
+from src.core.retry import with_retry
 
 # Do NOT call logging.basicConfig() here — configuration belongs in the entry point.
 logger = logging.getLogger(__name__)
 
 
-@retry(
-    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
-    wait=wait_exponential(
-        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
-        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
-    ),
-    reraise=True,
-)
+@with_retry()
 def fetch_crude_prices() -> list[RawPriceRecord]:
     """
     Fetch current WTI and Brent crude prices from Alpha Vantage.
@@ -58,14 +49,7 @@ def fetch_crude_prices() -> list[RawPriceRecord]:
     )
 
 
-@retry(
-    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
-    wait=wait_exponential(
-        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
-        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
-    ),
-    reraise=True,
-)
+@with_retry()
 def fetch_etf_equity_prices() -> list[RawPriceRecord]:
     """
     Fetch current prices for USO, XLE, XOM, CVX from Yahoo Finance via yfinance.
@@ -83,14 +67,7 @@ def fetch_etf_equity_prices() -> list[RawPriceRecord]:
     )
 
 
-@retry(
-    stop=stop_after_attempt(int(os.environ.get("TENACITY_MAX_RETRIES", "5"))),
-    wait=wait_exponential(
-        multiplier=int(os.environ.get("TENACITY_WAIT_MULTIPLIER", "1")),
-        max=int(os.environ.get("TENACITY_WAIT_MAX", "60")),
-    ),
-    reraise=True,
-)
+@with_retry()
 def fetch_options_chain() -> list[OptionRecord]:
     """
     Fetch options chain data for USO, XLE, XOM, CVX from Yahoo Finance / Polygon.io.
