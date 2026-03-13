@@ -23,7 +23,11 @@ Phases: Phase 1 (core signals) → Phase 2 (supply/event) → Phase 3 (alternati
 ## Session Startup (Do This Every Time — In Order)
 
 ```
-1. Read HEARTBEAT.md       → find active sprint, active branch, blockers, current issue
+1. Read HEARTBEAT.md (remote-first — never read your local copy without fetching first):
+   git fetch origin develop --quiet
+   git show origin/develop:HEARTBEAT.md
+   → find active sprint, active branch, blockers, current issue
+   → do NOT read the local file; your local branch may be hours behind develop
 2. gh issue view <N>       → read ALL acceptance criteria for the issue you are working
 3. Read SESSION.md         → if it exists from a prior session, absorb its context
 4. Read docs/energy_options_adlc.md → identify task type, select prompt template (§5.1–§5.5), confirm DoD (§6)
@@ -65,7 +69,7 @@ doc updates in scope, commit authorship, HEARTBEAT.md session updates.
 | Commits | Author commit messages in correct format | — |
 | Branch work | Work within the current issue's branch | Open a branch for a different issue |
 | Error handling | `try/except` with logging | Swallow exceptions silently |
-| HEARTBEAT.md | Update sprint notes and issue status at session end | Change sprint goal, milestone, or scope |
+| HEARTBEAT.md | Append timestamped lines to the current Sprint Notes section at session end | Edit the Sprint Issues table rows; change sprint goal, milestone, or scope |
 | SESSION.md | Create, update, and maintain throughout session | — |
 
 **When in doubt:** explain what you're about to do and ask. Waiting costs less than rework.
@@ -77,7 +81,7 @@ doc updates in scope, commit authorship, HEARTBEAT.md session updates.
 Before writing or editing any source file:
 
 ```
-[ ] HEARTBEAT.md read → sprint is ACTIVE; issue confirmed in sprint table
+[ ] HEARTBEAT.md read (remote: git fetch origin develop --quiet && git show origin/develop:HEARTBEAT.md) → sprint is ACTIVE; issue confirmed in sprint table
 [ ] Issue read completely → you can list all acceptance criteria from memory
 [ ] Test suite passes locally: pytest tests/ -m "not integration"
 [ ] Branch name follows convention; branch exists and is clean
@@ -121,11 +125,16 @@ Full reference: `docs/sprint_framework.md`
 
 - Work **only** on issues in the current sprint milestone (see HEARTBEAT.md)
 - **To pick up an issue:**
-  1. Verify the issue is in the "Sprint Issues" table in HEARTBEAT.md with Status = Not Started or In Progress
-  2. Verify issue meets Definition of Ready: `bash scripts/refine_issue.sh <N>`
-  3. Create branch: `bash scripts/new_branch.sh` (or `git checkout -b <type>/<issue>-<slug> develop` if running non-interactively)
-  4. Update HEARTBEAT issue table row: Status → "In Progress", Branch → your branch name
-  5. Open (or update) `SESSION.md` with the issue goal
+  1. Verify the issue is in the "Sprint Issues" table in HEARTBEAT.md with Status = Not Started
+     (re-read `origin/develop:HEARTBEAT.md` if more than a few minutes have passed since step 1)
+  2. `gh issue view <N>` — confirm the issue has no assignee; if already assigned, stop and pick a different issue
+  3. Claim the issue atomically: `gh issue assign <N> --self`
+     This is the lock. GitHub serializes concurrent assign requests; only one agent wins.
+  4. Apply the in-progress label: `gh issue edit <N> --add-label in-progress`
+  5. Verify issue meets Definition of Ready: `bash scripts/refine_issue.sh <N>`
+  6. Create branch: `git checkout -b <type>/<issue>-<slug> develop`
+  7. Open (or update) `SESSION.md` with the issue goal
+  8. Do NOT edit the HEARTBEAT Sprint Issues table — live status is tracked via GitHub assignee and labels
 - **To refine a backlog issue:** `bash scripts/refine_issue.sh <N>` (pre-sprint only)
 - **To start a sprint:** `bash scripts/sprint_start.sh` (human-led; requires develop branch)
 - **Never work on out-of-sprint issues** without explicit human approval
@@ -136,9 +145,9 @@ Full reference: `docs/sprint_framework.md`
 
 | Stage | What You Do |
 |-------|-------------|
-| Issue enters sprint | Verify DoR, create branch, update HEARTBEAT row to "In Progress" |
-| Working | Update SESSION.md each session; update HEARTBEAT when status changes |
-| Ready for review | `bash scripts/local_check.sh` exits 0; open PR; add `needs-review` label; update HEARTBEAT to "In Review" |
+| Issue enters sprint | Verify DoR, claim via `gh issue assign <N> --self`, apply `in-progress` label, create branch |
+| Working | Update SESSION.md each session; update GitHub labels when status changes; append to HEARTBEAT sprint notes (never edit the issue table rows) |
+| Ready for review | `bash scripts/local_check.sh` exits 0; open PR; remove `in-progress` label; add `needs-review` label; append one line to HEARTBEAT sprint notes: `- #N In Review, PR #M opened YYYY-MM-DD` |
 | PR is open | Review every changed line as a second developer would; verify CI passes |
 | Closing an issue | Add comment: `"Closing: all AC verified ✓, merged in PR #N"` — then close |
 | Issue with unchecked AC | Do NOT close — escalate to human |
@@ -173,13 +182,16 @@ Do this at the end of **every** session, before closing your terminal:
    - Describe in-progress state clearly (enough for a different agent to continue)
    - Fill in Handoff Notes
 4. Promote Key Decisions from SESSION.md to HEARTBEAT.md sprint notes
-5. Update HEARTBEAT sprint issues table: Status and Branch for your issue
+   — APPEND a new dated block (e.g. "## Sprint Notes (YYYY-MM-DD, session N)")
+   — NEVER edit existing Sprint Notes blocks or Sprint Issues table rows
+5. Update GitHub issue labels to reflect current status (e.g. remove in-progress, add needs-review)
 6. Commit HEARTBEAT.md:
    git commit -m "chore: update HEARTBEAT after session YYYY-MM-DD (#issue)"
 7. Push branch to remote:
    git push origin <your-branch>
 8. If work is complete and all DoD criteria are met:
-   - Open PR, add needs-review label, update HEARTBEAT to "In Review"
+   - Open PR, remove in-progress label, add needs-review label
+   - Append one line to HEARTBEAT sprint notes: "- #N In Review, PR #M opened YYYY-MM-DD"
 ```
 
 ---
@@ -201,6 +213,8 @@ NEVER  change a public function signature outside the explicit scope of the issu
 NEVER  create, modify, or run database schema migrations without human review
 NEVER  work on issues outside the current sprint milestone without explicit approval
 NEVER  silently skip a failing test or acceptance criterion — document and escalate
+NEVER  edit an existing row in the HEARTBEAT Sprint Issues table — only append timestamped notes at the bottom of the current Sprint Notes section
+NEVER  start work on an issue without first running `gh issue assign <N> --self` and confirming no assignee conflict
 ```
 
 ---
