@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from src.agents.ingestion.models import MarketState, OptionRecord, RawPriceRecord
@@ -28,15 +29,30 @@ def write_price_records(records: list[RawPriceRecord], engine: Engine) -> int:
 
     Returns:
         Number of records successfully written.
-
-    Raises:
-        NotImplementedError: Until implemented.
     """
-    raise NotImplementedError(
-        "write_price_records not yet implemented. "
-        "TODO: Batch INSERT into market_prices. "
-        "Ensure timestamp column uses TIMESTAMPTZ for TimescaleDB compatibility."
-    )
+    if not records:
+        return 0
+
+    sql = text("""
+        INSERT INTO market_prices (instrument, instrument_type, price, volume, source, timestamp)
+        VALUES (:instrument, :instrument_type, :price, :volume, :source, :timestamp)
+        """)
+    rows = [
+        {
+            "instrument": r.instrument,
+            "instrument_type": r.instrument_type.value,
+            "price": r.price,
+            "volume": r.volume,
+            "source": r.source,
+            "timestamp": r.timestamp,
+        }
+        for r in records
+    ]
+    with engine.begin() as conn:
+        conn.execute(sql, rows)
+
+    logger.info("Wrote %d price record(s) to market_prices", len(records))
+    return len(records)
 
 
 def write_option_records(records: list[OptionRecord], engine: Engine) -> int:
@@ -49,13 +65,37 @@ def write_option_records(records: list[OptionRecord], engine: Engine) -> int:
 
     Returns:
         Number of records successfully written.
-
-    Raises:
-        NotImplementedError: Until implemented.
     """
-    raise NotImplementedError(
-        "write_option_records not yet implemented. " "TODO: Batch INSERT into options_chain table."
-    )
+    if not records:
+        return 0
+
+    sql = text("""
+        INSERT INTO options_chain
+            (instrument, strike, expiration_date, implied_volatility,
+             open_interest, volume, option_type, source, timestamp)
+        VALUES
+            (:instrument, :strike, :expiration_date, :implied_volatility,
+             :open_interest, :volume, :option_type, :source, :timestamp)
+        """)
+    rows = [
+        {
+            "instrument": r.instrument,
+            "strike": r.strike,
+            "expiration_date": r.expiration_date,
+            "implied_volatility": r.implied_volatility,
+            "open_interest": r.open_interest,
+            "volume": r.volume,
+            "option_type": r.option_type,
+            "source": r.source,
+            "timestamp": r.timestamp,
+        }
+        for r in records
+    ]
+    with engine.begin() as conn:
+        conn.execute(sql, rows)
+
+    logger.info("Wrote %d option record(s) to options_chain", len(records))
+    return len(records)
 
 
 def read_latest_market_state(engine: Engine) -> MarketState | None:
