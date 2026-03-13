@@ -134,9 +134,7 @@ def fetch_etf_equity_prices() -> list[RawPriceRecord]:
             fast_info = yf.Ticker(symbol).fast_info
             price = fast_info.last_price
             if price is None or price <= 0:
-                raise ValueError(
-                    f"Invalid price from yfinance for {symbol}: {price!r}"
-                )
+                raise ValueError(f"Invalid price from yfinance for {symbol}: {price!r}")
             raw_vol = getattr(fast_info, "last_volume", None)
             volume: int | None = int(raw_vol) if raw_vol is not None else None
             records.append(
