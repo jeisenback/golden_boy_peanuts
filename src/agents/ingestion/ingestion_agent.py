@@ -17,14 +17,25 @@ DATABASE_URL from environment.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
+import os
+
+import requests
 
 from src.agents.ingestion.db import write_option_records  # noqa: F401
-from src.agents.ingestion.models import MarketState, OptionRecord, RawPriceRecord
+from src.agents.ingestion.models import (
+    InstrumentType,
+    MarketState,
+    OptionRecord,
+    RawPriceRecord,
+)
 from src.core.retry import with_retry
 
 # Do NOT call logging.basicConfig() here — configuration belongs in the entry point.
 logger = logging.getLogger(__name__)
+
+_HTTP_TIMEOUT_SECONDS: int = 10  # seconds; applies to all outbound HTTP requests
 
 
 @with_retry()
@@ -32,21 +43,58 @@ def fetch_crude_prices() -> list[RawPriceRecord]:
     """
     Fetch current WTI and Brent crude prices from Alpha Vantage.
 
-    Retries with exponential backoff (ESOD Section 6).
-    On persistent failure, re-raises — caller implements degraded-mode behavior.
+    Calls the GLOBAL_QUOTE endpoint for CL=F (WTI) and BZ=F (Brent).
+    Timestamp is set to UTC time of the fetch, not the API's reported quote time.
 
     Returns:
         Validated RawPriceRecord objects for WTI (CL=F) and Brent (BZ=F).
 
     Raises:
-        NotImplementedError: Until implemented.
+        RuntimeError: If ALPHA_VANTAGE_API_KEY env var is not set.
+        ValueError: If any API response is missing required price fields.
+        Exception: Propagates the last exception after all retry attempts
+            are exhausted (reraise=True).
     """
-    raise NotImplementedError(
-        "fetch_crude_prices not yet implemented. "
-        "TODO: Call Alpha Vantage for WTI (CL=F) and Brent (BZ=F). "
-        "Validate each record with RawPriceRecord before returning. "
-        "See .env.example for ALPHA_VANTAGE_API_KEY."
-    )
+    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
+    if not api_key:
+        raise RuntimeError("ALPHA_VANTAGE_API_KEY environment variable is not set.")
+
+    symbols = ["CL=F", "BZ=F"]
+    records: list[RawPriceRecord] = []
+    fetch_time = datetime.now(UTC)
+
+    for symbol in symbols:
+        response = requests.get(
+            "https://www.alphavantage.co/query",
+            params={"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": api_key},
+            timeout=_HTTP_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+        data: dict[str, object] = response.json()
+
+        quote = data.get("Global Quote", {})
+        price_str = quote.get("05. price") if isinstance(quote, dict) else None
+        if not price_str:
+            raise ValueError(f"Malformed Alpha Vantage response for {symbol}: {data}")
+
+        volume_str = quote.get("06. volume") if isinstance(quote, dict) else None
+        volume: int | None = int(volume_str) if volume_str else None
+
+        try:
+            records.append(
+                RawPriceRecord(
+                    instrument=symbol,
+                    instrument_type=InstrumentType.CRUDE_FUTURES,
+                    price=float(price_str),
+                    volume=volume,
+                    timestamp=fetch_time,
+                    source="alpha_vantage",
+                )
+            )
+        except Exception as exc:
+            raise ValueError(f"Malformed Alpha Vantage response for {symbol}: {data}") from exc
+
+    return records
 
 
 @with_retry()

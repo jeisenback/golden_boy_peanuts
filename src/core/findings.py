@@ -21,9 +21,9 @@ from pydantic import BaseModel, Field
 class FindingSeverity(StrEnum):
     """Severity level for a single review finding."""
 
-    BLOCKER = "blocker"       # Must be resolved before the gated action proceeds
-    WARNING = "warning"       # Should be addressed; reviewer judgment required
-    SUGGESTION = "suggestion" # Optional improvement; low priority
+    BLOCKER = "blocker"  # Must be resolved before the gated action proceeds
+    WARNING = "warning"  # Should be addressed; reviewer judgment required
+    SUGGESTION = "suggestion"  # Optional improvement; low priority
 
 
 class Finding(BaseModel):

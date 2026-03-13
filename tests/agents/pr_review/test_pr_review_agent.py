@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+from pydantic import ValidationError
 import pytest
 
 from src.agents.pr_review.models import PRMetadata, ReviewSeverity
@@ -238,11 +239,9 @@ class TestCheckTypeHints:
 
 
 class TestReviewPullRequest:
-    def _patched_review(self, metadata: PRMetadata) -> "PRReviewResult":  # type: ignore[name-defined]  # noqa: F821
+    def _patched_review(self, metadata: PRMetadata) -> PRReviewResult:  # type: ignore[name-defined]  # noqa: F821
         """Run review with LLMWrapper patched to raise NotImplementedError."""
-        with patch(
-            "src.agents.pr_review.pr_review_agent.LLMWrapper"
-        ) as mock_wrapper_cls:
+        with patch("src.agents.pr_review.pr_review_agent.LLMWrapper") as mock_wrapper_cls:
             mock_instance = MagicMock()
             mock_instance.complete.side_effect = NotImplementedError("not implemented")
             mock_wrapper_cls.return_value = mock_instance
@@ -299,16 +298,15 @@ class TestReviewPullRequest:
             diff=_UNTYPED_DIFF,
         )
         result = self._patched_review(meta)
-        from src.agents.pr_review.models import ReviewSeverity as RS
 
         assert result.blocker_count == sum(
-            1 for f in result.findings if f.severity == RS.BLOCKER
+            1 for f in result.findings if f.severity == ReviewSeverity.BLOCKER
         )
         assert result.warning_count == sum(
-            1 for f in result.findings if f.severity == RS.WARNING
+            1 for f in result.findings if f.severity == ReviewSeverity.WARNING
         )
         assert result.suggestion_count == sum(
-            1 for f in result.findings if f.severity == RS.SUGGESTION
+            1 for f in result.findings if f.severity == ReviewSeverity.SUGGESTION
         )
 
 
@@ -323,11 +321,11 @@ class TestPRMetadataValidation:
         assert meta.pr_number == 42
 
     def test_pr_number_must_be_positive(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             _make_metadata(pr_number=0)
 
     def test_title_must_not_be_empty(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             _make_metadata(title="")
 
 
@@ -366,9 +364,7 @@ class TestLLMWrapperDispatch:
             "stop_reason": "end_turn",
             "usage": {},
         }
-        with patch.object(
-            anthropic_http_mod, "complete", return_value=fake_raw
-        ) as mock_complete:
+        with patch.object(anthropic_http_mod, "complete", return_value=fake_raw) as mock_complete:
             wrapper = LLMWrapper(model_id="claude-sonnet-4-6")
             response = wrapper.complete(prompt="test prompt")
 
