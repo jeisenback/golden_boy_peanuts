@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import logging
+import math
 import os
 
 import requests
@@ -45,6 +46,26 @@ _ETF_EQUITY_INSTRUMENTS: list[tuple[str, InstrumentType]] = [
     ("XOM", InstrumentType.EQUITY),
     ("CVX", InstrumentType.EQUITY),
 ]
+
+# Number of nearest expiry dates fetched per instrument for options chain (PRD §4.1)
+_OPTIONS_EXPIRY_LIMIT: int = 2
+
+
+def _nan_to_none_float(val: object) -> float | None:
+    """Return None if val is None or NaN; otherwise return float(val)."""
+    if val is None:
+        return None
+    try:
+        f = float(val)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return None if math.isnan(f) else f
+
+
+def _nan_to_none_int(val: object) -> int | None:
+    """Return None if val is None or NaN; otherwise return int(float(val))."""
+    f = _nan_to_none_float(val)
+    return None if f is None else int(f)
 
 
 @with_retry()
@@ -161,27 +182,64 @@ def fetch_etf_equity_prices() -> list[RawPriceRecord]:
 
 
 @with_retry()
-def fetch_options_chain() -> list[OptionRecord]:
+def fetch_options_chain(instruments: list[str]) -> list[OptionRecord]:
     """
-    Fetch options chain data for USO, XLE, XOM, CVX from Yahoo Finance / Polygon.io.
+    Fetch options chain data for the given instruments from Yahoo Finance via yfinance.
 
-    Retries with exponential backoff (ESOD Section 6).
-    On persistent failure, re-raises — caller implements degraded-mode behavior.
+    If POLYGON_API_KEY is not set, logs a WARNING and falls back to yfinance.
+    For each instrument, fetches the nearest _OPTIONS_EXPIRY_LIMIT expiry dates and
+    iterates over all call and put contracts in each chain.
+
+    Records with missing or NaN implied_volatility are included with
+    implied_volatility=None (not filtered out) — Feature Generation handles absent IV.
+
+    Args:
+        instruments: List of ticker symbols to fetch options for,
+            e.g. ["USO", "XLE", "XOM", "CVX"].
 
     Returns:
-        Validated OptionRecord objects for all configured instruments.
+        Validated OptionRecord objects for all instruments, expiries, and option types.
 
     Raises:
-        NotImplementedError: Until implemented.
+        Exception: Propagates any yfinance exception after all retry attempts
+            are exhausted (reraise=True via with_retry). Caller implements
+            degraded-mode behavior.
     """
-    raise NotImplementedError(
-        "fetch_options_chain not yet implemented. "
-        "TODO: Fetch options chain for USO, XLE, XOM, CVX. "
-        "Sources: Yahoo Finance (yfinance) or Polygon.io. "
-        "Validate each record with OptionRecord before returning. "
-        "Results are written to DB via write_option_records. "
-        "See .env.example for POLYGON_API_KEY."
-    )
+    if not os.environ.get("POLYGON_API_KEY"):
+        logger.warning("POLYGON_API_KEY not set; falling back to yfinance for options chain data")
+
+    records: list[OptionRecord] = []
+    fetch_time = datetime.now(UTC)
+
+    for symbol in instruments:
+        ticker = yf.Ticker(symbol)
+        expiries: tuple[str, ...] = ticker.options
+
+        for expiry_str in expiries[:_OPTIONS_EXPIRY_LIMIT]:
+            expiry_dt = datetime.strptime(expiry_str, "%Y-%m-%d").replace(tzinfo=UTC)
+            chain = ticker.option_chain(expiry_str)
+
+            for option_type, df in (("call", chain.calls), ("put", chain.puts)):
+                for _, row in df.iterrows():
+                    iv = _nan_to_none_float(row.get("impliedVolatility"))
+                    oi = _nan_to_none_int(row.get("openInterest"))
+                    vol = _nan_to_none_int(row.get("volume"))
+
+                    records.append(
+                        OptionRecord(
+                            instrument=symbol,
+                            strike=float(row["strike"]),
+                            expiration_date=expiry_dt,
+                            implied_volatility=iv,
+                            open_interest=oi,
+                            volume=vol,
+                            option_type=option_type,
+                            timestamp=fetch_time,
+                            source="yfinance",
+                        )
+                    )
+
+    return records
 
 
 def run_ingestion() -> MarketState:

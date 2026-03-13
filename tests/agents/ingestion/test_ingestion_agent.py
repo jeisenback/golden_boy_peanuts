@@ -10,6 +10,7 @@ Coverage goal (expand per GitHub Issue):
   - run_ingestion: partial feed failure returns partial MarketState cleanly
 """
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -17,6 +18,7 @@ import pytest
 from src.agents.ingestion.ingestion_agent import (
     fetch_crude_prices,
     fetch_etf_equity_prices,
+    fetch_options_chain,
     run_ingestion,
 )
 from src.agents.ingestion.models import InstrumentType, MarketState
@@ -181,6 +183,135 @@ class TestFetchEtfEquityPrices:
             with patch("time.sleep"):  # suppress tenacity backoff waits
                 with pytest.raises(ConnectionError):
                     fetch_etf_equity_prices()
+
+
+class TestFetchOptionsChain:
+    """Tests for fetch_options_chain() — yfinance options chain fetcher."""
+
+    def _make_row_mock(
+        self,
+        strike: float = 100.0,
+        iv: float = 0.25,
+        oi: float = 500.0,
+        volume: float = 200.0,
+    ) -> MagicMock:
+        row = MagicMock()
+        row_data = {
+            "strike": strike,
+            "impliedVolatility": iv,
+            "openInterest": oi,
+            "volume": volume,
+        }
+        row.get = lambda key, default=None: row_data.get(key, default)
+        row.__getitem__ = lambda self, key: row_data[key]
+        return row
+
+    def _make_chain_mock(
+        self,
+        call_rows: list[MagicMock] | None = None,
+        put_rows: list[MagicMock] | None = None,
+    ) -> MagicMock:
+        if call_rows is None:
+            call_rows = [self._make_row_mock()]
+        if put_rows is None:
+            put_rows = [self._make_row_mock()]
+
+        calls_df = MagicMock()
+        calls_df.iterrows.side_effect = lambda: iter(enumerate(call_rows))
+        puts_df = MagicMock()
+        puts_df.iterrows.side_effect = lambda: iter(enumerate(put_rows))
+
+        chain = MagicMock()
+        chain.calls = calls_df
+        chain.puts = puts_df
+        return chain
+
+    def _make_ticker_mock(
+        self,
+        expiries: tuple[str, ...] = ("2030-01-17",),
+        chain: MagicMock | None = None,
+    ) -> MagicMock:
+        ticker = MagicMock()
+        ticker.options = expiries
+        ticker.option_chain.return_value = chain or self._make_chain_mock()
+        return ticker
+
+    def test_returns_call_and_put_records(self) -> None:
+        """Returns one OptionRecord per contract row (calls + puts) per expiry."""
+        ticker = self._make_ticker_mock()
+
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=ticker,
+        ):
+            result = fetch_options_chain(["USO"])
+
+        # 1 expiry x 1 call + 1 put = 2 records
+        assert len(result) == 2
+        option_types = {r.option_type for r in result}
+        assert option_types == {"call", "put"}
+        assert all(r.instrument == "USO" for r in result)
+        assert all(r.source == "yfinance" for r in result)
+        assert all(r.strike == pytest.approx(100.0) for r in result)
+
+    def test_iv_nan_sets_implied_volatility_to_none(self) -> None:
+        """NaN impliedVolatility is mapped to implied_volatility=None in the record."""
+        nan_row = self._make_row_mock(iv=float("nan"))
+        ticker = self._make_ticker_mock(
+            chain=self._make_chain_mock(call_rows=[nan_row], put_rows=[nan_row])
+        )
+
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=ticker,
+        ):
+            result = fetch_options_chain(["USO"])
+
+        assert all(r.implied_volatility is None for r in result)
+
+    def test_option_chain_failure_reraises(self) -> None:
+        """Exception from ticker.option_chain() propagates to caller."""
+        ticker = MagicMock()
+        ticker.options = ("2030-01-17",)
+        ticker.option_chain.side_effect = ConnectionError("yfinance unavailable")
+
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=ticker,
+        ):
+            with patch("time.sleep"):  # suppress tenacity backoff waits
+                with pytest.raises(ConnectionError):
+                    fetch_options_chain(["USO"])
+
+    def test_no_polygon_key_logs_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Logs a WARNING when POLYGON_API_KEY is not set."""
+        monkeypatch.delenv("POLYGON_API_KEY", raising=False)
+        ticker = self._make_ticker_mock()
+
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=ticker,
+        ):
+            with caplog.at_level(logging.WARNING, logger="src.agents.ingestion.ingestion_agent"):
+                fetch_options_chain(["USO"])
+
+        assert "POLYGON_API_KEY not set" in caplog.text
+
+    def test_multiple_instruments_aggregated(self) -> None:
+        """Records from all requested instruments are collected into a single list."""
+        ticker = self._make_ticker_mock()
+
+        with patch(
+            "src.agents.ingestion.ingestion_agent.yf.Ticker",
+            return_value=ticker,
+        ):
+            result = fetch_options_chain(["USO", "XLE"])
+
+        instruments = [r.instrument for r in result]
+        assert instruments.count("USO") == 2  # 1 call + 1 put
+        assert instruments.count("XLE") == 2
 
 
 class TestRunIngestion:
