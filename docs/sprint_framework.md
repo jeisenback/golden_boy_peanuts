@@ -37,10 +37,13 @@ The script enforces entry criteria; if any item fails, the sprint does not start
 
 ### 2.3 Daily Check-in (Async — No Meeting)
 - Not a standup. Async via HEARTBEAT.md + GitHub issue comments.
-- At the **end of each session**, the agent updates HEARTBEAT.md with:
-  - Which issue is In Progress
-  - What was completed since the previous update
-  - Any new blockers discovered
+- At the **end of each session**, the agent:
+  1. Updates GitHub issue labels to reflect current status (`in-progress`, `needs-review`)
+  2. APPENDs a new dated Sprint Notes block to HEARTBEAT.md containing:
+     - What was completed since the previous update
+     - Key decisions made
+     - Any new blockers discovered or resolved
+  3. **NEVER edits the Sprint Issues table or existing Sprint Notes blocks**
 - Human reviews HEARTBEAT.md at the start of each day
 - Human responds to blockers in issue comments (agents check comments at session start)
 - SESSION.md supplements HEARTBEAT for intra-session granularity
@@ -79,6 +82,13 @@ Use `bash scripts/refine_issue.sh <N>` to walk through this checklist interactiv
 Signal for Ready: `needs-review` label removed (done by `refine_issue.sh` when all 7 pass).
 Add `agent-assisted` label if Claude Code / Cursor / Copilot will lead implementation.
 
+**Issue pickup sequence** (these run at claim time — not sprint planning):
+1. `gh issue view <N>` — confirm the issue has no assignee; if assigned, pick a different issue
+2. `gh issue assign <N> --self` — atomic claim; GitHub serializes concurrent requests
+3. `gh issue edit <N> --add-label in-progress`
+4. Create branch: `git checkout -b <type>/<issue>-<slug> develop`
+No HEARTBEAT edit is required at pickup time. Status is tracked via GitHub assignee + labels.
+
 ---
 
 ## 4. Definition of Done
@@ -92,7 +102,7 @@ Key gate items reproduced here for scanning:
 - CI green on all stages
 - Issue closed with comment referencing PR number
 - Branch deleted after merge
-- HEARTBEAT.md updated
+- HEARTBEAT.md sprint notes updated (append-only — new dated block added)
 
 ---
 
@@ -143,8 +153,8 @@ Warning (non-fatal): open issues → noted as carry-overs in HEARTBEAT.md.
 |--------|-----------|---------------------|
 | **Backlog** | Defined but not yet scheduled in a sprint | Open, no current sprint milestone |
 | **Ready** | Meets DoR; scheduled for current sprint; not blocked | Open, current sprint milestone, no `blocked` label |
-| **In Progress** | Actively being worked; a branch exists | Open, branch exists, no open PR |
-| **In Review** | PR open; awaiting human review | `needs-review` label applied |
+| **In Progress** | Actively being worked; a branch exists; issue is assigned | Open, `in-progress` label, assignee set via `gh issue assign <N> --self`, no open PR |
+| **In Review** | PR open; awaiting human review | `needs-review` label applied; `in-progress` label removed |
 | **Done** | All DoD criteria met; issue closed; branch deleted | Closed |
 
 ---

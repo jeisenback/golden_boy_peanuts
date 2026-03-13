@@ -1,10 +1,16 @@
 # HEARTBEAT.md — Energy Options Opportunity Agent
 # -----------------------------------------------------------------------
-# COMMITTED. Always current. If this file is stale, it is wrong.
+# COMMITTED. Append-only sprint notes. If this file is stale, it is wrong.
 #
-# Claude Code: READ THIS FILE BEFORE DOING ANYTHING ELSE EACH SESSION.
-# It tells you what sprint is active, what you are working on, and
-# what branch to use. If you skip this step, you will work on the wrong thing.
+# Claude Code: READ THE REMOTE VERSION — never your local copy without fetching first:
+#   git fetch origin develop --quiet
+#   git show origin/develop:HEARTBEAT.md
+# Your local branch may be hours behind. Always read from origin/develop.
+#
+# The Sprint Issues table shows sprint scope and final merged/closed state only.
+# Live status (In Progress / In Review) is tracked on the GitHub issue via
+# assignee + labels — NOT in this table. To check live status:
+#   gh issue view <N>
 #
 # Update protocol: see bottom of this file.
 # -----------------------------------------------------------------------
@@ -30,6 +36,28 @@
 | 6 | PostgreSQL schema: market_prices and options_chain tables | In Review | `feature/6-schema-market-prices` | PR open; schema verified with psql |
 | 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
 | 34 | Replace remaining inline @retry decorators with @with_retry() | Not Started | — | Blocked until PR #55 merges |
+
+## Issue Status: GitHub Is Authoritative
+
+The Sprint Issues table above shows sprint scope and the final merged/closed state of each
+issue. It is **not** updated by agents during a sprint.
+
+To see live status for any issue:
+```
+gh issue view <N>                                             # assignee = who has claimed it
+gh issue list --milestone "Sprint 2 — Core Infrastructure" --state open  # full sprint view
+```
+
+An issue is **claimed** when it has an assignee (`gh issue assign <N> --self`).
+The `in-progress` label means actively being worked. The `needs-review` label means PR is open.
+These transitions happen on the GitHub issue — not in this file.
+
+The Sprint Issues table is updated only by:
+- `bash scripts/sprint_start.sh` — writes the initial table at sprint start
+- `bash scripts/sprint_close.sh` — updates final Merged/Closed rows at sprint end
+- Human lead (manual corrections only)
+
+---
 
 ## Current Active Branch
 
@@ -122,10 +150,20 @@ Run `bash scripts/sprint_start.sh` to formally begin the sprint.
 - Any scope change, new blocker, or milestone shift mid-sprint
 
 **Claude updates HEARTBEAT at:**
-- Session end: promote Key Decisions from SESSION.md into sprint notes
-- When an issue changes status (e.g., Not Started → In Progress → In Review)
-- When a blocker is discovered or resolved
+- Session end: APPEND a new dated Sprint Notes block — `## Sprint Notes (YYYY-MM-DD, session N)`
+  containing: completed work, key decisions, blockers discovered or resolved
+- When a PR is opened: append one line `- #N In Review, PR #M opened YYYY-MM-DD`
+- **NEVER edit existing Sprint Notes blocks** — only add new blocks at the bottom
+- **NEVER edit the Sprint Issues table rows** — use GitHub issue labels/assignee for status instead
 - Commit format: `chore: update HEARTBEAT after session YYYY-MM-DD (#issue)`
+
+**Claude does NOT update HEARTBEAT at:**
+- Issue pickup — use `gh issue assign <N> --self` + apply `in-progress` label on GitHub instead
+- Mid-sprint status transitions — update GitHub labels instead; HEARTBEAT is not the status store
+
+**Sprint notes are append-only (makes HEARTBEAT merge-safe):**
+Each session writes a unique dated block. Two agents writing notes in the same sprint produce
+two independent blocks at the bottom of the file — git merges them as clean appends with no conflict.
 
 **HEARTBEAT is stale if:**
 - The "Current Active Branch" does not match what `git branch --show-current` shows
