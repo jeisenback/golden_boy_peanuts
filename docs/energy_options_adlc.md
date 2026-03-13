@@ -125,6 +125,73 @@ steps; it adapts them.
 | never closes issues, and never decides when something is done.        |
 +-----------------------------------------------------------------------+
 
+**2b. Lightweight Track (Small Changes)**
+
+The 10-step Standard Track is sized for new modules and substantial
+features. For small, self-contained changes, use this 3-step Lightweight
+Track instead. It preserves the two non-negotiable practices --- read
+before you touch; gate before you commit --- without imposing the full
+PR-and-review ceremony.
+
+**When to use the Lightweight Track (ALL must be true):**
+
+  -----------------------------------------------------------------------
+  **Condition**                **Requirement**
+  ---------------------------- ------------------------------------------
+  File scope                   ≤ 2 files changed
+
+  src/ runtime code            Not modified --- OR --- change is a
+                               private rename / single-line fix with zero
+                               interface change
+
+  Public API                   No new public functions, no signature
+                               changes, no schema touches
+
+  Judgment required            Change is obviously correct after reading
+                               the file (no architectural decision needed)
+  -----------------------------------------------------------------------
+
+**When to use the Standard Track instead (ANY of these = Standard):**
+
+-   New agent module or new file in src/
+
+-   Change to a public function signature
+
+-   New or modified tests with more than trivial logic
+
+-   Schema or migration change
+
+-   More than 2 files changed
+
+-   New or removed dependency
+
+-   Requires an ADLC prompt template (§5.1--§5.5)
+
+**If uncertain which track applies, use the Standard Track.**
+
+**The 3-Step Loop:**
+
+  -----------------------------------------------------------------------
+  **\#**   **Step**      **Action**
+  -------- ------------- ------------------------------------------------
+  **1**    **READ**      Read every file you will touch. No exceptions.
+
+  **2**    **CHANGE**    Make the change.
+
+  **3**    **GATE**      bash scripts/local_check.sh exits 0 → commit
+                         with correct format.
+  -----------------------------------------------------------------------
+
++-----------------------------------------------------------------------+
+| **Lightweight Track Commit Rules**                                    |
+|                                                                       |
+| Commit format is identical to the Standard Track:                     |
+| \`\<type\>(\<scope\>): \<description\> (#\<issue\>)\`. Issue          |
+| reference is always required. If no issue exists for the change, use  |
+| the current sprint\'s closest related issue, or open a micro-issue    |
+| before committing.                                                     |
++-----------------------------------------------------------------------+
+
 **3. Human vs. Agent Decision Checkpoints**
 
 At key moments in the loop, the developer must make a deliberate choice

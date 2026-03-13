@@ -26,8 +26,8 @@ Phases: Phase 1 (core signals) → Phase 2 (supply/event) → Phase 3 (alternati
 1. Read HEARTBEAT.md       → find active sprint, active branch, blockers, current issue
 2. gh issue view <N>       → read ALL acceptance criteria for the issue you are working
 3. Read SESSION.md         → if it exists from a prior session, absorb its context
-4. Read docs/energy_options_adlc.md → identify task type, select prompt template (§5.1–§5.5), confirm DoD (§6)
-     §5.1 New Agent Module · §5.2 Feature · §5.3 Bug Fix · §5.4 Test Coverage · §5.5 Refactor
+4. Read docs/energy_options_adlc.md → select track (§2 Standard or §2b Lightweight), select prompt template (§5.1–§5.5), confirm DoD (§6)
+     §2b Lightweight (small changes) · §5.1 New Agent Module · §5.2 Feature · §5.3 Bug Fix · §5.4 Test Coverage · §5.5 Refactor
 5. git status              → confirm branch, confirm clean state
 6. pytest -m "not integration"  → must pass before writing any code
 ```
@@ -49,6 +49,10 @@ scope changes, issue closure with unchecked AC items, any irreversible operation
 
 **You own:** implementation within the issue, tests for your own code, code quality,
 doc updates in scope, commit authorship, HEARTBEAT.md session updates.
+
+For small, contained changes (docs, config, single-file private fixes with no interface
+change), use the **Lightweight Track** defined in ADLC §2b instead of the full 10-step
+loop. When uncertain which track applies, use the Standard Track.
 
 ---
 
