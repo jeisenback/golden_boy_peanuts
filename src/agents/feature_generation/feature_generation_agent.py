@@ -203,19 +203,48 @@ def run_feature_generation(
     """
     Compute the full FeatureSet for one evaluation cycle.
 
+    Calls each compute_* function independently. If a signal fails, the error
+    is appended to feature_errors and processing continues — the caller always
+    receives a FeatureSet, never an exception from this function.
+
     Args:
         market_state: Current validated market snapshot.
         events: Detected events from Event Detection Agent.
 
     Returns:
-        FeatureSet with all computed signals.
-        feature_errors contains details of any computation failures.
-
-    Raises:
-        NotImplementedError: Until implemented.
+        FeatureSet with all successfully computed signals.
+        feature_errors contains one entry per failed signal computation.
     """
-    raise NotImplementedError(
-        "run_feature_generation not yet implemented. "
-        "TODO: Orchestrate all compute_* functions. "
-        "Catch individual signal failures and continue with partial FeatureSet."
+    feature_errors: list[str] = []
+    volatility_gaps: list[VolatilityGap] = []
+    sector_dispersion: float | None = None
+    supply_shock_probability: float | None = None
+
+    try:
+        volatility_gaps = compute_volatility_gap(market_state)
+    except Exception as exc:
+        msg = f"compute_volatility_gap failed: {exc}"
+        logger.warning(msg)
+        feature_errors.append(msg)
+
+    try:
+        sector_dispersion = compute_sector_dispersion(market_state)
+    except Exception as exc:
+        msg = f"compute_sector_dispersion failed: {exc}"
+        logger.warning(msg)
+        feature_errors.append(msg)
+
+    try:
+        supply_shock_probability = compute_supply_shock_probability(events)
+    except Exception as exc:
+        msg = f"compute_supply_shock_probability failed: {exc}"
+        logger.warning(msg)
+        feature_errors.append(msg)
+
+    return FeatureSet(
+        snapshot_time=market_state.snapshot_time,
+        volatility_gaps=volatility_gaps,
+        sector_dispersion=sector_dispersion,
+        supply_shock_probability=supply_shock_probability,
+        feature_errors=feature_errors,
     )
