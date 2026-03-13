@@ -25,9 +25,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+from pydantic import ValidationError
 import pytest
 
-from src.agents.issue_refinement.models import DoRSeverity, IssueMetadata
 from src.agents.issue_refinement.issue_refinement_agent import (
     _check_ac_count,
     _check_labels,
@@ -35,6 +35,7 @@ from src.agents.issue_refinement.issue_refinement_agent import (
     _check_not_blocked,
     refine_issue,
 )
+from src.agents.issue_refinement.models import DoRSeverity, IssueMetadata
 from src.core.findings import Finding, FindingSeverity
 
 # ---------------------------------------------------------------------------
@@ -72,13 +73,11 @@ def _make_metadata(**overrides: object) -> IssueMetadata:
     return IssueMetadata(**defaults)  # type: ignore[arg-type]
 
 
-def _patched_refine(metadata: IssueMetadata) -> "IssueRefinementResult":  # type: ignore[name-defined]  # noqa: F821
+def _patched_refine(metadata: IssueMetadata) -> IssueRefinementResult:  # type: ignore[name-defined]  # noqa: F821
     """Run refine_issue with LLMWrapper patched to raise EnvironmentError."""
-    with patch(
-        "src.agents.issue_refinement.issue_refinement_agent.LLMWrapper"
-    ) as mock_cls:
+    with patch("src.agents.issue_refinement.issue_refinement_agent.LLMWrapper") as mock_cls:
         mock_instance = MagicMock()
-        mock_instance.complete.side_effect = EnvironmentError("ANTHROPIC_API_KEY not set")
+        mock_instance.complete.side_effect = OSError("ANTHROPIC_API_KEY not set")
         mock_cls.return_value = mock_instance
         return refine_issue(metadata)
 
@@ -286,11 +285,11 @@ class TestIssueMetadataValidation:
         assert meta.issue_number == 8
 
     def test_issue_number_must_be_positive(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             _make_metadata(issue_number=0)
 
     def test_title_must_not_be_empty(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             _make_metadata(title="")
 
 

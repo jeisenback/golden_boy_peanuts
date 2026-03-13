@@ -13,31 +13,40 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 2 |
-| Sprint Name | Sprint 2 — Core Infrastructure |
-| Goal | Shared db/retry core modules extracted; CI green; Phase 1 DB schema applied and verified |
-| Start Date | 2026-03-12 |
-| Target Close | 2026-03-19 |
+| Sprint Number | 3 |
+| Sprint Name | Sprint 3 — Data Pipeline |
+| Goal | Phase 1 fetch functions implemented; ingestion pipeline wired end-to-end; feature generation scaffolded |
+| Start Date | 2026-03-13 |
+| Target Close | 2026-03-20 |
 | Status | ACTIVE |
 
 ## Sprint Issues
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 3 | Refactor: extract shared get_engine() to src/core/db.py | Merged | `refactor/3-extract-get-engine` | PR #54 merged |
-| 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | In Review | `refactor/4-extract-retry-config` | PR #55 open |
-| 5 | CI pipeline verification: confirm all 4 workflows run green | Closed | `chore/5-ci-verification` | All 4 workflows verified green; issue closed |
-| 6 | PostgreSQL schema: market_prices and options_chain tables | In Review | `feature/6-schema-market-prices` | PR open; schema verified with psql |
-| 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
-| 34 | Replace remaining inline @retry decorators with @with_retry() | Not Started | — | Blocked until PR #55 merges |
+| 8 | Implement fetch_crude_prices — Alpha Vantage (WTI, Brent) | Merged | `feature/8-fetch-crude-prices` | PR #63 merged |
+| 9 | Implement fetch_etf_equity_prices — yfinance (USO, XLE, XOM, CVX) | In Review | `feature/9-fetch-etf-equity-prices` | PR #67 open |
+| 10 | Implement fetch_options_chain — yfinance / Polygon | Not Started | — | — |
+| 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Not Started | — | Depends on #8, #9, #10 |
+| 13 | Implement compute_volatility_gap — realized vs. implied volatility | Not Started | — | — |
+| 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | Not Started | — | — |
+| 15 | Implement run_feature_generation — Phase 1 orchestration | Not Started | — | Depends on #13, #14 |
 
 ## Current Active Branch
 
-`feature/6-schema-market-prices`
+`feature/9-fetch-etf-equity-prices`
 
 ## Blockers
 
-- None currently. Issue #34 is sequentially dependent on PR #55 merge.
+- None.
+
+## Sprint Notes (2026-03-13)
+
+Sprint 3 started. Issues #8 and #9 implemented; #8 merged, #9 in review:
+- `#8` — `fetch_crude_prices()`: Alpha Vantage GLOBAL_QUOTE for CL=F (WTI) and BZ=F (Brent); RuntimeError on missing key; ValueError on malformed response; timestamp = UTC fetch time; `_HTTP_TIMEOUT_SECONDS` constant; 5 unit tests. PR #63 merged.
+- `#9` — `fetch_etf_equity_prices()`: yfinance fast_info for USO/XLE (ETF) and XOM/CVX (EQUITY); no API key required; per-ticker exceptions logged and re-raised; 5 unit tests. PR #67 open.
+- Pre-existing ruff/black/mypy lint errors from PR #60 fixed on both branches to pass gate.
+- PR #64 merged: chore/fix-workflow-pythonpath — adds PYTHONPATH=. to pr-review and issue-refinement CI workflows.
 
 ## Sprint Notes (2026-03-12)
 
