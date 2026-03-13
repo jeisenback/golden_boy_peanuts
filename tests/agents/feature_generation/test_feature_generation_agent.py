@@ -18,6 +18,7 @@ import pytest
 
 from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.feature_generation_agent import (
+    compute_sector_dispersion,
     compute_volatility_gap,
     run_feature_generation,
 )
@@ -195,6 +196,113 @@ class TestComputeVolatilityGap:
 
         assert result == []
         assert "no implied volatility" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared across TestComputeSectorDispersion
+# ---------------------------------------------------------------------------
+
+_SECTOR_TYPES: dict[str, InstrumentType] = {
+    "USO": InstrumentType.ETF,
+    "XLE": InstrumentType.ETF,
+    "XOM": InstrumentType.EQUITY,
+    "CVX": InstrumentType.EQUITY,
+}
+
+
+def _make_sector_state(prices: dict[str, float]) -> MarketState:
+    """Build a MarketState containing only the given instrument→price entries.
+
+    Raises:
+        KeyError: If any key in ``prices`` is not in ``_SECTOR_TYPES``
+            ({USO, XLE, XOM, CVX}).
+    """
+    records = [
+        RawPriceRecord(
+            instrument=instr,
+            instrument_type=_SECTOR_TYPES[instr],
+            price=price,
+            timestamp=datetime.now(UTC),
+            source="test",
+        )
+        for instr, price in prices.items()
+    ]
+    return MarketState(snapshot_time=datetime.now(UTC), prices=records, options=[])
+
+
+class TestComputeSectorDispersion:
+    """Tests for compute_sector_dispersion() — CV of XOM/CVX/USO/XLE prices."""
+
+    def test_four_equal_prices_returns_zero(self) -> None:
+        """Four identical prices → stdev=0, CV=0.0."""
+        state = _make_sector_state({"XOM": 100.0, "CVX": 100.0, "USO": 100.0, "XLE": 100.0})
+        assert compute_sector_dispersion(state) == pytest.approx(0.0)
+
+    def test_one_outlier_returns_positive_dispersion(self) -> None:
+        """One outlier price raises CV above a detectable threshold."""
+        # mean=125, stdev(sample)=50, cv=0.4
+        state = _make_sector_state({"XOM": 100.0, "CVX": 100.0, "USO": 100.0, "XLE": 200.0})
+        result = compute_sector_dispersion(state)
+        assert result is not None
+        assert result > 0.1
+
+    def test_cv_formula_matches_expected(self) -> None:
+        """CV == stdev(prices) / mean(prices) for a known input."""
+        raw = [100.0, 100.0, 100.0, 200.0]
+        expected_cv = statistics.stdev(raw) / statistics.mean(raw)
+        state = _make_sector_state({"XOM": 100.0, "CVX": 100.0, "USO": 100.0, "XLE": 200.0})
+        assert compute_sector_dispersion(state) == pytest.approx(expected_cv)
+
+    def test_cv_capped_at_one(self) -> None:
+        """Raw CV > 1.0 is returned as exactly 1.0."""
+        # [1, 100, 1, 100]: mean≈50.5, stdev≈57.2, cv≈1.13 > 1.0
+        state = _make_sector_state({"XOM": 1.0, "CVX": 100.0, "USO": 1.0, "XLE": 100.0})
+        assert compute_sector_dispersion(state) == pytest.approx(1.0)
+
+    def test_fewer_than_two_instruments_returns_none_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Fewer than 2 sector instruments present → None with WARNING logged."""
+        state = _make_sector_state({"XOM": 100.0})
+        with caplog.at_level(
+            logging.WARNING,
+            logger="src.agents.feature_generation.feature_generation_agent",
+        ):
+            result = compute_sector_dispersion(state)
+        assert result is None
+        assert "Insufficient sector instruments" in caplog.text
+
+    def test_non_sector_instruments_are_ignored(self) -> None:
+        """CL=F and BZ=F prices do not influence the sector CV."""
+        state = MarketState(
+            snapshot_time=datetime.now(UTC),
+            prices=[
+                RawPriceRecord(
+                    instrument="CL=F",
+                    instrument_type=InstrumentType.CRUDE_FUTURES,
+                    price=9999.0,  # would dominate if included
+                    timestamp=datetime.now(UTC),
+                    source="test",
+                ),
+                RawPriceRecord(
+                    instrument="XOM",
+                    instrument_type=InstrumentType.EQUITY,
+                    price=100.0,
+                    timestamp=datetime.now(UTC),
+                    source="test",
+                ),
+                RawPriceRecord(
+                    instrument="CVX",
+                    instrument_type=InstrumentType.EQUITY,
+                    price=100.0,
+                    timestamp=datetime.now(UTC),
+                    source="test",
+                ),
+            ],
+            options=[],
+        )
+        # Only XOM and CVX are sector instruments; both equal → CV=0.0
+        assert compute_sector_dispersion(state) == pytest.approx(0.0)
 
 
 class TestRunFeatureGeneration:

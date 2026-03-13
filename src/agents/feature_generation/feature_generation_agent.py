@@ -35,6 +35,18 @@ _TRADING_DAYS_PER_YEAR: int = 252
 # Minimum number of DB price records required to compute realized volatility
 _MIN_PRICE_RECORDS: int = 10
 
+# Instruments whose prices constitute the 'sector' for dispersion measurement
+_SECTOR_INSTRUMENTS: frozenset[str] = frozenset({"XOM", "CVX", "USO", "XLE"})
+
+# Minimum number of sector instruments required to compute dispersion
+_MIN_SECTOR_INSTRUMENTS: int = 2
+
+# Maximum value returned by compute_sector_dispersion (CV capped for model input)
+_CV_CAP: float = 1.0
+
+# Guard: mean sector price must exceed this before CV division is safe
+_MEAN_PRICE_ZERO: float = 0.0
+
 
 def compute_volatility_gap(market_state: MarketState) -> list[VolatilityGap]:
     """
@@ -124,6 +136,45 @@ def compute_volatility_gap(market_state: MarketState) -> list[VolatilityGap]:
         )
 
     return result
+
+
+def compute_sector_dispersion(market_state: MarketState) -> float | None:
+    """
+    Compute price dispersion across the equity/ETF sector instruments.
+
+    Measures how much XOM, CVX, USO, and XLE prices diverge from each other
+    using the coefficient of variation (CV = stddev / mean).  High dispersion
+    alongside a positive volatility gap strengthens the edge score for equity
+    options (PRD Section 4.3).
+
+    The `_MIN_SECTOR_INSTRUMENTS = 2` guard guarantees that `statistics.stdev`
+    always receives at least 2 values; `StatisticsError` is therefore not an
+    expected exception path.
+
+    Args:
+        market_state: Current validated market snapshot from Ingestion Agent.
+
+    Returns:
+        CV capped to [0.0, 1.0], or None if fewer than 2 sector instruments
+        are present in market_state.prices (WARNING logged).
+    """
+    relevant_prices = [r.price for r in market_state.prices if r.instrument in _SECTOR_INSTRUMENTS]
+
+    if len(relevant_prices) < _MIN_SECTOR_INSTRUMENTS:
+        logger.warning(
+            "Insufficient sector instruments for dispersion: %d present (min %d) — returning None",
+            len(relevant_prices),
+            _MIN_SECTOR_INSTRUMENTS,
+        )
+        return None
+
+    mean_price = statistics.mean(relevant_prices)
+    if mean_price == _MEAN_PRICE_ZERO:
+        logger.warning("Mean sector price is zero — cannot compute CV; returning None")
+        return None
+
+    cv = statistics.stdev(relevant_prices) / mean_price
+    return min(cv, _CV_CAP)
 
 
 def compute_supply_shock_probability(events: list[DetectedEvent]) -> float:
