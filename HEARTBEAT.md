@@ -39,6 +39,21 @@
 
 - None currently. Issue #34 is sequentially dependent on PR #55 merge.
 
+## Sprint Notes (2026-03-13)
+
+Ad-hoc chore (no issue — retroactively noted):
+- `pr-review/branch-name` — fixed false-positive BLOCKER in `_check_branch_name()`:
+  `claude/` prefixed session branches are now exempt from the `<type>/<issue>-<slug>`
+  convention check. Commit `a848e07` on `claude/system-evaluation-analysis-6WgIJ`.
+  Future: open a proper chore issue if this needs backporting to develop.
+
+Also committed in this session (docs, same branch):
+- ADLC §2b Lightweight Track added (`c360196`) — reduces ceremony for small changes.
+- CLAUDE.md updated to reference §2b in Session Startup step 4 and Your Role section.
+
+Process note: session did not follow CLAUDE.md Before-You-Code checklist (no sprint issue,
+no pytest gate before edits). Corrected going forward.
+
 ## Sprint Notes (2026-03-12)
 
 Sprint 2 kicked off. Issues #3, #4, #5, #6 completed in single session:
