@@ -11,9 +11,85 @@ from datetime import UTC, datetime
 
 import pytest
 
-from src.agents.feature_generation.models import FeatureSet
+from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.strategy_evaluation.models import StrategyCandidate
-from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies
+from src.agents.strategy_evaluation.strategy_evaluation_agent import (
+    compute_edge_score,
+    evaluate_strategies,
+)
+
+
+def _make_vg(instrument: str, gap: float) -> VolatilityGap:
+    return VolatilityGap(
+        instrument=instrument,
+        realized_vol=0.20,
+        implied_vol=0.20 + gap,
+        gap=gap,
+        computed_at=datetime.now(tz=UTC),
+    )
+
+
+def _make_feature_set(
+    gaps: list[VolatilityGap],
+    sector_dispersion: float | None = None,
+) -> FeatureSet:
+    return FeatureSet(
+        snapshot_time=datetime.now(tz=UTC),
+        volatility_gaps=gaps,
+        sector_dispersion=sector_dispersion,
+    )
+
+
+class TestComputeEdgeScore:
+    """Tests for compute_edge_score()."""
+
+    def test_high_gap_high_dispersion(self) -> None:
+        """Full vol gap + full dispersion → 1.0."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=1.0)
+        score = compute_edge_score("USO", fs)
+        assert abs(score - 1.0) < 1e-9
+
+    def test_full_gap_no_dispersion(self) -> None:
+        """Full vol gap, dispersion None → 0.70."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=None)
+        score = compute_edge_score("USO", fs)
+        assert abs(score - 0.70) < 1e-9
+
+    def test_low_gap(self) -> None:
+        """Half vol gap, half dispersion → 0.35 + 0.15 = 0.50."""
+        fs = _make_feature_set([_make_vg("XLE", 0.10)], sector_dispersion=0.50)
+        score = compute_edge_score("XLE", fs)
+        assert abs(score - 0.50) < 1e-9
+
+    def test_gap_capped_at_one(self) -> None:
+        """Vol gap larger than 0.20 caps at 1.0 contribution, so score ≤ 1.0."""
+        fs = _make_feature_set([_make_vg("XOM", 0.50)], sector_dispersion=1.0)
+        score = compute_edge_score("XOM", fs)
+        assert abs(score - 1.0) < 1e-9
+
+    def test_no_instrument_returns_zero(self) -> None:
+        """Instrument not in feature_set.volatility_gaps → 0.0."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=1.0)
+        score = compute_edge_score("XOM", fs)
+        assert score == 0.0
+
+    def test_negative_gap_returns_zero(self) -> None:
+        """Negative vol gap (IV below realized) clipped to 0 → 0.0 vol contribution."""
+        fs = _make_feature_set([_make_vg("CVX", -0.05)], sector_dispersion=None)
+        score = compute_edge_score("CVX", fs)
+        assert score == 0.0
+
+    def test_zero_dispersion(self) -> None:
+        """Full gap, zero dispersion → 0.70."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.0)
+        score = compute_edge_score("USO", fs)
+        assert abs(score - 0.70) < 1e-9
+
+    def test_score_bounded(self) -> None:
+        """Edge score must always be in [0.0, 1.0]."""
+        fs = _make_feature_set([_make_vg("USO", 1.0)], sector_dispersion=1.0)
+        score = compute_edge_score("USO", fs)
+        assert 0.0 <= score <= 1.0
 
 
 class TestEvaluateStrategies:
