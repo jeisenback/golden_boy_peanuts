@@ -16,7 +16,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.feature_generation_agent import (
     compute_sector_dispersion,
     compute_volatility_gap,
@@ -305,24 +304,104 @@ class TestComputeSectorDispersion:
         assert compute_sector_dispersion(state) == pytest.approx(0.0)
 
 
+_PATCH_COMPUTE_VOL_GAP = (
+    "src.agents.feature_generation.feature_generation_agent.compute_volatility_gap"
+)
+_PATCH_COMPUTE_SECTOR = (
+    "src.agents.feature_generation.feature_generation_agent.compute_sector_dispersion"
+)
+_PATCH_COMPUTE_SUPPLY = (
+    "src.agents.feature_generation.feature_generation_agent.compute_supply_shock_probability"
+)
+
+
 class TestRunFeatureGeneration:
     """Tests for run_feature_generation() orchestration function."""
 
-    @pytest.mark.xfail(reason="Not yet implemented", strict=True)
+    def _base_state(self) -> MarketState:
+        return MarketState(snapshot_time=datetime.now(tz=UTC))
+
     def test_run_feature_generation_returns_feature_set(self) -> None:
         """run_feature_generation() must return a FeatureSet instance."""
-        market_state = MarketState(snapshot_time=datetime.now(tz=UTC))
-        events: list[DetectedEvent] = []
-        result = run_feature_generation(market_state, events)
+        market_state = self._base_state()
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),
+            patch(_PATCH_COMPUTE_SECTOR, return_value=None),
+            patch(_PATCH_COMPUTE_SUPPLY, return_value=0.0),
+        ):
+            result = run_feature_generation(market_state, [])
         assert isinstance(result, FeatureSet)
 
-    @pytest.mark.xfail(reason="Not yet implemented", strict=True)
+    def test_successful_signals_populate_feature_set(self) -> None:
+        """All successfully computed signals are present in the returned FeatureSet."""
+        market_state = self._base_state()
+        fake_gaps = [
+            VolatilityGap(
+                instrument="USO",
+                realized_vol=0.20,
+                implied_vol=0.30,
+                gap=0.10,
+                computed_at=datetime.now(tz=UTC),
+            )
+        ]
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, return_value=fake_gaps),
+            patch(_PATCH_COMPUTE_SECTOR, return_value=0.15),
+            patch(_PATCH_COMPUTE_SUPPLY, return_value=0.6),
+        ):
+            result = run_feature_generation(market_state, [])
+
+        assert result.volatility_gaps == fake_gaps
+        assert result.sector_dispersion == pytest.approx(0.15)
+        assert result.supply_shock_probability == pytest.approx(0.6)
+        assert result.feature_errors == []
+
     def test_partial_signal_failure_does_not_raise(self) -> None:
         """
         If one signal computation fails, run_feature_generation() must return a
-        partial FeatureSet with the error in feature_errors, not raise an exception.
+        partial FeatureSet with the error in feature_errors, not raise.
         """
-        market_state = MarketState(snapshot_time=datetime.now(tz=UTC))
-        events: list[DetectedEvent] = []
-        result = run_feature_generation(market_state, events)
+        market_state = self._base_state()
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, side_effect=RuntimeError("db down")),
+            patch(_PATCH_COMPUTE_SECTOR, return_value=0.05),
+            patch(_PATCH_COMPUTE_SUPPLY, return_value=0.2),
+        ):
+            result = run_feature_generation(market_state, [])
+
+        assert isinstance(result, FeatureSet)
         assert isinstance(result.feature_errors, list)
+        assert len(result.feature_errors) == 1
+        assert "compute_volatility_gap failed" in result.feature_errors[0]
+        assert "db down" in result.feature_errors[0]
+        # other signals still computed
+        assert result.sector_dispersion == pytest.approx(0.05)
+        assert result.supply_shock_probability == pytest.approx(0.2)
+
+    def test_all_signal_failures_recorded_in_feature_errors(self) -> None:
+        """All three compute functions failing still returns a valid FeatureSet."""
+        market_state = self._base_state()
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, side_effect=RuntimeError("vol fail")),
+            patch(_PATCH_COMPUTE_SECTOR, side_effect=ValueError("sector fail")),
+            patch(_PATCH_COMPUTE_SUPPLY, side_effect=NotImplementedError("supply fail")),
+        ):
+            result = run_feature_generation(market_state, [])
+
+        assert isinstance(result, FeatureSet)
+        assert len(result.feature_errors) == 3
+        assert result.volatility_gaps == []
+        assert result.sector_dispersion is None
+        assert result.supply_shock_probability is None
+
+    def test_snapshot_time_matches_market_state(self) -> None:
+        """FeatureSet.snapshot_time equals market_state.snapshot_time."""
+        snap = datetime.now(tz=UTC)
+        market_state = MarketState(snapshot_time=snap)
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),
+            patch(_PATCH_COMPUTE_SECTOR, return_value=None),
+            patch(_PATCH_COMPUTE_SUPPLY, return_value=0.0),
+        ):
+            result = run_feature_generation(market_state, [])
+        assert result.snapshot_time == snap
