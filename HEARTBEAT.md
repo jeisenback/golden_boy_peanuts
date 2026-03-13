@@ -44,7 +44,7 @@
 Issue #5 closed: all 4 GitHub Actions workflows verified green against existing run history. No code changes required.
 - `ci.yml` — push to develop run 22946745279 ✓; PR run 22927190645 ✓
 - `runtime-check.yml` — push to develop run 22946745272 ✓; PR run 22927190654 ✓
-- `integration.yml` — PR runs 23026165853, 23027379749 ✓ (exit 5 = 0 tests collected; acceptable per issue notes)
+- `integration.yml` — PR runs 23026165853, 23027379749 ✓ (exit code 5: 0 tests collected; acceptable per issue notes)
 - `security.yml` — PR runs 23026165882, 23027379759 ✓ (no HIGH bandit findings; pip-audit clean)
 
 ## Sprint Notes (2026-03-12)
