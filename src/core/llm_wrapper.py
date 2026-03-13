@@ -51,7 +51,10 @@ class LLMWrapper:
 
     Reads LLM_PROVIDER from the environment to select the backend.
     No provider SDK is imported at module level — imports are lazy and
-    isolated in src/core/_providers/ (future issue).
+    isolated in src/core/_providers/.
+
+    Supported providers:
+        anthropic  — Anthropic Messages API via HTTP (requests library)
     """
 
     def __init__(self, model_id: str) -> None:
@@ -68,6 +71,9 @@ class LLMWrapper:
         """
         Send a prompt to the configured LLM provider and return a normalized response.
 
+        Dispatches to the backend selected by the LLM_PROVIDER environment variable.
+        Provider modules are imported lazily so unused providers have zero import cost.
+
         Args:
             prompt: The text prompt to send to the model.
             **kwargs: Additional provider-specific parameters (e.g., max_tokens).
@@ -76,10 +82,27 @@ class LLMWrapper:
             LLMResponse with normalized content, model_id, and provider fields.
 
         Raises:
-            NotImplementedError: Until provider backends are implemented.
+            LLMProviderError: If LLM_PROVIDER is set to an unsupported value.
+            EnvironmentError: If required provider credentials are missing.
         """
-        raise NotImplementedError(
-            "LLMWrapper.complete() is not yet implemented. "
-            "TODO: Implement provider backends in src/core/_providers/. "
-            "See ESOD Section 5.3 for interface contract."
+        if self.provider == "anthropic":
+            from src.core._providers import anthropic_http  # lazy import
+
+            raw = anthropic_http.complete(
+                model_id=self.model_id,
+                prompt=prompt,
+                **{k: v for k, v in kwargs.items()},
+            )
+            content = anthropic_http.extract_text(raw)
+            return LLMResponse(
+                content=content,
+                model_id=self.model_id,
+                provider=self.provider,
+                raw=raw,
+            )
+
+        raise LLMProviderError(
+            f"Unsupported LLM_PROVIDER={self.provider!r}. "
+            "Currently supported: 'anthropic'. "
+            "Set LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY in your environment."
         )

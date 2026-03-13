@@ -50,7 +50,15 @@ Sprint 2 kicked off. Issues #3, #4, #5, #6 completed in single session:
 
 Decision: `db/schema.sql` uses `IF NOT EXISTS` guards throughout — idempotent, safe to re-run.
 
-## Sprint Notes (2026-03-11)
+## Sprint Notes (2026-03-12, session 2)
+
+Issue #5 closed: all 4 GitHub Actions workflows verified green against existing run history. No code changes required.
+- `ci.yml` — push to develop run 22946745279 ✓; PR run 22927190645 ✓
+- `runtime-check.yml` — push to develop run 22946745272 ✓; PR run 22927190654 ✓
+- `integration.yml` — PR runs 23026165853, 23027379749 ✓ (exit code 5: 0 tests collected; acceptable per issue notes)
+- `security.yml` — PR runs 23026165882, 23027379759 ✓ (no HIGH bandit findings; pip-audit clean)
+
+## Sprint Notes (2026-03-12)
 
 All Sprint 1 PRs confirmed merged. Issue table updated to reflect merged state. No open blockers. Sprint ready for human to close via `bash scripts/sprint_close.sh`. Next sprint candidates: #3, #4, #5, #6, #7, #8 (Phase 0 / Phase 1 infra).
 
