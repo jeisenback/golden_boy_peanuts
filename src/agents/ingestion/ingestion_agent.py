@@ -35,6 +35,8 @@ from src.core.retry import with_retry
 # Do NOT call logging.basicConfig() here — configuration belongs in the entry point.
 logger = logging.getLogger(__name__)
 
+_HTTP_TIMEOUT_SECONDS: int = 10  # seconds; applies to all outbound HTTP requests
+
 
 @with_retry()
 def fetch_crude_prices() -> list[RawPriceRecord]:
@@ -65,7 +67,7 @@ def fetch_crude_prices() -> list[RawPriceRecord]:
         response = requests.get(
             "https://www.alphavantage.co/query",
             params={"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": api_key},
-            timeout=10,
+            timeout=_HTTP_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         data: dict[str, object] = response.json()
