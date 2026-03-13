@@ -186,6 +186,15 @@ All 8 agent-doable issues committed on separate branches in a single session:
 
 Key architecture observation documented: `run_event_detection()` takes no arguments (fetches own data from DB). This means Event Detection and Ingestion are currently decoupled at the function boundary — Phase 2 may need to revisit this.
 
+## Sprint Notes (2026-03-13, session 7)
+
+Issue #12 implemented and merged (PR #80):
+- Implemented `write_price_records()` and `write_option_records()` in `src/agents/ingestion/db.py` — parameterized `text()` batch INSERT with `try/except + logger.exception` before re-raise (ESOD-4 compliant); `Raises` section added to both docstrings.
+- Created `tests/agents/ingestion/test_ingestion_agent_integration.py` — 7 `@pytest.mark.integration` tests using `testcontainers.postgres.PostgresContainer` (no mocked DB): round-trip writes for both tables, NULL column handling, `run_ingestion()` full-success and partial-failure paths.
+- `TESTCONTAINERS_RYUK_DISABLED=true` set at module level (Windows Ryuk port-mapping workaround).
+- Coverage: 93% (>80% AC). Gate: all 5 stages pass (145 unit tests, 7 integration tests).
+- Sprint 4 remaining: #16, #19.
+
 ## Last Merged PR
 
 - PR #53 (develop ← develop merge), PR #52/#51 (#26 ingestion fix), PR #50 (#1 CODEOWNERS), PR #48 (#31 post_session), PR #45 (#27 pipeline), PR #42 (#33), PR #41 (#32), PR #40 (#31), PR #39 (#29), PR #38 (#27), PR #37 (#26), PR #36 (#2), PR #35 (#30) — all Sprint 1 PRs merged 2026-03-10
