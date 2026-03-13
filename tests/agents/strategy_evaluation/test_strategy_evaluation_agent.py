@@ -8,8 +8,7 @@ Coverage goal (expand per GitHub Issue):
 """
 
 from datetime import UTC, datetime
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.strategy_evaluation.models import StrategyCandidate
@@ -17,6 +16,10 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
     compute_edge_score,
     evaluate_strategies,
 )
+
+# Patch target for DB calls inside evaluate_strategies
+_PATCH_GET_ENGINE = "src.agents.strategy_evaluation.strategy_evaluation_agent.get_engine"
+_PATCH_WRITE = "src.agents.strategy_evaluation.strategy_evaluation_agent.write_strategy_candidates"
 
 
 def _make_vg(instrument: str, gap: float) -> VolatilityGap:
@@ -93,38 +96,109 @@ class TestComputeEdgeScore:
 
 
 class TestEvaluateStrategies:
-    """Tests for evaluate_strategies() function."""
+    """Tests for evaluate_strategies() function.
 
-    @pytest.mark.xfail(reason="Not yet implemented", strict=True)
+    DB calls (get_engine, write_strategy_candidates) are mocked in all tests
+    so the suite runs without a live database.
+    """
+
+    @staticmethod
+    def _mock_db() -> tuple[MagicMock, MagicMock]:
+        """Return patched (get_engine, write_strategy_candidates) mocks."""
+        return (
+            patch(_PATCH_GET_ENGINE, return_value=MagicMock()),
+            patch(_PATCH_WRITE, return_value=3),
+        )
+
     def test_evaluate_strategies_returns_list(self) -> None:
         """evaluate_strategies() must return a list of StrategyCandidate."""
-        feature_set = FeatureSet(snapshot_time=datetime.now(tz=UTC))
-        result = evaluate_strategies(feature_set)
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
         assert isinstance(result, list)
         for item in result:
             assert isinstance(item, StrategyCandidate)
 
-    @pytest.mark.xfail(reason="Not yet implemented", strict=True)
     def test_candidates_sorted_by_edge_score_desc(self) -> None:
         """evaluate_strategies() output must be sorted by edge_score descending."""
-        feature_set = FeatureSet(snapshot_time=datetime.now(tz=UTC))
-        result = evaluate_strategies(feature_set)
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20), _make_vg("XLE", 0.10)], sector_dispersion=0.5
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
         scores = [c.edge_score for c in result]
         assert scores == sorted(scores, reverse=True)
 
-    @pytest.mark.xfail(reason="Not yet implemented", strict=True)
     def test_strategy_candidate_matches_prd_schema(self) -> None:
-        """
-        StrategyCandidate must have all PRD Section 9 output schema fields:
-        instrument, structure, expiration, edge_score, signals, generated_at
-        """
-        feature_set = FeatureSet(snapshot_time=datetime.now(tz=UTC))
-        result = evaluate_strategies(feature_set)
-        if result:
-            candidate = result[0]
-            assert hasattr(candidate, "instrument")
-            assert hasattr(candidate, "structure")
-            assert hasattr(candidate, "expiration")
-            assert hasattr(candidate, "edge_score")
-            assert hasattr(candidate, "signals")
-            assert hasattr(candidate, "generated_at")
+        """StrategyCandidate has all PRD Section 9 output schema fields."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result, "Expected at least one candidate"
+        candidate = result[0]
+        assert hasattr(candidate, "instrument")
+        assert hasattr(candidate, "structure")
+        assert hasattr(candidate, "expiration")
+        assert hasattr(candidate, "edge_score")
+        assert hasattr(candidate, "signals")
+        assert hasattr(candidate, "generated_at")
+
+    def test_three_structures_per_instrument(self) -> None:
+        """Each qualifying instrument produces 3 candidates (one per Phase 1 structure)."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        uso_candidates = [c for c in result if c.instrument == "USO"]
+        assert len(uso_candidates) == 3
+        structures = {c.structure for c in uso_candidates}
+        assert "long_straddle" in structures
+        assert "call_spread" in structures
+        assert "put_spread" in structures
+
+    def test_below_threshold_filtered_out(self) -> None:
+        """Instruments with edge_score < 0.10 produce no candidates."""
+        # gap=0.0 → edge_score=0.0, which is below _MIN_EDGE_SCORE=0.10
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.0)
+        result = evaluate_strategies(fs)  # no candidates → DB not called
+        assert result == []
+
+    def test_empty_feature_set_returns_empty(self) -> None:
+        """No volatility gaps → no candidates (all instruments score 0.0)."""
+        fs = _make_feature_set([], sector_dispersion=1.0)
+        result = evaluate_strategies(fs)  # no candidates → DB not called
+        assert result == []
+
+    def test_expiration_is_30_days(self) -> None:
+        """All Phase 1 candidates use _DEFAULT_EXPIRATION_DAYS = 30."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert all(c.expiration == 30 for c in result)
+
+    def test_signals_dict_keys(self) -> None:
+        """signals dict must contain 'volatility_gap' and 'sector_dispersion' keys."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result
+        assert "volatility_gap" in result[0].signals
+        assert "sector_dispersion" in result[0].signals
+
+    def test_signals_positive_gap_high_dispersion(self) -> None:
+        """Positive gap + high dispersion → correct signal labels."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.20)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        uso = next(c for c in result if c.instrument == "USO")
+        assert uso.signals["volatility_gap"] == "positive"
+        assert uso.signals["sector_dispersion"] == "high"
+
+    def test_signals_negative_gap(self) -> None:
+        """Negative gap → 'negative' label (dispersion carries score above threshold)."""
+        # With gap=-0.05 and dispersion=0.5, edge_score = 0 + 0.5*0.30 = 0.15 → above threshold
+        fs = _make_feature_set([_make_vg("USO", -0.05)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        uso = next((c for c in result if c.instrument == "USO"), None)
+        assert uso is not None
+        assert uso.signals["volatility_gap"] == "negative"
