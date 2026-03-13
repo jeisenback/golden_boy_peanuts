@@ -87,12 +87,17 @@ def _check_branch_name(metadata: PRMetadata) -> list[ReviewFinding]:
     """
     Verify the head branch follows <type>/<issue>-<slug> naming convention.
 
+    Branches prefixed with 'claude/' are system-assigned session branches
+    (see CLAUDE.md) and are exempt from the convention check.
+
     Args:
         metadata: Validated PR metadata.
 
     Returns:
-        List of findings; empty if the branch name is compliant.
+        List of findings; empty if the branch name is compliant or exempt.
     """
+    if metadata.head_branch.startswith("claude/"):
+        return []
     if not _BRANCH_RE.match(metadata.head_branch):
         return [
             ReviewFinding(
