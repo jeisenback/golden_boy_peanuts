@@ -29,12 +29,12 @@
 | 10 | Implement fetch_options_chain — yfinance / Polygon | Merged | `feature/10-fetch-options-chain` | PR #68 merged |
 | 11 | Implement run_ingestion — orchestration, MarketState build, DB persist | Merged | `feature/11-run-ingestion` | PR #70 merged |
 | 13 | Implement compute_volatility_gap — realized vs. implied volatility | Merged | `feature/13-compute-volatility-gap` | PR #71 merged |
-| 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | In Review | `feature/14-compute-sector-dispersion` | PR #74 open |
+| 14 | Implement compute_sector_dispersion — price spread across XOM, CVX, USO, XLE | Merged | `feature/14-compute-sector-dispersion` | PR #74 merged |
 | 15 | Implement run_feature_generation — Phase 1 orchestration | Not Started | — | Depends on #13, #14 |
 
 ## Current Active Branch
 
-`feature/14-compute-sector-dispersion`
+none
 
 ## Blockers
 
