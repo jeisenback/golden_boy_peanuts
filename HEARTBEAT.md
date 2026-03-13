@@ -15,9 +15,9 @@
 |-------|-------|
 | Sprint Number | 2 |
 | Sprint Name | Sprint 2 — Core Infrastructure |
-| Goal | Shared utilities (get_engine, retry), CI green, PostgreSQL schema for all four agents. Blocks all feature implementation. |
-| Start Date | 2026-03-11 |
-| Target Close | TBD |
+| Goal | Shared db/retry core modules extracted; CI green; Phase 1 DB schema applied and verified |
+| Start Date | 2026-03-12 |
+| Target Close | 2026-03-19 |
 | Status | ACTIVE |
 
 ## Sprint Issues
@@ -26,18 +26,29 @@
 |---|-------|--------|--------|-------|
 | 3 | Refactor: extract shared get_engine() to src/core/db.py | Merged | `refactor/3-extract-get-engine` | PR #54 merged |
 | 4 | Refactor: extract shared tenacity retry config to src/core/retry.py | In Review | `refactor/4-extract-retry-config` | PR #55 open |
-| 5 | CI pipeline verification: confirm all 4 workflows run green | Closed | `chore/5-ci-verification` | All 4 workflows verified green — no code changes |
-| 6 | PostgreSQL schema: market_prices and options_chain tables | Not Started | — | — |
+| 5 | CI pipeline verification: confirm all 4 workflows run green | Closed | `chore/5-ci-verification` | All 4 workflows verified green; issue closed |
+| 6 | PostgreSQL schema: market_prices and options_chain tables | In Review | `feature/6-schema-market-prices` | PR open; schema verified with psql |
 | 7 | PostgreSQL schema: feature_sets and strategy_candidates tables | Not Started | — | — |
-| 34 | chore: replace inline @retry decorators with @with_retry() | Not Started | — | Blocked by #4 |
+| 34 | Replace remaining inline @retry decorators with @with_retry() | Not Started | — | Blocked until PR #55 merges |
 
 ## Current Active Branch
 
-`chore/5-ci-verification` — issue #5 verified and closed. No code changes.
+`feature/6-schema-market-prices`
 
 ## Blockers
 
-- None.
+- None currently. Issue #34 is sequentially dependent on PR #55 merge.
+
+## Sprint Notes (2026-03-12)
+
+Sprint 2 kicked off. Issues #3, #4, #5, #6 completed in single session:
+
+- `#3` — `src/core/db.py` created with canonical `get_engine()`; all 4 agent `db.py` files updated to re-export via `# noqa: F401`. PR #54 merged.
+- `#4` — `src/core/retry.py` created with `with_retry()` decorator factory; TypeVar-typed, `before_sleep_log` WARNING logging, env-configurable retries. Both agent files updated. PR #55 open.
+- `#5` — CI verification: all 4 workflows (ci.yml, runtime-check.yml, integration.yml, security.yml) confirmed green against PR #54/#55. No code changes needed. Issue closed.
+- `#6` — `db/schema.sql` created: `market_prices` and `options_chain` DDL with TIMESTAMPTZ columns, composite indexes, TimescaleDB hypertable migration comments (PRD §6.2). Applied to local Postgres (timescale/timescaledb:2.15.2-pg15) and verified with `\d`. PR open.
+
+Decision: `db/schema.sql` uses `IF NOT EXISTS` guards throughout — idempotent, safe to re-run.
 
 ## Sprint Notes (2026-03-12, session 2)
 
