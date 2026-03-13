@@ -44,6 +44,9 @@ _MIN_SECTOR_INSTRUMENTS: int = 2
 # Maximum value returned by compute_sector_dispersion (CV capped for model input)
 _CV_CAP: float = 1.0
 
+# Guard: mean sector price must exceed this before CV division is safe
+_MEAN_PRICE_ZERO: float = 0.0
+
 
 def compute_volatility_gap(market_state: MarketState) -> list[VolatilityGap]:
     """
@@ -144,6 +147,10 @@ def compute_sector_dispersion(market_state: MarketState) -> float | None:
     alongside a positive volatility gap strengthens the edge score for equity
     options (PRD Section 4.3).
 
+    The `_MIN_SECTOR_INSTRUMENTS = 2` guard guarantees that `statistics.stdev`
+    always receives at least 2 values; `StatisticsError` is therefore not an
+    expected exception path.
+
     Args:
         market_state: Current validated market snapshot from Ingestion Agent.
 
@@ -162,7 +169,7 @@ def compute_sector_dispersion(market_state: MarketState) -> float | None:
         return None
 
     mean_price = statistics.mean(relevant_prices)
-    if mean_price == 0.0:
+    if mean_price == _MEAN_PRICE_ZERO:
         logger.warning("Mean sector price is zero — cannot compute CV; returning None")
         return None
 

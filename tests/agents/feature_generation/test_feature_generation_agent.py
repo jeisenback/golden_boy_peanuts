@@ -211,7 +211,12 @@ _SECTOR_TYPES: dict[str, InstrumentType] = {
 
 
 def _make_sector_state(prices: dict[str, float]) -> MarketState:
-    """Build a MarketState containing only the given instrument→price entries."""
+    """Build a MarketState containing only the given instrument→price entries.
+
+    Raises:
+        KeyError: If any key in ``prices`` is not in ``_SECTOR_TYPES``
+            ({USO, XLE, XOM, CVX}).
+    """
     records = [
         RawPriceRecord(
             instrument=instr,
