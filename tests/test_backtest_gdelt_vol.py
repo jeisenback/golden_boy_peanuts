@@ -2,7 +2,7 @@ import pathlib
 from backtests.backtest_gdelt_vol import evaluate
 
 
-def test_evaluate_sample(tmp_path):
+def test_evaluate_sample(tmp_path) -> None:
     repo = pathlib.Path(__file__).resolve().parents[1]
     gdelt = repo / "backtests" / "sample_gdelt.csv"
     prices = repo / "backtests" / "sample_prices.csv"

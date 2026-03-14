@@ -14,29 +14,82 @@ import json
 import numpy as np
 import pandas as pd
 from typing import Any, Dict
+import logging
+
+# Module-level defaults (avoid magic numbers in code)
+DEFAULT_ROLLING_WINDOW: int = 14  # default rolling window (days)
+ROLLING_MIN_PERIODS_FLOOR: int = 3  # minimum observations for rolling stats
+MIN_PERIODS_DIVISOR: int = 4  # divisor to compute adaptive min_periods from window
+
+logger = logging.getLogger(__name__)
 
 
 def load_gdelt(path: pathlib.Path) -> pd.DataFrame:
-    df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
-    df = df.sort_values("date").set_index("date")
-    if "articles" not in df.columns:
-        raise KeyError("gdelt CSV must contain an 'articles' column")
-    return df
+    """Load a GDELT timeline CSV.
+
+    The CSV must contain a `date` column and an `articles` numeric column.
+
+    Args:
+        path: Path to the CSV file.
+
+    Returns:
+        DataFrame indexed by `date` with an `articles` column.
+
+    Raises:
+        KeyError: if required columns are missing.
+        Exception: if file cannot be read.
+    """
+    try:
+        df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
+        df = df.sort_values("date").set_index("date")
+        if "articles" not in df.columns:
+            raise KeyError("gdelt CSV must contain an 'articles' column")
+        return df
+    except Exception:
+        logger.exception("Failed to load GDELT CSV: %s", path)
+        raise
 
 
 def load_prices(path: pathlib.Path) -> pd.DataFrame:
-    df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
-    df = df.sort_values("date").set_index("date")
-    if "close" not in df.columns:
-        raise KeyError("prices CSV must contain a 'close' column")
-    df["ret"] = df["close"].pct_change()
-    return df
+    """Load a price series CSV.
+
+    The CSV must contain a `date` column and a `close` numeric column.
+
+    Args:
+        path: Path to the CSV file.
+
+    Returns:
+        DataFrame indexed by `date` with `close` and `ret` (pct change) columns.
+
+    Raises:
+        KeyError: if required columns are missing.
+        Exception: if file cannot be read.
+    """
+    try:
+        df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
+        df = df.sort_values("date").set_index("date")
+        if "close" not in df.columns:
+            raise KeyError("prices CSV must contain a 'close' column")
+        df["ret"] = df["close"].pct_change()
+        return df
+    except Exception:
+        logger.exception("Failed to load prices CSV: %s", path)
+        raise
 
 
-def detect_events(gdelt: pd.DataFrame, window: int = 14, threshold: float = 2.0) -> pd.Series:
-    # Use rolling z-score on `articles` count. Use smaller min_periods for short series.
+def detect_events(gdelt: pd.DataFrame, window: int = DEFAULT_ROLLING_WINDOW, threshold: float = 2.0) -> pd.Series:
+    """Detect volume burst events using a rolling z-score on article counts.
+
+    Args:
+        gdelt: DataFrame with an `articles` column indexed by date.
+        window: Rolling window size (days) to compute baseline statistics.
+        threshold: z-score threshold to flag an event.
+
+    Returns:
+        Boolean Series indexed by the same index as `gdelt` where True indicates an event.
+    """
     s = gdelt["articles"].astype(float)
-    minp = max(3, window // 4)
+    minp = max(ROLLING_MIN_PERIODS_FLOOR, window // MIN_PERIODS_DIVISOR)
     mu = s.rolling(window=window, min_periods=minp).mean()
     sigma = s.rolling(window=window, min_periods=minp).std().replace(0, np.nan)
     z = (s - mu) / sigma
@@ -44,7 +97,15 @@ def detect_events(gdelt: pd.DataFrame, window: int = 14, threshold: float = 2.0)
 
 
 def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
-    # realized absolute return over next `hold` days
+    """Compute forward realized absolute return over the next `hold` days.
+
+    Args:
+        prices: DataFrame with `ret` (pct change) column.
+        hold: Number of days to aggregate absolute returns.
+
+    Returns:
+        Series of realized absolute returns aligned to the window start.
+    """
     abs_ret = prices["ret"].abs()
     return abs_ret.rolling(window=hold, min_periods=1).sum().shift(-hold + 1)
 
@@ -100,8 +161,8 @@ def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: flo
             fig_path = pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
             fig.savefig(fig_path)
         except Exception as e:
-            # plotting is optional; continue on failure
-            print(f"Plotting failed: {e}")
+            # plotting is optional; log and continue
+            logger.warning("Plotting failed: %s", e)
 
     return out
 
