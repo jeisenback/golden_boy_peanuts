@@ -110,7 +110,11 @@ def detect_events(
     s = gdelt["articles"].astype(float)
     minp = max(ROLLING_MIN_PERIODS_FLOOR, window // MIN_PERIODS_DIVISOR)
     mu = s.rolling(window=window, min_periods=minp).mean()
-    sigma = s.rolling(window=window, min_periods=minp).std().replace(0, np.nan)
+    sigma = s.rolling(window=window, min_periods=minp).std()
+    # Warn operators if rolling std contains zeros — indicates degenerate window
+    if (sigma == 0).any():
+        logger.warning("detect_events: rolling std contains zero values in window=%s; replacing with NaN", window)
+    sigma = sigma.replace(0, np.nan)
     z = (s - mu) / sigma
     return z.fillna(0) > threshold
 
