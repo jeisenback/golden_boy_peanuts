@@ -48,7 +48,7 @@ _SEVERITY_EMOJI = {
 }
 
 
-def _run(cmd: list[str], check: bool = True) -> str:  # noqa: S603
+def _run(cmd: list[str], check: bool = True) -> str:
     """
     Run a subprocess command and return its stdout as a string.
 
@@ -62,7 +62,7 @@ def _run(cmd: list[str], check: bool = True) -> str:  # noqa: S603
     Raises:
         subprocess.CalledProcessError: On non-zero exit when check=True.
     """
-    result = subprocess.run(cmd, capture_output=True, text=True, check=check)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=check)  # noqa: S603
     return result.stdout.strip()
 
 
