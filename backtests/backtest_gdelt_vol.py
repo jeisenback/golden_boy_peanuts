@@ -4,6 +4,29 @@
 Usage:
   python backtest_gdelt_vol.py --gdelt sample_gdelt.csv --prices sample_prices.csv --threshold 2.0 --hold 3
 """
+<<<<<<< HEAD
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import pathlib
+import sys
+from typing import Any
+=======
+from __future__ import annotations
+
+import argparse
+import pathlib
+import sys
+>>>>>>> 3db6b7d (Add GDELT->volatility backtest prototype (backtest_gdelt_vol.py + sample data))
+#!/usr/bin/env python3
+"""Prototype backtest: GDELT volume spikes -> realized volatility proxy.
+
+Usage:
+  python backtest_gdelt_vol.py --gdelt sample_gdelt.csv --prices sample_prices.csv --threshold 2.0 --hold 3
+"""
 
 from __future__ import annotations
 
@@ -113,7 +136,10 @@ def detect_events(
     sigma = s.rolling(window=window, min_periods=minp).std()
     # Warn operators if rolling std contains zeros — indicates degenerate window
     if (sigma == 0).any():
-        logger.warning("detect_events: rolling std contains zero values in window=%s; replacing with NaN", window)
+        logger.warning(
+            "detect_events: rolling std contains zero values in window=%s; replacing with NaN",
+            window,
+        )
     sigma = sigma.replace(0, np.nan)
     z = (s - mu) / sigma
     return z.fillna(0) > threshold
@@ -172,7 +198,7 @@ def evaluate(
     Args:
         gdelt_path: Path to GDELT CSV with an `articles` column.
         prices_path: Path to prices CSV with a `close` column.
-        threshold: Z-score threshold used to flag GDELT volume events.
+        threshold: z-score threshold used to flag GDELT volume events.
         hold: Number of days used to compute realized absolute returns.
         out_events: Optional path to write per-event CSV rows.
         plot: If True, save diagnostic plots to `backtests/`.
@@ -250,29 +276,15 @@ def evaluate(
             hold,
         )
         raise
-
-
-def main(argv: list[str] | None = None) -> int:
-    argv = argv if argv is not None else sys.argv[1:]
-    p = argparse.ArgumentParser(
-        description="Backtest prototype: GDELT volume -> realized volatility"
-    )
-    p.add_argument("--gdelt", required=True)
-    p.add_argument("--prices", required=True)
-    p.add_argument("--threshold", type=float, default=2.0)
-    p.add_argument("--hold", type=int, default=3)
-    p.add_argument("--out-events", default=None, help="Path to write per-event CSV")
-    p.add_argument("--plot", action="store_true", help="Save diagnostic plot to backtests/ folder")
-    args = p.parse_args(argv)
-
-    out = evaluate(
-        pathlib.Path(args.gdelt),
-        pathlib.Path(args.prices),
-        threshold=args.threshold,
-        hold=args.hold,
         out_events=pathlib.Path(args.out_events) if args.out_events else None,
         plot=args.plot,
     )
+=======
+    args = p.parse_args(argv)
+
+    out = evaluate(pathlib.Path(args.gdelt), pathlib.Path(args.prices), threshold=args.threshold, hold=args.hold)
+    import json
+>>>>>>> 3db6b7d (Add GDELT->volatility backtest prototype (backtest_gdelt_vol.py + sample data))
 
     print(json.dumps(out, indent=2))
     return 0
