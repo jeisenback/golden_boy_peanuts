@@ -10,13 +10,11 @@ from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies
 
 
-# Skip integration tests if Docker is not available locally (CI will provide Docker).
-try:
-    import docker
+import os
 
-    docker.from_env().ping()
-except Exception:
-    pytest.skip("Docker not available — skipping integration tests", allow_module_level=True)
+# Run integrations only in CI (local machines often lack testcontainers support).
+if not os.environ.get("CI"):
+    pytest.skip("Integration tests run in CI only. Set CI=1 to run locally.", allow_module_level=True)
 
 
 @pytest.mark.integration
