@@ -123,7 +123,7 @@ python -m bandit -r src/ -f json -o "$BANDIT_JSON" -ll 2>&1 | tee -a "$REPORT_FI
 
 # Count HIGH severity findings
 high_count=0
-high_count=$(python3 -c "
+high_count=$(python -c "
 import json, sys
 try:
     with open('${BANDIT_JSON}') as f:
@@ -178,7 +178,7 @@ python -m pytest tests/ \
 # Parse coverage total
 coverage_total="N/A"
 if [[ -f "coverage-tmp.json" ]]; then
-  coverage_total=$(python3 -c "
+  coverage_total=$(python -c "
 import json
 try:
     with open('coverage-tmp.json') as f:
