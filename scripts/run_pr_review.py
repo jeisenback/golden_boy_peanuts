@@ -25,11 +25,11 @@ Environment variables:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import logging
 import subprocess
 import sys
-from datetime import datetime, timezone
 
 from src.agents.pr_review.models import PRMetadata, ReviewSeverity
 from src.agents.pr_review.pr_review_agent import review_pull_request
@@ -139,7 +139,7 @@ def format_comment(result_summary: str, findings_md: str, approved: bool) -> str
     )
 
 
-def findings_to_markdown(result: "PRReviewResult") -> str:  # type: ignore[name-defined]  # noqa: F821
+def findings_to_markdown(result: PRReviewResult) -> str:  # type: ignore[name-defined]  # noqa: F821
     """
     Render PRReviewResult findings as a markdown table.
 
@@ -149,7 +149,6 @@ def findings_to_markdown(result: "PRReviewResult") -> str:  # type: ignore[name-
     Returns:
         Markdown string; empty string if there are no findings.
     """
-    from src.agents.pr_review.models import PRReviewResult  # local import for type
 
     if not result.findings:
         return "_No findings._"
