@@ -83,7 +83,11 @@ def detect_events(
     mu = s.rolling(window=window, min_periods=minp).mean()
     sigma = s.rolling(window=window, min_periods=minp).std()
     if (sigma == 0).any():
-        logger.warning("detect_events: rolling std contains zero values in window=%s; replacing with NaN", window)
+        logger.warning(
+            "detect_events: rolling std contains zero values in window=%s; "
+            "replacing with NaN",
+            window,
+        )
         sigma = sigma.replace(0, np.nan)
     z = (s - mu) / sigma
     return z.fillna(0) > threshold
@@ -150,7 +154,9 @@ def evaluate(
         }
 
         if out_events and event_rows.shape[0] > 0:
-            event_rows_to_save = event_rows[["articles", "close", "realized_abs_return"]].reset_index()
+            event_rows_to_save = event_rows[
+                ["articles", "close", "realized_abs_return"]
+            ].reset_index()
             event_rows_to_save.to_csv(out_events, index=False)
 
         if plot:

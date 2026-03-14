@@ -48,7 +48,7 @@ _SEVERITY_EMOJI = {
 }
 
 
-def _run(cmd: list[str], check: bool = True) -> str:
+def _run(cmd: list[str], check: bool = True) -> str:  # noqa: S603
     """
     Run a subprocess command and return its stdout as a string.
 
@@ -223,7 +223,11 @@ def main() -> int:
 
     # Log summary via logger
     logger.info("%s", "\n" + "=" * 70)
-    logger.info("PR #%d Review — %s", result.pr_number, result.reviewed_at.strftime("%Y-%m-%d %H:%M UTC"))
+    logger.info(
+        "PR #%d Review — %s",
+        result.pr_number,
+        result.reviewed_at.strftime("%Y-%m-%d %H:%M UTC"),
+    )
     logger.info("%s", "=" * 70)
     logger.info(result.summary)
 

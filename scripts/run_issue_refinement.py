@@ -50,7 +50,7 @@ _SEVERITY_EMOJI = {
 }
 
 
-def _run(cmd: list[str], check: bool = True) -> str:
+def _run(cmd: list[str], check: bool = True) -> str:  # noqa: S603
     """
     Run a subprocess command and return its stdout.
 
