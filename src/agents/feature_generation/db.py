@@ -5,8 +5,11 @@ PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 
 from __future__ import annotations
 
+from datetime import datetime
+import json
 import logging
 
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from src.agents.feature_generation.models import FeatureSet
@@ -32,30 +35,77 @@ def read_price_history(
         Prices in chronological order (oldest to newest), up to `limit` records.
 
     Raises:
-        NotImplementedError: Until implemented.
+        sqlalchemy.exc.SQLAlchemyError: Propagates on connection or query failure.
     """
-    raise NotImplementedError(
-        f"read_price_history not yet implemented for {instrument!r}. "  # noqa: S608
-        "TODO: SELECT price FROM market_prices WHERE instrument = %(instrument)s "
-        "ORDER BY timestamp DESC LIMIT %(limit)s; reverse result for chronological order."
-    )
+    sql = text("""
+        SELECT price FROM market_prices
+        WHERE instrument = :instrument
+        ORDER BY timestamp DESC
+        LIMIT :limit
+        """)
+    with engine.connect() as conn:
+        rows = conn.execute(sql, {"instrument": instrument, "limit": limit}).fetchall()
+
+    # Rows are newest-first from ORDER BY DESC; reverse for chronological order
+    return [float(row[0]) for row in reversed(rows)]
 
 
 def write_feature_set(feature_set: FeatureSet, engine: Engine) -> None:
     """
     Persist a computed FeatureSet to the feature_sets table.
 
+    volatility_gaps and feature_errors are stored as JSONB. VolatilityGap
+    objects are serialized to dicts; datetime fields are converted to ISO strings.
+
     Args:
         feature_set: Validated FeatureSet to persist.
         engine: SQLAlchemy Engine.
 
     Raises:
-        NotImplementedError: Until implemented.
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
+            connection failure after logging the exception.
     """
-    raise NotImplementedError(
-        "write_feature_set not yet implemented. "
-        "TODO: INSERT into feature_sets table. "
-        "Use snapshot_time (TIMESTAMPTZ) for TimescaleDB compatibility."
+    gaps_json = json.dumps(
+        [
+            {
+                "instrument": vg.instrument,
+                "realized_vol": vg.realized_vol,
+                "implied_vol": vg.implied_vol,
+                "gap": vg.gap,
+                "computed_at": vg.computed_at.isoformat(),
+            }
+            for vg in feature_set.volatility_gaps
+        ]
+    )
+    errors_json = json.dumps(feature_set.feature_errors)
+
+    sql = text("""
+        INSERT INTO feature_sets
+            (snapshot_time, volatility_gaps, sector_dispersion, feature_errors, computed_at)
+        VALUES
+            (:snapshot_time, :volatility_gaps, :sector_dispersion, :feature_errors, :computed_at)
+        """)
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                sql,
+                {
+                    "snapshot_time": feature_set.snapshot_time,
+                    "volatility_gaps": gaps_json,
+                    "sector_dispersion": feature_set.sector_dispersion,
+                    "feature_errors": errors_json,
+                    "computed_at": datetime.now().astimezone(),
+                },
+            )
+    except Exception:
+        logger.exception("write_feature_set failed; FeatureSet not persisted")
+        raise
+
+    logger.info(
+        "Wrote FeatureSet to feature_sets (snapshot_time=%s, gaps=%d, errors=%d)",
+        feature_set.snapshot_time,
+        len(feature_set.volatility_gaps),
+        len(feature_set.feature_errors),
     )
 
 
