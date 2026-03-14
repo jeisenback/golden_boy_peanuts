@@ -84,8 +84,7 @@ def detect_events(
     sigma = s.rolling(window=window, min_periods=minp).std()
     if (sigma == 0).any():
         logger.warning(
-            "detect_events: rolling std contains zero values in window=%s; "
-            "replacing with NaN",
+            "detect_events: rolling std contains zero values in window=%s; " "replacing with NaN",
             window,
         )
         sigma = sigma.replace(0, np.nan)
@@ -97,10 +96,7 @@ def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
     """Compute forward realized absolute return over the next `hold` days."""
     abs_ret = prices["ret"].abs()
     return (
-        abs_ret
-        .rolling(window=hold, min_periods=REALIZED_RETURN_MIN_PERIODS)
-        .sum()
-        .shift(-hold + 1)
+        abs_ret.rolling(window=hold, min_periods=REALIZED_RETURN_MIN_PERIODS).sum().shift(-hold + 1)
     )
 
 
