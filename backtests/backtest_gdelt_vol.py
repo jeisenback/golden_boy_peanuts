@@ -73,7 +73,9 @@ def load_prices(path: pathlib.Path) -> pd.DataFrame:
 
 
 def detect_events(
-    gdelt: pd.DataFrame, window: int = DEFAULT_ROLLING_WINDOW, threshold: float = DEFAULT_ZSCORE_THRESHOLD
+    gdelt: pd.DataFrame,
+    window: int = DEFAULT_ROLLING_WINDOW,
+    threshold: float = DEFAULT_ZSCORE_THRESHOLD,
 ) -> pd.Series:
     """Detect volume burst events using a rolling z-score on article counts."""
     s = gdelt["articles"].astype(float)
@@ -90,7 +92,12 @@ def detect_events(
 def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
     """Compute forward realized absolute return over the next `hold` days."""
     abs_ret = prices["ret"].abs()
-    return abs_ret.rolling(window=hold, min_periods=REALIZED_RETURN_MIN_PERIODS).sum().shift(-hold + 1)
+    return (
+        abs_ret
+        .rolling(window=hold, min_periods=REALIZED_RETURN_MIN_PERIODS)
+        .sum()
+        .shift(-hold + 1)
+    )
 
 
 def _stats(s: pd.Series) -> dict[str, Any]:
@@ -121,7 +128,12 @@ def evaluate(
         pr_reindexed = pr.reindex(union_idx).ffill()
         rv = realized_abs_return_series(pr_reindexed, hold=hold)
 
-        df = pd.DataFrame({"articles": gd["articles"].reindex(union_idx), "event": events.reindex(union_idx).fillna(False)})
+        df = pd.DataFrame(
+            {
+                "articles": gd["articles"].reindex(union_idx),
+                "event": events.reindex(union_idx).fillna(False),
+            }
+        )
         df = df.join(pr_reindexed["close"], how="left")
         df = df.join(rv.rename("realized_abs_return"), how="left")
 
@@ -152,7 +164,10 @@ def evaluate(
                 ax[1].plot(df.index, df["realized_abs_return"], label="realized_abs_return")
                 ax[1].legend()
                 fig.tight_layout()
-                fig_path = pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+                fig_path = (
+                    pathlib.Path("backtests")
+                    / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+                )
                 fig.savefig(fig_path)
             except Exception as e:
                 logger.warning("Plotting failed: %s", e)
@@ -171,7 +186,9 @@ def evaluate(
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
-    p = argparse.ArgumentParser(description="Backtest prototype: GDELT volume -> realized volatility")
+    p = argparse.ArgumentParser(
+        description=("Backtest prototype: GDELT volume -> realized volatility")
+    )
     p.add_argument("--gdelt", required=True)
     p.add_argument("--prices", required=True)
     p.add_argument("--threshold", type=float, default=DEFAULT_ZSCORE_THRESHOLD)
@@ -189,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
         plot=args.plot,
     )
 
-    print(json.dumps(out, indent=2))
+    logger.info(json.dumps(out, indent=2))
     return 0
 
 
