@@ -26,7 +26,7 @@ no langchain.*/langgraph.* imports, LLM calls via LLMWrapper only.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import logging
 import re
 
@@ -340,7 +340,7 @@ def refine_issue(
 
     result = IssueRefinementResult(
         issue_number=metadata.issue_number,
-        refined_at=datetime.now(tz=timezone.utc),
+        refined_at=datetime.now(tz=UTC),
         findings=findings,
         summary=" ".join(summary_parts),
         ready=ready,

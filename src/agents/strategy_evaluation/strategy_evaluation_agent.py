@@ -17,7 +17,7 @@ no langchain.*/langgraph.* imports, static scoring rules only in Phase 1
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import logging
 
 from src.agents.feature_generation.models import FeatureSet
@@ -160,7 +160,7 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
         List of StrategyCandidate sorted by edge_score descending.
         Empty list if no candidates meet the minimum threshold.
     """
-    generated_at = datetime.now(timezone.utc)
+    generated_at = datetime.now(tz=UTC)
     candidates: list[StrategyCandidate] = []
 
     for instrument in INSTRUMENTS_IN_SCOPE:

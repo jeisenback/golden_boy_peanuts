@@ -27,7 +27,7 @@ no langchain.*/langgraph.* imports, LLM calls via LLMWrapper only.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import logging
 import re
 
@@ -367,7 +367,7 @@ def review_pull_request(
 
     result = PRReviewResult(
         pr_number=metadata.pr_number,
-        reviewed_at=datetime.now(tz=timezone.utc),
+        reviewed_at=datetime.now(tz=UTC),
         findings=findings,
         summary=" ".join(summary_parts),
         approved=approved,

@@ -18,7 +18,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
@@ -37,7 +37,7 @@ from src.agents.pr_review.pr_review_agent import (
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_TS = datetime.now(timezone.utc)
+_TS = datetime.now(tz=UTC)
 
 
 def _make_metadata(**overrides: object) -> PRMetadata:

@@ -5,11 +5,12 @@ Tests use mocked dependencies (no real DB, no real API calls).
 Integration tests belong in test_ingestion_agent_integration.py.
 
 Coverage goal (expand per GitHub Issue):
-  - fetch_crude_prices: retry behavior, Pydantic validation, error quarantine
-  - fetch_etf_equity_prices: retry behavior, Pydantic validation
-  - run_ingestion: partial feed failure returns partial MarketState cleanly
+    - fetch_crude_prices: retry behavior, Pydantic validation, error quarantine
+    - fetch_etf_equity_prices: retry behavior, Pydantic validation
+    - run_ingestion: partial feed failure returns partial MarketState cleanly
 """
 
+from datetime import UTC, datetime
 import logging
 from unittest.mock import MagicMock, patch
 
@@ -55,7 +56,7 @@ class TestFetchCrudePrices:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """timestamp is UTC time of the fetch; both records share the same fetch_time."""
-        from datetime import timezone
+        # using datetime.UTC instead of timezone.utc
 
         monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
 
@@ -69,7 +70,7 @@ class TestFetchCrudePrices:
         with patch("src.agents.ingestion.ingestion_agent.requests.get", return_value=mock_resp):
             result = fetch_crude_prices()
 
-        assert result[0].timestamp.tzinfo == timezone.utc
+        assert result[0].timestamp.tzinfo == UTC
         assert result[0].timestamp == result[1].timestamp
 
     def test_malformed_response_missing_price_raises_value_error(
@@ -150,7 +151,7 @@ class TestFetchEtfEquityPrices:
 
     def test_timestamp_is_utc_and_shared_across_records(self) -> None:
         """timestamp is UTC time of the fetch; all records share the same fetch_time."""
-        from datetime import timezone
+        # using datetime.UTC instead of timezone.utc
 
         with patch(
             "src.agents.ingestion.ingestion_agent.yf.Ticker",
@@ -158,7 +159,7 @@ class TestFetchEtfEquityPrices:
         ):
             result = fetch_etf_equity_prices()
 
-        assert result[0].timestamp.tzinfo == timezone.utc
+        assert result[0].timestamp.tzinfo == UTC
         assert all(r.timestamp == result[0].timestamp for r in result)
 
     def test_none_price_raises_value_error(self) -> None:
@@ -326,29 +327,27 @@ class TestRunIngestion:
     _PATCH_WRITE_OPTIONS = "src.agents.ingestion.ingestion_agent.write_option_records"
 
     def _make_price_record(self, instrument: str = "CL=F") -> RawPriceRecord:
-        from datetime import datetime, timezone
 
         return RawPriceRecord(
             instrument=instrument,
             instrument_type=InstrumentType.CRUDE_FUTURES,
             price=75.0,
             volume=1000,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             source="test",
         )
 
     def _make_option_record(self) -> OptionRecord:
-        from datetime import datetime, timezone
 
         return OptionRecord(
             instrument="USO",
             strike=100.0,
-            expiration_date=datetime.now(timezone.utc),
+            expiration_date=datetime.now(UTC),
             implied_volatility=0.25,
             open_interest=500,
             volume=200,
             option_type="call",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             source="test",
         )
 

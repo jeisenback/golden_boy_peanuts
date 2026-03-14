@@ -12,6 +12,7 @@ Returns:
     0 — no banned imports found
     1 — one or more banned imports found (details printed to stdout)
 """
+
 import ast
 import pathlib
 import sys
@@ -42,22 +43,12 @@ def scan_file(path: pathlib.Path) -> list[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 module_name = alias.name or ""
-                if any(
-                    module_name == b or module_name.startswith(f"{b}.")
-                    for b in BANNED
-                ):
-                    violations.append(
-                        f"FAIL: {path}:{node.lineno} — `import {module_name}`"
-                    )
+                if any(module_name == b or module_name.startswith(f"{b}.") for b in BANNED):
+                    violations.append(f"FAIL: {path}:{node.lineno} — `import {module_name}`")
         elif isinstance(node, ast.ImportFrom):
             module_name = node.module or ""
-            if any(
-                module_name == b or module_name.startswith(f"{b}.")
-                for b in BANNED
-            ):
-                violations.append(
-                    f"FAIL: {path}:{node.lineno} — `from {module_name} import ...`"
-                )
+            if any(module_name == b or module_name.startswith(f"{b}.") for b in BANNED):
+                violations.append(f"FAIL: {path}:{node.lineno} — `from {module_name} import ...`")
     return violations
 
 

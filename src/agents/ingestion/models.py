@@ -7,19 +7,10 @@ any downstream processing.
 from __future__ import annotations
 
 from datetime import datetime
-try:
-    from enum import StrEnum
-except Exception:
-    try:
-        from typing_extensions import StrEnum  # type: ignore
-    except Exception:
-        from enum import Enum
-
-        class StrEnum(str, Enum):
-            """Compatibility fallback for Python < 3.11: simple StrEnum shim."""
-            pass
 
 from pydantic import BaseModel, Field
+
+from src.core.compat import StrEnum
 
 
 class InstrumentType(StrEnum):

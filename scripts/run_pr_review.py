@@ -83,10 +83,16 @@ def fetch_pr_metadata(pr_number: int) -> PRMetadata:
     logger.info("Fetching PR #%d metadata via gh CLI...", pr_number)
 
     # Fetch structured metadata as JSON
-    meta_json = _run([
-        "gh", "pr", "view", str(pr_number),
-        "--json", "number,title,body,baseRefName,headRefName,author,files,createdAt",
-    ])
+    meta_json = _run(
+        [
+            "gh",
+            "pr",
+            "view",
+            str(pr_number),
+            "--json",
+            "number,title,body,baseRefName,headRefName,author,files,createdAt",
+        ]
+    )
     meta = json.loads(meta_json)
 
     # Fetch the unified diff
@@ -107,9 +113,7 @@ def fetch_pr_metadata(pr_number: int) -> PRMetadata:
         author=meta["author"]["login"],
         changed_files=changed_files,
         diff=diff,
-        created_at=datetime.fromisoformat(
-            meta["createdAt"].replace("Z", "+00:00")
-        ),
+        created_at=datetime.fromisoformat(meta["createdAt"].replace("Z", "+00:00")),
     )
 
 
