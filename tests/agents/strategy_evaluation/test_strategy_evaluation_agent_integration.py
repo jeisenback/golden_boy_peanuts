@@ -8,11 +8,10 @@ These tests are marked `@pytest.mark.integration` and are excluded from default 
 
 from __future__ import annotations
 
-import os
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 import json
-
+import os
 from unittest.mock import patch
 
 import pytest
@@ -20,7 +19,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
-from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies, compute_edge_score
+from src.agents.strategy_evaluation.strategy_evaluation_agent import (
+    compute_edge_score,
+    evaluate_strategies,
+)
 
 # Disable Testcontainers Reaper (Ryuk) on Windows if not available
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
@@ -62,12 +64,18 @@ def _make_vg(instrument: str, gap: float) -> VolatilityGap:
         realized_vol=0.20,
         implied_vol=0.20 + gap,
         gap=gap,
-        computed_at=datetime.now(tz=timezone.utc),
+        computed_at=datetime.now(tz=UTC),
     )
 
 
-def _make_feature_set(gaps: list[VolatilityGap], sector_dispersion: float | None = None) -> FeatureSet:
-    return FeatureSet(snapshot_time=datetime.now(tz=timezone.utc), volatility_gaps=gaps, sector_dispersion=sector_dispersion)
+def _make_feature_set(
+    gaps: list[VolatilityGap], sector_dispersion: float | None = None
+) -> FeatureSet:
+    return FeatureSet(
+        snapshot_time=datetime.now(tz=UTC),
+        volatility_gaps=gaps,
+        sector_dispersion=sector_dispersion,
+    )
 
 
 @pytest.mark.integration
@@ -85,7 +93,11 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
 
     # Verify DB rows
     with pg_engine.connect() as conn:
-        rows = conn.execute(text("SELECT instrument, structure, expiration, edge_score, signals, generated_at FROM strategy_candidates")).fetchall()
+        rows = conn.execute(
+            text(
+                "SELECT instrument, structure, expiration, edge_score, signals, generated_at FROM strategy_candidates"
+            )
+        ).fetchall()
 
     assert len(rows) >= 1
     instr, struct, expiration, edge_score, signals_raw, gen_at = rows[0]
@@ -115,7 +127,10 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
         candidates = evaluate_strategies(fs)
 
     # Find USO long_straddle candidate
-    uso = next((c for c in candidates if c.instrument == "USO" and c.structure.value == "long_straddle"), None)
+    uso = next(
+        (c for c in candidates if c.instrument == "USO" and c.structure.value == "long_straddle"),
+        None,
+    )
     assert uso is not None, "Expected a USO long_straddle candidate"
 
     # Compute expected score via the same function to avoid magic numbers
@@ -126,7 +141,11 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
 
     # Also verify DB persist occurred
     with pg_engine.connect() as conn:
-        rows = conn.execute(text("SELECT instrument, structure, edge_score FROM strategy_candidates WHERE instrument = 'USO' ORDER BY edge_score DESC")).fetchall()
+        rows = conn.execute(
+            text(
+                "SELECT instrument, structure, edge_score FROM strategy_candidates WHERE instrument = 'USO' ORDER BY edge_score DESC"
+            )
+        ).fetchall()
     assert rows, "Expected persisted USO candidate(s)"
     db_edge = float(rows[0][2])
     assert abs(db_edge - expected) < 1e-3
