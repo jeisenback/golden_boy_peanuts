@@ -26,14 +26,14 @@ Environment variables:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import logging
 import subprocess
 import sys
-from datetime import datetime, timezone
 
-from src.agents.issue_refinement.models import IssueMetadata
 from src.agents.issue_refinement.issue_refinement_agent import refine_issue
+from src.agents.issue_refinement.models import IssueMetadata
 from src.core.findings import FindingSeverity
 
 logging.basicConfig(
@@ -109,7 +109,7 @@ def fetch_issue_metadata(issue_number: int) -> IssueMetadata:
     )
 
 
-def findings_to_markdown(result: "IssueRefinementResult") -> str:  # type: ignore[name-defined]  # noqa: F821
+def findings_to_markdown(result: IssueRefinementResult) -> str:  # type: ignore[name-defined]  # noqa: F821
     """
     Render IssueRefinementResult findings as a markdown table.
 
@@ -137,7 +137,7 @@ def findings_to_markdown(result: "IssueRefinementResult") -> str:  # type: ignor
     return "\n".join(lines)
 
 
-def format_comment(result: "IssueRefinementResult") -> str:  # type: ignore[name-defined]  # noqa: F821
+def format_comment(result: IssueRefinementResult) -> str:  # type: ignore[name-defined]  # noqa: F821
     """
     Build the issue comment body from refinement results.
 

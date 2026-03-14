@@ -332,8 +332,10 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
     pg_engine: Engine,
 ) -> None:
     """
-    compute_supply_shock_probability always raises NotImplementedError in Phase 1.
-    Assert feature_errors is non-empty in the persisted FeatureSet row.
+    With the supply-shock estimator implemented, run_feature_generation() should
+    compute a numeric `supply_shock_probability` (possibly 0.0) and not record
+    a compute_supply_shock_probability error in `feature_errors` for the happy
+    path where no supply events are present.
     """
     _seed_prices(pg_engine, "USO", _GOLDEN_PRICES)
     market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
@@ -341,9 +343,9 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
     with patch(_PATCH_ENGINE, return_value=pg_engine):
         feature_set = run_feature_generation(market_state, events=[])
 
-    # supply_shock always fails → at least 1 error
-    assert len(feature_set.feature_errors) >= 1
-    assert any("compute_supply_shock_probability" in e for e in feature_set.feature_errors)
+    # supply_shock now returns a numeric probability (no error recorded)
+    assert feature_set.supply_shock_probability is not None
+    assert not any("compute_supply_shock_probability" in e for e in feature_set.feature_errors)
 
     with pg_engine.connect() as conn:
         row = conn.execute(text("SELECT feature_errors FROM feature_sets LIMIT 1")).fetchone()
@@ -351,4 +353,5 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
     assert row is not None
     errors_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
     assert isinstance(errors_data, list)
-    assert len(errors_data) >= 1
+    # No compute_supply_shock_probability error expected for empty events
+    assert not any("compute_supply_shock_probability" in e for e in errors_data)

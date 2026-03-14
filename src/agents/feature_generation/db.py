@@ -121,7 +121,58 @@ def read_latest_feature_set(engine: Engine) -> FeatureSet | None:
     Raises:
         NotImplementedError: Until implemented.
     """
-    raise NotImplementedError(
-        "read_latest_feature_set not yet implemented. "
-        "TODO: Query feature_sets ORDER BY snapshot_time DESC LIMIT 1."
+    sql = text("""
+        SELECT snapshot_time, volatility_gaps, sector_dispersion, feature_errors, computed_at
+        FROM feature_sets
+        ORDER BY snapshot_time DESC
+        LIMIT 1
+        """)
+
+    with engine.connect() as conn:
+        row = conn.execute(sql).fetchone()
+
+    if not row:
+        return None
+
+    snapshot_time = row[0]
+    gaps_raw = row[1]
+    sector_dispersion = row[2]
+    errors_raw = row[3]
+
+    # Parse JSONB fields (some DB drivers return Python types directly)
+    gaps_list = gaps_raw if isinstance(gaps_raw, list) else json.loads(gaps_raw or "[]")
+    errors_list = errors_raw if isinstance(errors_raw, list) else json.loads(errors_raw or "[]")
+
+    from src.agents.feature_generation.models import VolatilityGap
+
+    gaps: list[VolatilityGap] = []
+    for g in gaps_list:
+        computed_at = g.get("computed_at")
+        # computed_at stored as ISO string — parse if necessary
+        if isinstance(computed_at, str):
+            try:
+                computed_at_dt = datetime.fromisoformat(computed_at)
+            except Exception:
+                computed_at_dt = datetime.now(tz=UTC)
+        else:
+            computed_at_dt = computed_at
+
+        gaps.append(
+            VolatilityGap(
+                instrument=g.get("instrument"),
+                realized_vol=float(g.get("realized_vol")),
+                implied_vol=float(g.get("implied_vol")),
+                gap=float(g.get("gap")),
+                computed_at=computed_at_dt,
+            )
+        )
+
+    feature_set = FeatureSet(
+        snapshot_time=snapshot_time,
+        volatility_gaps=gaps,
+        sector_dispersion=sector_dispersion,
+        supply_shock_probability=None,
+        feature_errors=errors_list,
     )
+
+    return feature_set
