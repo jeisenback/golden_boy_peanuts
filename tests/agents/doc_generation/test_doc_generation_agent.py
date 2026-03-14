@@ -38,7 +38,7 @@ from src.agents.doc_generation.models import DocArtifact, DocRequest, DocResult,
 _FAKE_CONTENT = (
     "# User Guide\n\nThis is a generated guide.\n\n" "```mermaid\nflowchart LR\n  A --> B\n```\n"
 )
-_TS = datetime.now(UTC)
+_TS = datetime.now(tz=UTC)
 
 
 def _make_request(**overrides: object) -> DocRequest:

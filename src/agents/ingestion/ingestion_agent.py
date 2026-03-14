@@ -100,7 +100,7 @@ def fetch_crude_prices() -> list[RawPriceRecord]:
 
     symbols = ["CL=F", "BZ=F"]
     records: list[RawPriceRecord] = []
-    fetch_time = datetime.now(UTC)
+    fetch_time = datetime.now(tz=UTC)
 
     for symbol in symbols:
         response = requests.get(
@@ -157,7 +157,7 @@ def fetch_etf_equity_prices() -> list[RawPriceRecord]:
             exhausted (reraise=True via with_retry).
     """
     records: list[RawPriceRecord] = []
-    fetch_time = datetime.now(UTC)
+    fetch_time = datetime.now(tz=UTC)
 
     for symbol, instrument_type in _ETF_EQUITY_INSTRUMENTS:
         try:
@@ -218,7 +218,7 @@ def fetch_options_chain(instruments: list[str]) -> list[OptionRecord]:
         logger.warning("POLYGON_API_KEY not set; falling back to yfinance for options chain data")
 
     records: list[OptionRecord] = []
-    fetch_time = datetime.now(UTC)
+    fetch_time = datetime.now(tz=UTC)
 
     for symbol in instruments:
         ticker = yf.Ticker(symbol)
@@ -270,7 +270,7 @@ def run_ingestion() -> MarketState:
         indicates a fully successful cycle.
         Never raises — even total feed failure returns an empty-but-valid state.
     """
-    start_time = datetime.now(UTC)
+    start_time = datetime.now(tz=UTC)
     prices: list[RawPriceRecord] = []
     options: list[OptionRecord] = []
     errors: list[str] = []
@@ -318,7 +318,7 @@ def run_ingestion() -> MarketState:
             errors.append(f"write_option_records: {exc}")
 
     # --- Assemble MarketState ---
-    snapshot_time = datetime.now(UTC)
+    snapshot_time = datetime.now(tz=UTC)
     state = MarketState(
         snapshot_time=snapshot_time,
         prices=prices,

@@ -26,14 +26,14 @@ Environment variables:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import logging
 import subprocess
 import sys
-from datetime import datetime, timezone
 
-from src.agents.issue_refinement.models import IssueMetadata
 from src.agents.issue_refinement.issue_refinement_agent import refine_issue
+from src.agents.issue_refinement.models import IssueMetadata
 from src.core.findings import FindingSeverity
 
 logging.basicConfig(
@@ -84,10 +84,16 @@ def fetch_issue_metadata(issue_number: int) -> IssueMetadata:
     """
     logger.info("Fetching issue #%d metadata via gh CLI...", issue_number)
 
-    meta_json = _run([
-        "gh", "issue", "view", str(issue_number),
-        "--json", "number,title,body,labels,milestone,assignees,createdAt,state",
-    ])
+    meta_json = _run(
+        [
+            "gh",
+            "issue",
+            "view",
+            str(issue_number),
+            "--json",
+            "number,title,body,labels,milestone,assignees,createdAt,state",
+        ]
+    )
     meta = json.loads(meta_json)
 
     labels = [lbl["name"] for lbl in meta.get("labels", [])]
@@ -102,14 +108,12 @@ def fetch_issue_metadata(issue_number: int) -> IssueMetadata:
         labels=labels,
         milestone=milestone_name,
         assignees=assignees,
-        created_at=datetime.fromisoformat(
-            meta["createdAt"].replace("Z", "+00:00")
-        ),
+        created_at=datetime.fromisoformat(meta["createdAt"].replace("Z", "+00:00")),
         state=meta.get("state", "open").lower(),
     )
 
 
-def findings_to_markdown(result: "IssueRefinementResult") -> str:  # type: ignore[name-defined]  # noqa: F821
+def findings_to_markdown(result: IssueRefinementResult) -> str:  # type: ignore[name-defined]  # noqa: F821
     """
     Render IssueRefinementResult findings as a markdown table.
 
@@ -131,13 +135,11 @@ def findings_to_markdown(result: "IssueRefinementResult") -> str:  # type: ignor
         msg = f.message.replace("|", "\\|")
         if f.suggestion:
             msg += f" _{f.suggestion.replace('|', chr(92) + '|')}_"
-        lines.append(
-            f"| {emoji} {f.severity.value} | `{f.location}` | `{f.rule}` | {msg} |"
-        )
+        lines.append(f"| {emoji} {f.severity.value} | `{f.location}` | `{f.rule}` | {msg} |")
     return "\n".join(lines)
 
 
-def format_comment(result: "IssueRefinementResult") -> str:  # type: ignore[name-defined]  # noqa: F821
+def format_comment(result: IssueRefinementResult) -> str:  # type: ignore[name-defined]  # noqa: F821
     """
     Build the issue comment body from refinement results.
 
@@ -225,10 +227,7 @@ def main() -> int:
     parser.add_argument(
         "--update-labels",
         action="store_true",
-        help=(
-            "Update labels: remove 'needs-review' on pass; "
-            "add 'blocked' on BLOCKER findings"
-        ),
+        help=("Update labels: remove 'needs-review' on pass; " "add 'blocked' on BLOCKER findings"),
     )
     args = parser.parse_args()
 
@@ -244,8 +243,10 @@ def main() -> int:
 
     # Print summary to stdout
     print("\n" + "=" * 70)
-    print(f"Issue #{result.issue_number} DoR Check — "
-          f"{result.refined_at.strftime('%Y-%m-%d %H:%M UTC')}")
+    print(
+        f"Issue #{result.issue_number} DoR Check — "
+        f"{result.refined_at.strftime('%Y-%m-%d %H:%M UTC')}"
+    )
     print("=" * 70)
     print(result.summary)
 

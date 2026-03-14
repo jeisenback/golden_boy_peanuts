@@ -5,11 +5,12 @@ Tests use mocked dependencies (no real DB, no real API calls).
 Integration tests belong in test_ingestion_agent_integration.py.
 
 Coverage goal (expand per GitHub Issue):
-  - fetch_crude_prices: retry behavior, Pydantic validation, error quarantine
-  - fetch_etf_equity_prices: retry behavior, Pydantic validation
-  - run_ingestion: partial feed failure returns partial MarketState cleanly
+    - fetch_crude_prices: retry behavior, Pydantic validation, error quarantine
+    - fetch_etf_equity_prices: retry behavior, Pydantic validation
+    - run_ingestion: partial feed failure returns partial MarketState cleanly
 """
 
+from datetime import UTC, datetime
 import logging
 from unittest.mock import MagicMock, patch
 
@@ -55,7 +56,7 @@ class TestFetchCrudePrices:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """timestamp is UTC time of the fetch; both records share the same fetch_time."""
-        from datetime import UTC
+        # using datetime.UTC instead of timezone.utc
 
         monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
 
@@ -150,7 +151,7 @@ class TestFetchEtfEquityPrices:
 
     def test_timestamp_is_utc_and_shared_across_records(self) -> None:
         """timestamp is UTC time of the fetch; all records share the same fetch_time."""
-        from datetime import UTC
+        # using datetime.UTC instead of timezone.utc
 
         with patch(
             "src.agents.ingestion.ingestion_agent.yf.Ticker",
@@ -326,7 +327,6 @@ class TestRunIngestion:
     _PATCH_WRITE_OPTIONS = "src.agents.ingestion.ingestion_agent.write_option_records"
 
     def _make_price_record(self, instrument: str = "CL=F") -> RawPriceRecord:
-        from datetime import UTC, datetime
 
         return RawPriceRecord(
             instrument=instrument,
@@ -338,7 +338,6 @@ class TestRunIngestion:
         )
 
     def _make_option_record(self) -> OptionRecord:
-        from datetime import UTC, datetime
 
         return OptionRecord(
             instrument="USO",
