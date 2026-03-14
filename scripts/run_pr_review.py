@@ -25,11 +25,11 @@ Environment variables:
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import logging
 import subprocess
 import sys
-from datetime import datetime, timezone
 
 from src.agents.pr_review.models import PRMetadata, ReviewSeverity
 from src.agents.pr_review.pr_review_agent import review_pull_request
@@ -83,10 +83,16 @@ def fetch_pr_metadata(pr_number: int) -> PRMetadata:
     logger.info("Fetching PR #%d metadata via gh CLI...", pr_number)
 
     # Fetch structured metadata as JSON
-    meta_json = _run([
-        "gh", "pr", "view", str(pr_number),
-        "--json", "number,title,body,baseRefName,headRefName,author,files,createdAt",
-    ])
+    meta_json = _run(
+        [
+            "gh",
+            "pr",
+            "view",
+            str(pr_number),
+            "--json",
+            "number,title,body,baseRefName,headRefName,author,files,createdAt",
+        ]
+    )
     meta = json.loads(meta_json)
 
     # Fetch the unified diff
@@ -107,9 +113,7 @@ def fetch_pr_metadata(pr_number: int) -> PRMetadata:
         author=meta["author"]["login"],
         changed_files=changed_files,
         diff=diff,
-        created_at=datetime.fromisoformat(
-            meta["createdAt"].replace("Z", "+00:00")
-        ),
+        created_at=datetime.fromisoformat(meta["createdAt"].replace("Z", "+00:00")),
     )
 
 
@@ -139,7 +143,7 @@ def format_comment(result_summary: str, findings_md: str, approved: bool) -> str
     )
 
 
-def findings_to_markdown(result: "PRReviewResult") -> str:  # type: ignore[name-defined]  # noqa: F821
+def findings_to_markdown(result: PRReviewResult) -> str:  # type: ignore[name-defined]  # noqa: F821
     """
     Render PRReviewResult findings as a markdown table.
 
@@ -149,7 +153,6 @@ def findings_to_markdown(result: "PRReviewResult") -> str:  # type: ignore[name-
     Returns:
         Markdown string; empty string if there are no findings.
     """
-    from src.agents.pr_review.models import PRReviewResult  # local import for type
 
     if not result.findings:
         return "_No findings._"

@@ -64,6 +64,11 @@ pip install -r requirements-dev.txt
 cp .env.example .env
 # Edit .env — set API keys. DATABASE_URL default matches docker-compose.yml.
 
+# Secrets handling
+# - NEVER commit `.env` or other secrets to the repository.
+# - Use `.env.example` as the template and store real secrets securely (Vault, CI secrets, or local env).
+# - Install `pre-commit` and run `pre-commit install` to enable local secret scanning and format checks.
+
 # 3. Start the local database (TimescaleDB on port 5432)
 docker compose up -d
 # Wait for "healthy" status: docker compose ps
