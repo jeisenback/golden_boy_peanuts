@@ -33,5 +33,12 @@ jobs:
       - name: Run integration tests
         env:
           CI: '1'
+          # Inject required API keys from repository secrets. CI owners must set
+          # these in the repo settings (Settings → Secrets → Actions).
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          QUIVER_API_KEY: ${{ secrets.QUIVER_API_KEY }}
         run: |
           pytest -q -m integration

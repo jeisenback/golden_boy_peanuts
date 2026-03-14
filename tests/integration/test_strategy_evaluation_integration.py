@@ -1,3 +1,15 @@
+"""Integration tests for strategy evaluation pipeline.
+
+These tests exercise the full strategy evaluation pipeline against a
+Postgres database provided by testcontainers. They are intended to run in
+CI only; local machines often lack testcontainers support.
+
+Prerequisites:
+- `CI=1` set in the environment or CI runner
+- Docker available for testcontainers
+- `db/schema.sql` present in repository root
+"""
+
 from datetime import datetime
 import os
 
@@ -6,18 +18,25 @@ from sqlalchemy import text
 from testcontainers.postgres import PostgresContainer
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
-from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies
+from src.agents.strategy_evaluation.strategy_evaluation_agent import (
+    evaluate_strategies,
+)
 
-# Run integrations only in CI (local machines often lack testcontainers support).
+# Integration tests run only in CI.
 if not os.environ.get("CI"):
     pytest.skip(
         "Integration tests run in CI only. Set CI=1 to run locally.",
         allow_module_level=True,
     )
+EXPECTED_EDGE_SCORE_MIN = 0.38
+EXPECTED_EDGE_SCORE_MAX = 0.58
+REALIZED_VOL = 0.2
+IMPLIED_VOL = 0.3
+GAP = 0.1
+SECTOR_DISPERSION = 0.1
 
 
-@pytest.mark.integration
-def test_strategy_evaluation_writes_candidates_and_golden_range():
+def test_strategy_evaluation_writes_candidates_and_golden_range() -> None:
     """Integration test: run evaluation against real Postgres and assert DB rows.
 
     Seeds a minimal FeatureSet where USO has a volatility gap=0.1 and
@@ -32,23 +51,31 @@ def test_strategy_evaluation_writes_candidates_and_golden_range():
 
         engine = create_engine(db_url)
         with engine.begin() as conn:
-            sql = open("db/schema.sql", encoding="utf-8").read()
+            try:
+                sql = open("db/schema.sql", encoding="utf-8").read()
+            except FileNotFoundError as exc:
+                raise RuntimeError(
+                    f"db/schema.sql not found in working directory {os.getcwd()}: {exc}"
+                ) from exc
             # exec_driver_sql executes raw SQL script
-            conn.exec_driver_sql(sql)
+            try:
+                conn.exec_driver_sql(sql)
+            except Exception as exc:  # pragma: no cover - integration error path
+                raise RuntimeError(f"failed to apply schema.sql: {exc}") from exc
 
         # Build a FeatureSet: USO gap=0.1, sector_dispersion=0.1
         snapshot = datetime.now(tz=datetime.UTC)
         vg = VolatilityGap(
             instrument="USO",
-            realized_vol=0.2,
-            implied_vol=0.3,
-            gap=0.1,
+            realized_vol=REALIZED_VOL,
+            implied_vol=IMPLIED_VOL,
+            gap=GAP,
             computed_at=snapshot,
         )
         fs = FeatureSet(
             snapshot_time=snapshot,
             volatility_gaps=[vg],
-            sector_dispersion=0.1,
+            sector_dispersion=SECTOR_DISPERSION,
         )
 
         # Execute evaluation — this should persist candidates to strategy_candidates
@@ -71,5 +98,7 @@ def test_strategy_evaluation_writes_candidates_and_golden_range():
         assert long_rows, "No long_straddle candidate found for USO"
 
         edge_score = float(long_rows[0][2])
-        # Golden dataset assertion: expect edge_score in [0.38, 0.58]
-        assert 0.38 <= edge_score <= 0.58, f"edge_score {edge_score} outside golden range"
+        # Golden dataset assertion: expect edge_score within expected bounds
+        assert (
+            EXPECTED_EDGE_SCORE_MIN <= edge_score <= EXPECTED_EDGE_SCORE_MAX
+        ), f"edge_score {edge_score} outside golden range"
