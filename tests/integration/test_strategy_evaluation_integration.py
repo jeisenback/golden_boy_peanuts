@@ -10,6 +10,15 @@ from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies
 
 
+# Skip integration tests if Docker is not available locally (CI will provide Docker).
+try:
+    import docker
+
+    docker.from_env().ping()
+except Exception:
+    pytest.skip("Docker not available — skipping integration tests", allow_module_level=True)
+
+
 @pytest.mark.integration
 def test_strategy_evaluation_writes_candidates_and_golden_range():
     """Integration test: run evaluation against real Postgres and assert DB rows.
