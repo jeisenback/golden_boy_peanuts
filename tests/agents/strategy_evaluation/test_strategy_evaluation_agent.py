@@ -7,7 +7,7 @@ Coverage goal (expand per GitHub Issue):
   - compute_edge_score: returns float in [0.0, 1.0]
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
@@ -28,7 +28,7 @@ def _make_vg(instrument: str, gap: float) -> VolatilityGap:
         realized_vol=0.20,
         implied_vol=0.20 + gap,
         gap=gap,
-        computed_at=datetime.now(tz=UTC),
+        computed_at=datetime.now(tz=timezone.utc),
     )
 
 
@@ -37,7 +37,7 @@ def _make_feature_set(
     sector_dispersion: float | None = None,
 ) -> FeatureSet:
     return FeatureSet(
-        snapshot_time=datetime.now(tz=UTC),
+        snapshot_time=datetime.now(tz=timezone.utc),
         volatility_gaps=gaps,
         sector_dispersion=sector_dispersion,
     )

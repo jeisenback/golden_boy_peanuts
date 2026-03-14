@@ -18,7 +18,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
@@ -38,7 +38,7 @@ from src.agents.doc_generation.models import DocArtifact, DocRequest, DocResult,
 _FAKE_CONTENT = (
     "# User Guide\n\nThis is a generated guide.\n\n" "```mermaid\nflowchart LR\n  A --> B\n```\n"
 )
-_TS = datetime.now(UTC)
+_TS = datetime.now(timezone.utc)
 
 
 def _make_request(**overrides: object) -> DocRequest:

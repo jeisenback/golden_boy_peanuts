@@ -21,7 +21,7 @@ no langchain.*/langgraph.* imports, LLM calls via LLMWrapper only.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import logging
 
 from src.agents.doc_generation.models import DocArtifact, DocRequest, DocResult, DocType
@@ -121,7 +121,7 @@ def generate_user_guide(
         doc_type=DocType.USER_GUIDE,
         subject=request.subject,
         content=response.content,
-        generated_at=datetime.now(tz=UTC),
+        generated_at=datetime.now(tz=timezone.utc),
     )
 
     logger.info(
@@ -182,7 +182,7 @@ def run_doc_generation(
             f"Output: {len(artifact.content)} characters of Markdown"
             + (" with Mermaid diagrams." if request.include_diagrams else ".")
         ),
-        generated_at=datetime.now(tz=UTC),
+        generated_at=datetime.now(tz=timezone.utc),
     )
 
     logger.info(

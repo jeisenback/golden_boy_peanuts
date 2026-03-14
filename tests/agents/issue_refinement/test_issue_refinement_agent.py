@@ -22,7 +22,7 @@ Coverage:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 from pydantic import ValidationError
@@ -42,7 +42,7 @@ from src.core.findings import Finding, FindingSeverity
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_TS = datetime.now(UTC)
+_TS = datetime.now(timezone.utc)
 
 _GOOD_BODY = """\
 ## Summary

@@ -21,7 +21,7 @@ import os
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import patch
 
 import pytest
@@ -106,7 +106,7 @@ def _make_price(instrument: str = "CL=F", price: float = 75.50) -> RawPriceRecor
         instrument_type=InstrumentType.CRUDE_FUTURES,
         price=price,
         volume=123456,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
         source="test",
     )
 
@@ -115,12 +115,12 @@ def _make_option(instrument: str = "USO", option_type: str = "call") -> OptionRe
     return OptionRecord(
         instrument=instrument,
         strike=100.0,
-        expiration_date=datetime(2030, 1, 17, tzinfo=UTC),
+        expiration_date=datetime(2030, 1, 17, tzinfo=timezone.utc),
         implied_volatility=0.25,
         open_interest=500,
         volume=200,
         option_type=option_type,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
         source="test",
     )
 
@@ -174,7 +174,7 @@ def test_write_price_records_null_volume(pg_engine) -> None:
         instrument_type=InstrumentType.ETF,
         price=62.10,
         volume=None,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
         source="test",
     )
     write_price_records([record], pg_engine)
@@ -220,12 +220,12 @@ def test_write_option_records_null_implied_volatility(pg_engine) -> None:
     record = OptionRecord(
         instrument="XLE",
         strike=55.0,
-        expiration_date=datetime(2030, 6, 20, tzinfo=UTC),
+        expiration_date=datetime(2030, 6, 20, tzinfo=timezone.utc),
         implied_volatility=None,
         open_interest=None,
         volume=None,
         option_type="put",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(timezone.utc),
         source="test",
     )
     write_option_records([record], pg_engine)

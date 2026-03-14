@@ -16,7 +16,7 @@ no langchain.*/langgraph.* imports.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import logging
 import math
 import statistics
@@ -76,7 +76,7 @@ def compute_volatility_gap(market_state: MarketState) -> list[VolatilityGap]:
             (run_feature_generation handles degraded-mode behavior).
     """
     _engine = get_engine()
-    computed_at = datetime.now(UTC)
+    computed_at = datetime.now(timezone.utc)
     result: list[VolatilityGap] = []
 
     # Build current price index: instrument → latest price

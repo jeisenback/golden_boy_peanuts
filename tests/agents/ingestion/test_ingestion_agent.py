@@ -55,7 +55,7 @@ class TestFetchCrudePrices:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """timestamp is UTC time of the fetch; both records share the same fetch_time."""
-        from datetime import UTC
+        from datetime import timezone
 
         monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
 
@@ -69,7 +69,7 @@ class TestFetchCrudePrices:
         with patch("src.agents.ingestion.ingestion_agent.requests.get", return_value=mock_resp):
             result = fetch_crude_prices()
 
-        assert result[0].timestamp.tzinfo == UTC
+        assert result[0].timestamp.tzinfo == timezone.utc
         assert result[0].timestamp == result[1].timestamp
 
     def test_malformed_response_missing_price_raises_value_error(
@@ -150,7 +150,7 @@ class TestFetchEtfEquityPrices:
 
     def test_timestamp_is_utc_and_shared_across_records(self) -> None:
         """timestamp is UTC time of the fetch; all records share the same fetch_time."""
-        from datetime import UTC
+        from datetime import timezone
 
         with patch(
             "src.agents.ingestion.ingestion_agent.yf.Ticker",
@@ -158,7 +158,7 @@ class TestFetchEtfEquityPrices:
         ):
             result = fetch_etf_equity_prices()
 
-        assert result[0].timestamp.tzinfo == UTC
+        assert result[0].timestamp.tzinfo == timezone.utc
         assert all(r.timestamp == result[0].timestamp for r in result)
 
     def test_none_price_raises_value_error(self) -> None:
@@ -326,29 +326,29 @@ class TestRunIngestion:
     _PATCH_WRITE_OPTIONS = "src.agents.ingestion.ingestion_agent.write_option_records"
 
     def _make_price_record(self, instrument: str = "CL=F") -> RawPriceRecord:
-        from datetime import UTC, datetime
+        from datetime import datetime, timezone
 
         return RawPriceRecord(
             instrument=instrument,
             instrument_type=InstrumentType.CRUDE_FUTURES,
             price=75.0,
             volume=1000,
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
             source="test",
         )
 
     def _make_option_record(self) -> OptionRecord:
-        from datetime import UTC, datetime
+        from datetime import datetime, timezone
 
         return OptionRecord(
             instrument="USO",
             strike=100.0,
-            expiration_date=datetime.now(UTC),
+            expiration_date=datetime.now(timezone.utc),
             implied_volatility=0.25,
             open_interest=500,
             volume=200,
             option_type="call",
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(timezone.utc),
             source="test",
         )
 

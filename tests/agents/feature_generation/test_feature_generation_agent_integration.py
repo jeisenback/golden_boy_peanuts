@@ -30,7 +30,7 @@ import os
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timezone, timedelta
 import json
 import math
 import statistics
@@ -146,7 +146,7 @@ def _seed_prices(
 ) -> None:
     """Insert price records with 1-minute spacing so ORDER BY timestamp is deterministic."""
     if base_time is None:
-        base_time = datetime(2026, 1, 1, tzinfo=UTC)
+        base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     sql = text("""
         INSERT INTO market_prices (instrument, instrument_type, price, volume, source, timestamp)
@@ -174,7 +174,7 @@ def _make_market_state(
     sector_prices: dict[str, float] | None = None,
 ) -> MarketState:
     """Build a minimal MarketState with one instrument and one ATM call option."""
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     prices = [
         RawPriceRecord(
             instrument=instrument,
@@ -202,7 +202,7 @@ def _make_market_state(
         OptionRecord(
             instrument=instrument,
             strike=current_price,  # ATM: strike == current price
-            expiration_date=datetime(2026, 3, 21, tzinfo=UTC),
+            expiration_date=datetime(2026, 3, 21, tzinfo=timezone.utc),
             implied_volatility=atm_iv,
             open_interest=1000,
             volume=500,
