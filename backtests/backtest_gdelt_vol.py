@@ -17,6 +17,15 @@ Usage:
 
 from __future__ import annotations
 
+#!/usr/bin/env python3
+"""Prototype backtest: GDELT volume spikes -> realized volatility proxy.
+
+Usage:
+  python backtest_gdelt_vol.py --gdelt sample_gdelt.csv --prices sample_prices.csv --threshold 2.0 --hold 3
+"""
+
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -263,6 +272,120 @@ def evaluate(
             hold,
         )
         raise
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = argv if argv is not None else sys.argv[1:]
+    p = argparse.ArgumentParser(
+        description="Backtest prototype: GDELT volume -> realized volatility"
+    )
+    p.add_argument("--gdelt", required=True)
+    p.add_argument("--prices", required=True)
+    p.add_argument("--threshold", type=float, default=DEFAULT_ZSCORE_THRESHOLD)
+    p.add_argument("--hold", type=int, default=3)
+    p.add_argument("--out-events", default=None, help="Path to write per-event CSV")
+    p.add_argument("--plot", action="store_true", help="Save diagnostic plot to backtests/ folder")
+    args = p.parse_args(argv)
+
+    out = evaluate(
+        pathlib.Path(args.gdelt),
+        pathlib.Path(args.prices),
+        threshold=args.threshold,
+        hold=args.hold,
+        out_events=pathlib.Path(args.out_events) if args.out_events else None,
+        plot=args.plot,
+    )
+
+    print(json.dumps(out, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+    `hold`-day horizon. The function returns summary statistics for event and
+    non-event realized returns along with the input parameters.
+
+    Args:
+        gdelt_path: Path to GDELT CSV with an `articles` column.
+        prices_path: Path to prices CSV with a `close` column.
+        threshold: z-score threshold used to flag GDELT volume events.
+        hold: Number of days used to compute realized absolute returns.
+        out_events: Optional path to write per-event CSV rows.
+        plot: If True, save diagnostic plots to `backtests/`.
+
+    Returns:
+        A dict containing `threshold`, `hold_days`, `events`, and `non_events`
+        summary statistics (count, mean, median, std).
+    """
+
+    try:
+        gd = load_gdelt(gdelt_path)
+        pr = load_prices(prices_path)
+
+        events = detect_events(gd, window=DEFAULT_ROLLING_WINDOW, threshold=threshold)
+
+        # Align dates robustly: compute union index and reindex prices (ffill closes)
+        union_idx = gd.index.union(pr.index).sort_values()
+        pr_reindexed = pr.reindex(union_idx).ffill()
+        rv = realized_abs_return_series(pr_reindexed, hold=hold)
+
+        df = pd.DataFrame(
+            {
+                "articles": gd["articles"].reindex(union_idx),
+                "event": events.reindex(union_idx).fillna(False),
+            }
+        )
+        df = df.join(pr_reindexed["close"], how="left")
+        df = df.join(rv.rename("realized_abs_return"), how="left")
+
+        # drop rows without realized returns (end of series)
+        df = df.dropna(subset=["realized_abs_return"]).copy()
+
+        event_rows = df[df["event"]]
+        non_event_rows = df[~df["event"]]
+
+        out = {
+            "threshold": threshold,
+            "hold_days": hold,
+            "events": _stats(event_rows["realized_abs_return"]),
+            "non_events": _stats(non_event_rows["realized_abs_return"]),
+        }
+
+        # Optional: write per-event CSV
+        if out_events and event_rows.shape[0] > 0:
+            event_rows_to_save = event_rows[["articles", "close", "realized_abs_return"]].reset_index()
+            event_rows_to_save.to_csv(out_events, index=False)
+
+        # Optional plotting (import locally to avoid matplotlib as strict dependency)
+        if plot:
+            try:
+                import matplotlib.pyplot as plt
+
+                fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+                ax[0].plot(df.index, df["articles"], label="articles")
+                ax[0].scatter(event_rows.index, event_rows["articles"], color="red", label="events")
+                ax[0].legend()
+                ax[1].plot(df.index, df["realized_abs_return"], label="realized_abs_return")
+                ax[1].legend()
+                fig.tight_layout()
+                fig_path = (
+                    pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+                )
+                fig.savefig(fig_path)
+            except Exception as e:
+                # plotting is optional; log and continue
+                logger.warning("Plotting failed: %s", e)
+
+        return out
+    except Exception:
+        logger.exception(
+            "evaluate() failed: gdelt=%s prices=%s threshold=%s hold=%s",
+            gdelt_path,
+            prices_path,
+            threshold,
+            hold,
+        )
+        raise
                 ax[1].legend()
                 fig.tight_layout()
                 fig_path = (
@@ -292,6 +415,20 @@ def evaluate(
     out = evaluate(pathlib.Path(args.gdelt), pathlib.Path(args.prices), threshold=args.threshold, hold=args.hold)
     import json
 >>>>>>> 3db6b7d (Add GDELT->volatility backtest prototype (backtest_gdelt_vol.py + sample data))
+=======
+def main(argv: list[str] | None = None) -> int:
+    argv = argv if argv is not None else sys.argv[1:]
+    p = argparse.ArgumentParser(description="Backtest prototype: GDELT volume -> realized volatility")
+    p.add_argument("--gdelt", required=True)
+    p.add_argument("--prices", required=True)
+    p.add_argument("--threshold", type=float, default=2.0)
+    p.add_argument("--hold", type=int, default=3)
+    p.add_argument("--out-events", default=None, help="Path to write per-event CSV")
+    p.add_argument("--plot", action="store_true", help="Save diagnostic plot to backtests/ folder")
+    args = p.parse_args(argv)
+
+    out = evaluate(pathlib.Path(args.gdelt), pathlib.Path(args.prices), threshold=args.threshold, hold=args.hold, out_events=pathlib.Path(args.out_events) if args.out_events else None, plot=args.plot)
+>>>>>>> d82f7c7 (Backtest: add robust alignment, event CSV export, optional plotting; add unit test and CI workflow)
 
     print(json.dumps(out, indent=2))
     return 0
