@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 import sys
+import json
 
 import numpy as np
 import pandas as pd
@@ -16,54 +17,61 @@ from typing import Any, Dict
 
 
 def load_gdelt(path: pathlib.Path) -> pd.DataFrame:
-    df = pd.read_csv(path, parse_dates=["date"])
+    df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
     df = df.sort_values("date").set_index("date")
+    if "articles" not in df.columns:
+        raise KeyError("gdelt CSV must contain an 'articles' column")
     return df
 
 
 def load_prices(path: pathlib.Path) -> pd.DataFrame:
-    df = pd.read_csv(path, parse_dates=["date"])
+    df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
     df = df.sort_values("date").set_index("date")
+    if "close" not in df.columns:
+        raise KeyError("prices CSV must contain a 'close' column")
     df["ret"] = df["close"].pct_change()
     return df
 
 
 def detect_events(gdelt: pd.DataFrame, window: int = 14, threshold: float = 2.0) -> pd.Series:
-    # use rolling z-score on `articles` count
+    # Use rolling z-score on `articles` count. Use smaller min_periods for short series.
     s = gdelt["articles"].astype(float)
-    mu = s.rolling(window=window, min_periods=5).mean()
-    sigma = s.rolling(window=window, min_periods=5).std().replace(0, np.nan)
+    minp = max(3, window // 4)
+    mu = s.rolling(window=window, min_periods=minp).mean()
+    sigma = s.rolling(window=window, min_periods=minp).std().replace(0, np.nan)
     z = (s - mu) / sigma
     return z.fillna(0) > threshold
 
 
 def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
-    # realized absolute return over next `hold` business days
+    # realized absolute return over next `hold` days
     abs_ret = prices["ret"].abs()
-    # rolling forward mean of absolute returns
     return abs_ret.rolling(window=hold, min_periods=1).sum().shift(-hold + 1)
 
 
-def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: float, hold: int) -> Dict[str, Any]:
+def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: float, hold: int, out_events: pathlib.Path | None = None, plot: bool = False) -> Dict[str, Any]:
     gd = load_gdelt(gdelt_path)
     pr = load_prices(prices_path)
 
     events = detect_events(gd, window=14, threshold=threshold)
 
-    rv = realized_abs_return_series(pr, hold=hold)
+    # Align dates robustly: compute union index and reindex prices (ffill closes)
+    union_idx = gd.index.union(pr.index).sort_values()
+    pr_reindexed = pr.reindex(union_idx).ffill()
+    rv = realized_abs_return_series(pr_reindexed, hold=hold)
 
-    # align on dates
-    df = pd.DataFrame({"articles": gd["articles"], "event": events}).join(pr["close"], how="inner")
+    df = pd.DataFrame({"articles": gd["articles"].reindex(union_idx), "event": events.reindex(union_idx).fillna(False)})
+    df = df.join(pr_reindexed["close"], how="left")
     df = df.join(rv.rename("realized_abs_return"), how="left")
 
-    # drop na realized
-    df = df.dropna(subset=["realized_abs_return"]) 
+    # drop rows without realized returns (end of series)
+    df = df.dropna(subset=["realized_abs_return"]).copy()
 
     event_rows = df[df["event"]]
     non_event_rows = df[~df["event"]]
 
-    def stats(s):
-        return {"count": int(s.count()), "mean": float(s.mean()), "median": float(s.median()), "std": float(s.std())}
+    def stats(s: pd.Series) -> Dict[str, Any]:
+        return {"count": int(s.count()), "mean": float(s.mean() if s.count() else 0.0), "median": float(s.median() if s.count() else 0.0), "std": float(s.std() if s.count() > 1 else 0.0)}
 
     out = {
         "threshold": threshold,
@@ -71,6 +79,29 @@ def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: flo
         "events": stats(event_rows["realized_abs_return"]),
         "non_events": stats(non_event_rows["realized_abs_return"]),
     }
+
+    # Optional: write per-event CSV
+    if out_events and event_rows.shape[0] > 0:
+        event_rows_to_save = event_rows[["articles", "close", "realized_abs_return"]].reset_index()
+        event_rows_to_save.to_csv(out_events, index=False)
+
+    # Optional plotting (import locally to avoid matplotlib as strict dependency)
+    if plot:
+        try:
+            import matplotlib.pyplot as plt
+
+            fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+            ax[0].plot(df.index, df["articles"], label="articles")
+            ax[0].scatter(event_rows.index, event_rows["articles"], color="red", label="events")
+            ax[0].legend()
+            ax[1].plot(df.index, df["realized_abs_return"], label="realized_abs_return")
+            ax[1].legend()
+            fig.tight_layout()
+            fig_path = pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+            fig.savefig(fig_path)
+        except Exception as e:
+            # plotting is optional; continue on failure
+            print(f"Plotting failed: {e}")
 
     return out
 
@@ -82,10 +113,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--prices", required=True)
     p.add_argument("--threshold", type=float, default=2.0)
     p.add_argument("--hold", type=int, default=3)
+    p.add_argument("--out-events", default=None, help="Path to write per-event CSV")
+    p.add_argument("--plot", action="store_true", help="Save diagnostic plot to backtests/ folder")
     args = p.parse_args(argv)
 
-    out = evaluate(pathlib.Path(args.gdelt), pathlib.Path(args.prices), threshold=args.threshold, hold=args.hold)
-    import json
+    out = evaluate(pathlib.Path(args.gdelt), pathlib.Path(args.prices), threshold=args.threshold, hold=args.hold, out_events=pathlib.Path(args.out_events) if args.out_events else None, plot=args.plot)
 
     print(json.dumps(out, indent=2))
     return 0
