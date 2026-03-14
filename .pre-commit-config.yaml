@@ -14,3 +14,12 @@ repos:
     rev: v0.18.4
     hooks:
       - id: ruff
+
+  - repo: local
+    hooks:
+      - id: check-runtime-imports
+        name: check-runtime-imports
+        entry: python .github/scripts/check_runtime_imports.py
+        language: system
+        pass_filenames: false
+        always_run: true

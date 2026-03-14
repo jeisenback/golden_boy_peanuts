@@ -105,7 +105,7 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
                 """)).fetchall()
 
     assert len(rows) >= 1
-    instr, struct, expiration, edge_score, signals_raw, gen_at = rows[0]
+    instr, _struct, expiration, edge_score, signals_raw, gen_at = rows[0]
     assert instr == "USO"
     assert expiration == 30
     assert 0.0 <= float(edge_score) <= 1.0
