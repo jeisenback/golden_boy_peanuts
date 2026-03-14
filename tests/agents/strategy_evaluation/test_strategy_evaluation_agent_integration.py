@@ -1,9 +1,14 @@
 """
-Integration tests for Strategy Evaluation Agent using Testcontainers (real Postgres).
-- Verifies `evaluate_strategies()` persists candidates to `strategy_candidates`.
-- Golden dataset validation: USO volatility gap + sector dispersion produce expected candidate and edge_score range.
+Integration tests for Strategy Evaluation Agent using Testcontainers (real
+Postgres).
 
-These tests are marked `@pytest.mark.integration` and are excluded from default `pytest -m "not integration"` runs.
+- Verifies `evaluate_strategies()` persists candidates to
+    `strategy_candidates`.
+- Golden dataset validation: USO volatility gap + sector dispersion produce an
+    expected candidate and edge_score range.
+
+These tests are marked `@pytest.mark.integration` and are excluded from default
+`pytest -m "not integration"` runs.
 """
 
 from __future__ import annotations
@@ -95,7 +100,11 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
     with pg_engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT instrument, structure, expiration, edge_score, signals, generated_at FROM strategy_candidates"
+                """
+                SELECT instrument, structure, expiration, edge_score, signals,
+                       generated_at
+                FROM strategy_candidates
+                """
             )
         ).fetchall()
 
@@ -111,9 +120,11 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
 
 @pytest.mark.integration
 def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
-    """Golden scenario: USO gap ~0.067 and sector_dispersion=0.5 produces expected edge_score (~0.39).
+    """Golden scenario: USO gap ~0.067 and sector_dispersion=0.5 produces
+    expected edge_score (~0.39).
 
-    The test asserts that a USO long_straddle exists and the edge_score falls within [0.38, 0.58].
+    The test asserts that a USO long_straddle exists and the edge_score falls
+    within [0.38, 0.58].
     """
     # Use a realistic Phase-1 gap and dispersion that match Feature Generation golden dataset
     gap = 0.0674
@@ -143,7 +154,12 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     with pg_engine.connect() as conn:
         rows = conn.execute(
             text(
-                "SELECT instrument, structure, edge_score FROM strategy_candidates WHERE instrument = 'USO' ORDER BY edge_score DESC"
+                """
+                SELECT instrument, structure, edge_score
+                FROM strategy_candidates
+                WHERE instrument = 'USO'
+                ORDER BY edge_score DESC
+                """
             )
         ).fetchall()
     assert rows, "Expected persisted USO candidate(s)"
