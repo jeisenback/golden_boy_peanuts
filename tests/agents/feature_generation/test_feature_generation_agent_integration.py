@@ -174,7 +174,7 @@ def _make_market_state(
     sector_prices: dict[str, float] | None = None,
 ) -> MarketState:
     """Build a minimal MarketState with one instrument and one ATM call option."""
-    now = datetime.now(UTC)
+    now = datetime.now(tz=UTC)
     prices = [
         RawPriceRecord(
             instrument=instrument,

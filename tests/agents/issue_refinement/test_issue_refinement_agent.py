@@ -42,7 +42,7 @@ from src.core.findings import Finding, FindingSeverity
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_TS = datetime.now(UTC)
+_TS = datetime.now(tz=UTC)
 
 _GOOD_BODY = """\
 ## Summary

@@ -4,17 +4,18 @@
 Usage:
   python backtest_gdelt_vol.py --gdelt sample_gdelt.csv --prices sample_prices.csv --threshold 2.0 --hold 3
 """
+
 from __future__ import annotations
 
 import argparse
+import json
+import logging
 import pathlib
 import sys
-import json
+from typing import Any
 
 import numpy as np
 import pandas as pd
-from typing import Any, Dict
-import logging
 
 # Module-level defaults (avoid magic numbers in code)
 DEFAULT_ROLLING_WINDOW: int = 14  # default rolling window (days)
@@ -89,7 +90,9 @@ def load_prices(path: pathlib.Path) -> pd.DataFrame:
         raise
 
 
-def detect_events(gdelt: pd.DataFrame, window: int = DEFAULT_ROLLING_WINDOW, threshold: float = 2.0) -> pd.Series:
+def detect_events(
+    gdelt: pd.DataFrame, window: int = DEFAULT_ROLLING_WINDOW, threshold: float = 2.0
+) -> pd.Series:
     """Detect volume burst events using a rolling z-score on article counts.
 
     Args:
@@ -122,7 +125,7 @@ def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
     return abs_ret.rolling(window=hold, min_periods=1).sum().shift(-hold + 1)
 
 
-def _stats(s: pd.Series) -> Dict[str, Any]:
+def _stats(s: pd.Series) -> dict[str, Any]:
     """Return simple summary statistics for a numeric series.
 
     Args:
@@ -139,7 +142,14 @@ def _stats(s: pd.Series) -> Dict[str, Any]:
     }
 
 
-def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: float, hold: int, out_events: pathlib.Path | None = None, plot: bool = False) -> Dict[str, Any]:
+def evaluate(
+    gdelt_path: pathlib.Path,
+    prices_path: pathlib.Path,
+    threshold: float,
+    hold: int,
+    out_events: pathlib.Path | None = None,
+    plot: bool = False,
+) -> dict[str, Any]:
     gd = load_gdelt(gdelt_path)
     pr = load_prices(prices_path)
 
@@ -150,7 +160,12 @@ def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: flo
     pr_reindexed = pr.reindex(union_idx).ffill()
     rv = realized_abs_return_series(pr_reindexed, hold=hold)
 
-    df = pd.DataFrame({"articles": gd["articles"].reindex(union_idx), "event": events.reindex(union_idx).fillna(False)})
+    df = pd.DataFrame(
+        {
+            "articles": gd["articles"].reindex(union_idx),
+            "event": events.reindex(union_idx).fillna(False),
+        }
+    )
     df = df.join(pr_reindexed["close"], how="left")
     df = df.join(rv.rename("realized_abs_return"), how="left")
 
@@ -184,7 +199,9 @@ def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: flo
             ax[1].plot(df.index, df["realized_abs_return"], label="realized_abs_return")
             ax[1].legend()
             fig.tight_layout()
-            fig_path = pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+            fig_path = (
+                pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+            )
             fig.savefig(fig_path)
         except Exception as e:
             # plotting is optional; log and continue
@@ -195,7 +212,9 @@ def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: flo
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
-    p = argparse.ArgumentParser(description="Backtest prototype: GDELT volume -> realized volatility")
+    p = argparse.ArgumentParser(
+        description="Backtest prototype: GDELT volume -> realized volatility"
+    )
     p.add_argument("--gdelt", required=True)
     p.add_argument("--prices", required=True)
     p.add_argument("--threshold", type=float, default=2.0)
@@ -204,7 +223,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--plot", action="store_true", help="Save diagnostic plot to backtests/ folder")
     args = p.parse_args(argv)
 
-    out = evaluate(pathlib.Path(args.gdelt), pathlib.Path(args.prices), threshold=args.threshold, hold=args.hold, out_events=pathlib.Path(args.out_events) if args.out_events else None, plot=args.plot)
+    out = evaluate(
+        pathlib.Path(args.gdelt),
+        pathlib.Path(args.prices),
+        threshold=args.threshold,
+        hold=args.hold,
+        out_events=pathlib.Path(args.out_events) if args.out_events else None,
+        plot=args.plot,
+    )
 
     print(json.dumps(out, indent=2))
     return 0
