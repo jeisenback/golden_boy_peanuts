@@ -12,6 +12,7 @@ import sys
 
 import numpy as np
 import pandas as pd
+from typing import Any, Dict
 
 
 def load_gdelt(path: pathlib.Path) -> pd.DataFrame:
@@ -43,7 +44,7 @@ def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
     return abs_ret.rolling(window=hold, min_periods=1).sum().shift(-hold + 1)
 
 
-def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: float, hold: int):
+def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: float, hold: int) -> Dict[str, Any]:
     gd = load_gdelt(gdelt_path)
     pr = load_prices(prices_path)
 
