@@ -8,19 +8,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
-import json
-import logging
-import pathlib
-import sys
-from typing import Any
-=======
-from __future__ import annotations
-
-import argparse
-import pathlib
-import sys
->>>>>>> 3db6b7d (Add GDELT->volatility backtest prototype (backtest_gdelt_vol.py + sample data))
 #!/usr/bin/env python3
 """Prototype backtest: GDELT volume spikes -> realized volatility proxy.
 
@@ -256,6 +243,26 @@ def evaluate(
                 ax[0].scatter(event_rows.index, event_rows["articles"], color="red", label="events")
                 ax[0].legend()
                 ax[1].plot(df.index, df["realized_abs_return"], label="realized_abs_return")
+                ax[1].legend()
+                fig.tight_layout()
+                fig_path = (
+                    pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+                )
+                fig.savefig(fig_path)
+            except Exception as e:
+                # plotting is optional; log and continue
+                logger.warning("Plotting failed: %s", e)
+
+        return out
+    except Exception:
+        logger.exception(
+            "evaluate() failed: gdelt=%s prices=%s threshold=%s hold=%s",
+            gdelt_path,
+            prices_path,
+            threshold,
+            hold,
+        )
+        raise
                 ax[1].legend()
                 fig.tight_layout()
                 fig_path = (
