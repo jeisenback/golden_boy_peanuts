@@ -150,6 +150,26 @@ def evaluate(
     out_events: pathlib.Path | None = None,
     plot: bool = False,
 ) -> dict[str, Any]:
+    """Evaluate GDELT-driven realized-return separation.
+
+    Runs a backtest that detects volume burst events in `gdelt_path` and
+    computes forward realized absolute returns from `prices_path` over a
+    `hold`-day horizon. The function returns summary statistics for event and
+    non-event realized returns along with the input parameters.
+
+    Args:
+        gdelt_path: Path to GDELT CSV with an `articles` column.
+        prices_path: Path to prices CSV with a `close` column.
+        threshold: Z-score threshold used to flag GDELT volume events.
+        hold: Number of days used to compute realized absolute returns.
+        out_events: Optional path to write per-event CSV rows.
+        plot: If True, save diagnostic plots to `backtests/`.
+
+    Returns:
+        A dict containing `threshold`, `hold_days`, `events`, and `non_events`
+        summary statistics (count, mean, median, std).
+    """
+
     gd = load_gdelt(gdelt_path)
     pr = load_prices(prices_path)
 

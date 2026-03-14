@@ -6,7 +6,7 @@ repos:
         args: ["--baseline", ".secrets.baseline"]
 
   - repo: https://github.com/psf/black
-    rev: stable
+    rev: 24.4.2
     hooks:
       - id: black
 
