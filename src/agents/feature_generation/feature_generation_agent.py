@@ -22,7 +22,7 @@ import math
 import statistics
 
 from src.agents.event_detection.models import DetectedEvent
-from src.agents.feature_generation.db import read_price_history
+from src.agents.feature_generation.db import read_price_history, write_feature_set
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.ingestion.models import MarketState, OptionRecord
 from src.core.db import get_engine
@@ -241,10 +241,22 @@ def run_feature_generation(
         logger.warning(msg)
         feature_errors.append(msg)
 
-    return FeatureSet(
+    feature_set = FeatureSet(
         snapshot_time=market_state.snapshot_time,
         volatility_gaps=volatility_gaps,
         sector_dispersion=sector_dispersion,
         supply_shock_probability=supply_shock_probability,
         feature_errors=feature_errors,
     )
+
+    # Persist to DB — failures logged but not propagated (degraded-mode).
+    # A DB outage must not suppress the FeatureSet from the caller.
+    try:
+        engine = get_engine()
+        write_feature_set(feature_set, engine)
+    except Exception as exc:
+        # ERROR (not WARNING) — a silent persistence failure is not recoverable
+        # from the caller's perspective and must be observable in logs/alerts.
+        logger.error("Failed to persist FeatureSet: %s", exc)
+
+    return feature_set
