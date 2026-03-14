@@ -42,8 +42,14 @@ def load_gdelt(path: pathlib.Path) -> pd.DataFrame:
     try:
         df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
         df = df.sort_values("date").set_index("date")
+        if df.shape[0] == 0:
+            raise ValueError("gdelt CSV is empty")
         if "articles" not in df.columns:
             raise KeyError("gdelt CSV must contain an 'articles' column")
+        # Ensure numeric
+        df["articles"] = pd.to_numeric(df["articles"], errors="raise")
+        if df["articles"].isna().any():
+            raise ValueError("gdelt 'articles' column contains NaN values")
         return df
     except Exception:
         logger.exception("Failed to load GDELT CSV: %s", path)
@@ -68,8 +74,14 @@ def load_prices(path: pathlib.Path) -> pd.DataFrame:
     try:
         df = pd.read_csv(path, parse_dates=["date"]).rename(columns=str.lower)
         df = df.sort_values("date").set_index("date")
+        if df.shape[0] == 0:
+            raise ValueError("prices CSV is empty")
         if "close" not in df.columns:
             raise KeyError("prices CSV must contain a 'close' column")
+        # Ensure numeric close
+        df["close"] = pd.to_numeric(df["close"], errors="raise")
+        if df["close"].isna().any():
+            raise ValueError("prices 'close' column contains NaN values")
         df["ret"] = df["close"].pct_change()
         return df
     except Exception:
@@ -110,11 +122,28 @@ def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
     return abs_ret.rolling(window=hold, min_periods=1).sum().shift(-hold + 1)
 
 
+def _stats(s: pd.Series) -> Dict[str, Any]:
+    """Return simple summary statistics for a numeric series.
+
+    Args:
+        s: Numeric pandas Series.
+
+    Returns:
+        Dict with keys: count, mean, median, std.
+    """
+    return {
+        "count": int(s.count()),
+        "mean": float(s.mean() if s.count() else 0.0),
+        "median": float(s.median() if s.count() else 0.0),
+        "std": float(s.std() if s.count() > 1 else 0.0),
+    }
+
+
 def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: float, hold: int, out_events: pathlib.Path | None = None, plot: bool = False) -> Dict[str, Any]:
     gd = load_gdelt(gdelt_path)
     pr = load_prices(prices_path)
 
-    events = detect_events(gd, window=14, threshold=threshold)
+    events = detect_events(gd, window=DEFAULT_ROLLING_WINDOW, threshold=threshold)
 
     # Align dates robustly: compute union index and reindex prices (ffill closes)
     union_idx = gd.index.union(pr.index).sort_values()
@@ -131,14 +160,11 @@ def evaluate(gdelt_path: pathlib.Path, prices_path: pathlib.Path, threshold: flo
     event_rows = df[df["event"]]
     non_event_rows = df[~df["event"]]
 
-    def stats(s: pd.Series) -> Dict[str, Any]:
-        return {"count": int(s.count()), "mean": float(s.mean() if s.count() else 0.0), "median": float(s.median() if s.count() else 0.0), "std": float(s.std() if s.count() > 1 else 0.0)}
-
     out = {
         "threshold": threshold,
         "hold_days": hold,
-        "events": stats(event_rows["realized_abs_return"]),
-        "non_events": stats(non_event_rows["realized_abs_return"]),
+        "events": _stats(event_rows["realized_abs_return"]),
+        "non_events": _stats(non_event_rows["realized_abs_return"]),
     }
 
     # Optional: write per-event CSV
