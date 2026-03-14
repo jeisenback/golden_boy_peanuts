@@ -3,15 +3,55 @@ name: Issue Refinement Agent (DoR Check)
 on:
   issues:
     types: [labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to refine (leave blank to run against all open issues)"
+        required: false
+        default: ""
 
 jobs:
-  dor-check:
-    name: Definition of Ready Check
-    # Only run when the 'needs-review' label is applied
-    if: github.event.label.name == 'needs-review'
+  collect:
+    name: Collect issues to process
     runs-on: ubuntu-latest
     permissions:
-      issues: write    # needed to post comments and update labels
+      issues: read
+    outputs:
+      issues: ${{ steps.list.outputs.issues }}
+    steps:
+      - name: Determine issue list
+        id: list
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.event_name }}" == "issues" ]]; then
+            # Label trigger: only proceed when the applied label is 'needs-review'
+            if [[ "${{ github.event.label.name }}" != "needs-review" ]]; then
+              echo "issues=[]" >> "$GITHUB_OUTPUT"
+            else
+              echo "issues=[${{ github.event.issue.number }}]" >> "$GITHUB_OUTPUT"
+            fi
+          elif [[ -n "${{ github.event.inputs.issue_number }}" ]]; then
+            # Manual trigger: specific issue number supplied
+            echo "issues=[${{ github.event.inputs.issue_number }}]" >> "$GITHUB_OUTPUT"
+          else
+            # Manual trigger: no number supplied — run against all open issues
+            # --limit 100 caps the batch to avoid very large matrix jobs; raise if needed
+            NUMS=$(gh issue list --state open --limit 100 --json number --jq '[.[].number]')
+            echo "issues=$NUMS" >> "$GITHUB_OUTPUT"
+          fi
+
+  dor-check:
+    name: "DoR Check (#${{ matrix.issue }})"
+    needs: collect
+    if: needs.collect.outputs.issues != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    strategy:
+      matrix:
+        issue: ${{ fromJson(needs.collect.outputs.issues) }}
+      fail-fast: false
 
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +76,9 @@ jobs:
           LLM_PROVIDER: anthropic
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           python scripts/run_issue_refinement.py \
-            --issue ${{ github.event.issue.number }} \
+            --issue ${{ matrix.issue }} \
             --post-comment \
             --update-labels

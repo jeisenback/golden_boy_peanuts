@@ -91,7 +91,7 @@ class LLMWrapper:
             raw = anthropic_http.complete(
                 model_id=self.model_id,
                 prompt=prompt,
-                **{k: v for k, v in kwargs.items()},
+                **kwargs,  # type: ignore[arg-type]
             )
             content = anthropic_http.extract_text(raw)
             return LLMResponse(
