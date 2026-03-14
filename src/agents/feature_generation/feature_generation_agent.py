@@ -255,6 +255,8 @@ def run_feature_generation(
         engine = get_engine()
         write_feature_set(feature_set, engine)
     except Exception as exc:
-        logger.warning("Failed to persist FeatureSet: %s", exc)
+        # ERROR (not WARNING) — a silent persistence failure is not recoverable
+        # from the caller's perspective and must be observable in logs/alerts.
+        logger.error("Failed to persist FeatureSet: %s", exc)
 
     return feature_set

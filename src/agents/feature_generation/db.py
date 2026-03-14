@@ -5,7 +5,7 @@ PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 import json
 import logging
 
@@ -33,6 +33,8 @@ def read_price_history(
 
     Returns:
         Prices in chronological order (oldest to newest), up to `limit` records.
+        Returns an empty list if no rows match `instrument` — callers must guard
+        against this (e.g. compute_volatility_gap skips instruments below _MIN_PRICE_RECORDS).
 
     Raises:
         sqlalchemy.exc.SQLAlchemyError: Propagates on connection or query failure.
@@ -94,7 +96,7 @@ def write_feature_set(feature_set: FeatureSet, engine: Engine) -> None:
                     "volatility_gaps": gaps_json,
                     "sector_dispersion": feature_set.sector_dispersion,
                     "feature_errors": errors_json,
-                    "computed_at": datetime.now().astimezone(),
+                    "computed_at": datetime.now(tz=UTC),  # all timestamps stored in UTC
                 },
             )
     except Exception:
