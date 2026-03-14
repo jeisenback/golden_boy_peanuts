@@ -160,7 +160,7 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
         List of StrategyCandidate sorted by edge_score descending.
         Empty list if no candidates meet the minimum threshold.
     """
-    generated_at = datetime.now(UTC)
+    generated_at = datetime.now(tz=UTC)
     candidates: list[StrategyCandidate] = []
 
     for instrument in INSTRUMENTS_IN_SCOPE:

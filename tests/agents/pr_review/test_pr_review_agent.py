@@ -37,7 +37,7 @@ from src.agents.pr_review.pr_review_agent import (
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-_TS = datetime.now(UTC)
+_TS = datetime.now(tz=UTC)
 
 
 def _make_metadata(**overrides: object) -> PRMetadata:

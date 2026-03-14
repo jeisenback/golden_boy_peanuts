@@ -5,8 +5,10 @@ PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 
 from __future__ import annotations
 
+import json
 import logging
 
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
 from src.agents.strategy_evaluation.models import StrategyCandidate
@@ -19,6 +21,8 @@ def write_strategy_candidates(candidates: list[StrategyCandidate], engine: Engin
     """
     Persist ranked strategy candidates to strategy_candidates table.
 
+    signals is stored as JSONB. structure is stored as the StrEnum string value.
+
     Args:
         candidates: Validated StrategyCandidate objects to insert.
         engine: SQLAlchemy Engine.
@@ -27,13 +31,40 @@ def write_strategy_candidates(candidates: list[StrategyCandidate], engine: Engin
         Number of records written.
 
     Raises:
-        NotImplementedError: Until implemented.
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
+            connection failure after logging the exception.
     """
-    raise NotImplementedError(
-        "write_strategy_candidates not yet implemented. "
-        "TODO: Batch INSERT into strategy_candidates table. "
-        "Use generated_at (TIMESTAMPTZ) for TimescaleDB compatibility."
-    )
+    if not candidates:
+        return 0
+
+    sql = text("""
+        INSERT INTO strategy_candidates
+            (instrument, structure, expiration, edge_score, signals, generated_at)
+        VALUES
+            (:instrument, :structure, :expiration, :edge_score, :signals, :generated_at)
+        """)
+    rows = [
+        {
+            "instrument": c.instrument,
+            "structure": c.structure.value,
+            "expiration": c.expiration,
+            "edge_score": c.edge_score,
+            "signals": json.dumps(c.signals),
+            "generated_at": c.generated_at,
+        }
+        for c in candidates
+    ]
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, rows)
+    except Exception:
+        logger.exception(
+            "write_strategy_candidates failed; %d record(s) not persisted", len(candidates)
+        )
+        raise
+
+    logger.info("Wrote %d strategy candidate(s) to strategy_candidates", len(candidates))
+    return len(candidates)
 
 
 def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandidate]:
@@ -50,7 +81,43 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
     Raises:
         NotImplementedError: Until implemented.
     """
-    raise NotImplementedError(
-        "read_top_candidates not yet implemented. "
-        "TODO: Query strategy_candidates ORDER BY edge_score DESC, generated_at DESC LIMIT limit."
-    )
+    sql = text("""
+        SELECT instrument, structure, expiration, edge_score, signals, generated_at
+        FROM strategy_candidates
+        ORDER BY edge_score DESC, generated_at DESC
+        LIMIT :limit
+        """)
+
+    with engine.connect() as conn:
+        rows = conn.execute(sql, {"limit": limit}).fetchall()
+
+    result: list[StrategyCandidate] = []
+    from src.agents.ingestion.models import OptionStructure
+
+    for row in rows:
+        instrument = row[0]
+        structure_raw = row[1]
+        expiration = int(row[2])
+        edge_score = float(row[3])
+        signals_raw = row[4]
+        generated_at = row[5]
+
+        signals = signals_raw if isinstance(signals_raw, dict) else json.loads(signals_raw or "{}")
+
+        try:
+            structure = OptionStructure(structure_raw)
+        except Exception:
+            # Fallback: treat unknown structure as long_straddle
+            structure = OptionStructure.LONG_STRADDLE
+
+        candidate = StrategyCandidate(
+            instrument=instrument,
+            structure=structure,
+            expiration=expiration,
+            edge_score=edge_score,
+            signals=signals,
+            generated_at=generated_at,
+        )
+        result.append(candidate)
+
+    return result
