@@ -11,7 +11,11 @@ repos:
       - id: black
 
   - repo: https://github.com/astral-sh/ruff
+<<<<<<< HEAD
+    rev: v0.18.4
+=======
     rev: v0.4.7
+>>>>>>> fix/19-pr-87-hygiene-temp
     hooks:
       - id: ruff
 
