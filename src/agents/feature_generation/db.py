@@ -153,6 +153,11 @@ def read_latest_feature_set(engine: Engine) -> FeatureSet | None:
             try:
                 computed_at_dt = datetime.fromisoformat(computed_at)
             except Exception:
+                logger.warning(
+                    "read_latest_feature_set: could not parse computed_at %r; "
+                    "substituting now(UTC) — data may be stale",
+                    computed_at,
+                )
                 computed_at_dt = datetime.now(tz=UTC)
         else:
             computed_at_dt = computed_at

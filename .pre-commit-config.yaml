@@ -6,12 +6,20 @@ repos:
         args: ["--baseline", ".secrets.baseline"]
 
   - repo: https://github.com/psf/black
-    rev: 26.1.0
+    rev: 24.4.2
     hooks:
       - id: black
 
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.4
+  - repo: https://github.com/astral-sh/ruff
+    rev: v0.18.4
     hooks:
       - id: ruff
-        args: [--fix]
+
+  - repo: local
+    hooks:
+      - id: check-runtime-imports
+        name: check-runtime-imports
+        entry: python .github/scripts/check_runtime_imports.py
+        language: system
+        pass_filenames: false
+        always_run: true

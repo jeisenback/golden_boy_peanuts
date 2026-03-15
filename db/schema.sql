@@ -71,3 +71,24 @@ CREATE TABLE IF NOT EXISTS options_chain (
 
 CREATE INDEX IF NOT EXISTS idx_options_chain_instrument_expiration
     ON options_chain (instrument, expiration_date);
+
+
+-- -----------------------------------------------------------------------------
+-- strategy_candidates
+--
+-- Stores generated strategy candidates from the Strategy Evaluation Agent.
+-- Fields mirror PRD Section 9 output schema and are written by
+-- `write_strategy_candidates()` as part of the Phase 1 pipeline.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS strategy_candidates (
+    id            BIGSERIAL       PRIMARY KEY,
+    instrument    TEXT            NOT NULL,
+    structure     TEXT            NOT NULL CHECK (structure IN ('long_straddle','call_spread','put_spread','calendar_spread')),
+    expiration    INTEGER         NOT NULL,
+    edge_score    NUMERIC(5,4)    NOT NULL CHECK (edge_score BETWEEN 0 AND 1),
+    signals       JSONB           NOT NULL,
+    generated_at  TIMESTAMPTZ     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_candidates_generated_edge
+    ON strategy_candidates (generated_at DESC, edge_score DESC);
