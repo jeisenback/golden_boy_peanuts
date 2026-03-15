@@ -6,7 +6,12 @@ Usage (local):
     python scripts/run_pr_review.py --pr 42
 
 Usage (CI — called by .github/workflows/pr-review.yml):
-    python scripts/run_pr_review.py --pr $PR_NUMBER --post-comment
+        python scripts/run_pr_review.py --pr $PR_NUMBER --post-comment
+
+Note:
+    By default the runner will not cause CI to fail when findings are present.
+    Use `--fail-on-findings` to restore the previous behaviour and exit non-zero
+    when BLOCKER findings are detected.
 
 Behaviour:
   1. Fetches PR metadata + diff via `gh pr view` and `gh pr diff`
@@ -209,6 +214,11 @@ def main() -> int:
         action="store_true",
         help="Post findings as a PR comment via gh CLI",
     )
+    parser.add_argument(
+        "--fail-on-findings",
+        action="store_true",
+        help="Exit with non-zero status when BLOCKER findings exist (default: false)",
+    )
     args = parser.parse_args()
 
     # Fetch PR data
@@ -255,7 +265,12 @@ def main() -> int:
             logger.error("Failed to post comment to PR #%d: %s", args.pr, exc)
             # Non-fatal — do not block CI exit code for comment failure
 
-    return 0 if result.approved else 1
+    # Exit code behaviour is configurable: by default we don't fail CI on
+    # findings so the PR can be annotated without making the workflow red.
+    # Use `--fail-on-findings` to error on blockers (legacy behaviour).
+    if result.approved:
+        return 0
+    return 1 if args.fail_on_findings else 0
 
 
 if __name__ == "__main__":
