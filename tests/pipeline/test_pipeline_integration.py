@@ -70,6 +70,11 @@ CREATE TABLE IF NOT EXISTS feature_sets (
 """
 
 # ---------------------------------------------------------------------------
+# Postgres container image
+# ---------------------------------------------------------------------------
+_PG_IMAGE: str = "postgres:15"
+
+# ---------------------------------------------------------------------------
 # Golden dataset constants
 #
 # USO: 30 alternating ±daily_vol log-return prices, daily_vol = 0.15/sqrt(252)
@@ -77,6 +82,8 @@ CREATE TABLE IF NOT EXISTS feature_sets (
 # XLE: 30 alternating ±daily_vol log-return prices, daily_vol = 0.13/sqrt(252)
 #      realized vol ≈ 13.22%  |  ATM IV = 18%  |  expected gap ≈ +4.78%
 # ---------------------------------------------------------------------------
+_PRICE_SERIES_LENGTH: int = 30  # trading-day lookback for realized-vol computation
+
 _USO_START_PRICE: float = 50.0
 _USO_ATM_IV: float = 0.22
 _USO_DAILY_VOL: float = 0.15 / math.sqrt(252)
@@ -91,15 +98,41 @@ _CVX_PRICE: float = 155.0
 
 _OPTION_EXPIRY = datetime(2026, 6, 20, tzinfo=UTC)
 
+# ---------------------------------------------------------------------------
+# Seed data constants — representative but not domain-meaningful
+# ---------------------------------------------------------------------------
+_SEED_PRICE_VOLUME: int = 1_000_000  # generic daily volume for seeded price rows
+_SEED_OPTION_OI: int = 1_000  # open interest for seeded ATM option rows
+_SEED_OPTION_VOLUME: int = 500  # volume for seeded ATM option rows
+_PRICE_ROW_SPACING_MINUTES: int = 1  # minute gap between consecutive seed price rows
+
+# ---------------------------------------------------------------------------
 # Acceptance thresholds
+# ---------------------------------------------------------------------------
 _USO_EDGE_SCORE_MIN: float = 0.30  # AC: edge_score > 0.30
 _MIN_CANDIDATE_ROWS: int = 2  # AC: at least 2 StrategyCandidate rows
 # PRD Section 9 fields: instrument, structure, expiration, edge_score, signals, generated_at
 _PRD_FIELD_COUNT: int = 6
 
 
-def _build_prices(start: float, daily_vol: float, n: int = 30) -> list[float]:
-    """Build n alternating ±daily_vol log-return prices starting from start."""
+def _build_prices(
+    start: float,
+    daily_vol: float,
+    n: int = _PRICE_SERIES_LENGTH,
+) -> list[float]:
+    """Build a deterministic price series of length n using alternating log returns.
+
+    Each step alternates between +daily_vol and -daily_vol, producing a
+    series with a known realized volatility ≈ daily_vol * sqrt(252).
+
+    Args:
+        start: Starting price (e.g. 50.0 for USO).
+        daily_vol: Daily log-return magnitude (annualized_vol / sqrt(252)).
+        n: Number of price points to generate; defaults to _PRICE_SERIES_LENGTH.
+
+    Returns:
+        List of n float prices in chronological order.
+    """
     prices = [start]
     for i in range(n - 1):
         ret = daily_vol if i % 2 == 0 else -daily_vol
@@ -121,7 +154,7 @@ def pg_engine() -> Generator[Engine, None, None]:
     """Start a real Postgres container, apply schema, yield engine."""
     from testcontainers.postgres import PostgresContainer
 
-    with PostgresContainer("postgres:15") as pg:
+    with PostgresContainer(_PG_IMAGE) as pg:
         engine = create_engine(pg.get_connection_url())
         with engine.begin() as conn:
             conn.exec_driver_sql(_SCHEMA_PATH.read_text(encoding="utf-8"))
@@ -131,7 +164,12 @@ def pg_engine() -> Generator[Engine, None, None]:
 
 @pytest.fixture(autouse=True)
 def _clean_tables(pg_engine: Engine) -> Generator[None, None, None]:
-    """Truncate all tables before each test for isolation."""
+    """Truncate all pipeline tables before each test for isolation.
+
+    Resets market_prices, options_chain, feature_sets, and strategy_candidates
+    so that each test starts from a known-empty state regardless of insertion
+    order or prior test failures.
+    """
     with pg_engine.begin() as conn:
         conn.execute(
             text(
@@ -154,7 +192,18 @@ def _seed_prices(
     prices: list[float],
     base_time: datetime | None = None,
 ) -> None:
-    """Insert price rows with 1-minute spacing (deterministic ORDER BY timestamp)."""
+    """Insert price rows into market_prices with deterministic timestamps.
+
+    Rows are spaced _PRICE_ROW_SPACING_MINUTES apart starting from base_time
+    so that ORDER BY timestamp produces a stable chronological sequence.
+
+    Args:
+        engine: SQLAlchemy Engine connected to the test database.
+        instrument: Ticker symbol, e.g. 'USO'.
+        instrument_type: Raw instrument type string, e.g. 'etf'.
+        prices: Sequence of price floats to insert (oldest first).
+        base_time: UTC datetime for the first row; defaults to 2026-01-01 00:00 UTC.
+    """
     if base_time is None:
         base_time = datetime(2026, 1, 1, tzinfo=UTC)
     sql = text("""
@@ -168,9 +217,9 @@ def _seed_prices(
             "instrument": instrument,
             "instrument_type": instrument_type,
             "price": p,
-            "volume": 1_000_000,
+            "volume": _SEED_PRICE_VOLUME,
             "source": "test",
-            "timestamp": base_time + timedelta(minutes=i),
+            "timestamp": base_time + timedelta(minutes=i * _PRICE_ROW_SPACING_MINUTES),
         }
         for i, p in enumerate(prices)
     ]
@@ -184,7 +233,17 @@ def _seed_option(
     strike: float,
     atm_iv: float,
 ) -> None:
-    """Insert a single ATM call option row."""
+    """Insert a single ATM call option row into options_chain.
+
+    Uses _OPTION_EXPIRY, _SEED_OPTION_OI, and _SEED_OPTION_VOLUME constants
+    so that all seeded options share the same expiry and representative liquidity.
+
+    Args:
+        engine: SQLAlchemy Engine connected to the test database.
+        instrument: Underlying ticker symbol, e.g. 'USO'.
+        strike: ATM strike price (should equal the current spot price).
+        atm_iv: Implied volatility for the ATM option (e.g. 0.22 for 22%).
+    """
     sql = text("""
         INSERT INTO options_chain
             (instrument, strike, expiration_date, implied_volatility,
@@ -201,8 +260,8 @@ def _seed_option(
                 "strike": strike,
                 "expiration_date": _OPTION_EXPIRY,
                 "implied_volatility": atm_iv,
-                "open_interest": 1000,
-                "volume": 500,
+                "open_interest": _SEED_OPTION_OI,
+                "volume": _SEED_OPTION_VOLUME,
                 "option_type": "call",
                 "source": "test",
                 "timestamp": datetime.now(tz=UTC),
@@ -211,7 +270,14 @@ def _seed_option(
 
 
 def _build_market_state() -> MarketState:
-    """Build MarketState from the golden dataset prices and options."""
+    """Build a MarketState from the golden dataset prices and options.
+
+    Includes USO and XLE with ATM call options for volatility gap computation,
+    WTI spot-only (no Phase 1 options), and XOM + CVX for sector dispersion.
+
+    Returns:
+        MarketState with snapshot_time=now(UTC), 5 price records, 2 option records.
+    """
     now = datetime.now(tz=UTC)
     prices = [
         RawPriceRecord(
@@ -261,8 +327,8 @@ def _build_market_state() -> MarketState:
             strike=_USO_PRICES[-1],
             expiration_date=_OPTION_EXPIRY,
             implied_volatility=_USO_ATM_IV,
-            open_interest=1000,
-            volume=500,
+            open_interest=_SEED_OPTION_OI,
+            volume=_SEED_OPTION_VOLUME,
             option_type="call",
             timestamp=now,
             source="test",
@@ -272,8 +338,8 @@ def _build_market_state() -> MarketState:
             strike=_XLE_PRICES[-1],
             expiration_date=_OPTION_EXPIRY,
             implied_volatility=_XLE_ATM_IV,
-            open_interest=800,
-            volume=300,
+            open_interest=_SEED_OPTION_OI,
+            volume=_SEED_OPTION_VOLUME,
             option_type="call",
             timestamp=now,
             source="test",
