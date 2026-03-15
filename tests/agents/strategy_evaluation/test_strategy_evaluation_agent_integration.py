@@ -32,6 +32,12 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
 # Disable Testcontainers Reaper (Ryuk) on Windows if not available
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
+# Named constants for golden dataset acceptance criteria (issue #19)
+_GOLDEN_EDGE_SCORE_MIN: float = 0.38   # lower bound of acceptable USO edge_score range
+_GOLDEN_EDGE_SCORE_MAX: float = 0.58   # upper bound of acceptable USO edge_score range
+_EDGE_SCORE_FLOOR: float = 0.0         # minimum valid edge_score (schema constraint)
+_EDGE_SCORE_CEIL: float = 1.0          # maximum valid edge_score (schema constraint)
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS strategy_candidates (
     id            BIGSERIAL       PRIMARY KEY,
@@ -114,12 +120,17 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
 
     # All rows must satisfy edge_score BETWEEN 0 AND 1
     for row in rows:
-        assert 0.0 <= float(row[3]) <= 1.0, f"edge_score {row[3]} out of [0, 1] for {row[0]}"
+        row_instrument = row._mapping["instrument"]
+        row_edge_score = float(row._mapping["edge_score"])
+        assert _EDGE_SCORE_FLOOR <= row_edge_score <= _EDGE_SCORE_CEIL, (
+            f"edge_score {row_edge_score} out of [{_EDGE_SCORE_FLOOR}, {_EDGE_SCORE_CEIL}]"
+            f" for {row_instrument}"
+        )
 
     instr, _struct, expiration, edge_score, signals_raw, gen_at = rows[0]
     assert instr == "USO"
     assert expiration == 30
-    assert 0.0 <= float(edge_score) <= 1.0
+    assert _EDGE_SCORE_FLOOR <= float(edge_score) <= _EDGE_SCORE_CEIL
     signals = signals_raw if isinstance(signals_raw, dict) else json.loads(signals_raw or "{}")
     assert "volatility_gap" in signals and "sector_dispersion" in signals
     # generated_at must be timezone-aware (UTC)
@@ -156,9 +167,9 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
 
     # Compute expected score via the same function to avoid magic numbers
     expected = compute_edge_score("USO", fs)
-    assert 0.0 <= expected <= 1.0
+    assert _EDGE_SCORE_FLOOR <= expected <= _EDGE_SCORE_CEIL
     # Check expected falls inside the broad acceptance band
-    assert 0.38 <= expected <= 0.58
+    assert _GOLDEN_EDGE_SCORE_MIN <= expected <= _GOLDEN_EDGE_SCORE_MAX
 
     # signals dict must label a positive gap as 'positive'
     uso_signals = uso.signals if isinstance(uso.signals, dict) else json.loads(uso.signals or "{}")
