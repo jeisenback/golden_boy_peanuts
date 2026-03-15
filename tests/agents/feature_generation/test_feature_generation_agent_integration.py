@@ -339,9 +339,9 @@ def test_run_feature_generation_happy_path_no_feature_errors(pg_engine: Engine) 
     with patch(_PATCH_ENGINE, return_value=pg_engine):
         feature_set = run_feature_generation(market_state, events=[])
 
-    assert feature_set.feature_errors == [], (
-        f"expected no feature_errors on happy path, got {feature_set.feature_errors}"
-    )
+    assert (
+        feature_set.feature_errors == []
+    ), f"expected no feature_errors on happy path, got {feature_set.feature_errors}"
     assert feature_set.supply_shock_probability is not None
 
     with pg_engine.connect() as conn:
@@ -366,19 +366,18 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
     _seed_prices(pg_engine, "USO", _GOLDEN_PRICES)
     market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
 
-    _patch_vol_gap = (
-        "src.agents.feature_generation.feature_generation_agent.compute_volatility_gap"
-    )
-    with patch(_PATCH_ENGINE, return_value=pg_engine), patch(
-        _patch_vol_gap, side_effect=RuntimeError("simulated vol gap failure")
+    _patch_vol_gap = "src.agents.feature_generation.feature_generation_agent.compute_volatility_gap"
+    with (
+        patch(_PATCH_ENGINE, return_value=pg_engine),
+        patch(_patch_vol_gap, side_effect=RuntimeError("simulated vol gap failure")),
     ):
         feature_set = run_feature_generation(market_state, events=[])
 
     # feature_errors must be non-empty and mention the failed signal
     assert feature_set.feature_errors, "expected feature_errors to be non-empty after failure"
-    assert any("compute_volatility_gap" in e for e in feature_set.feature_errors), (
-        f"expected 'compute_volatility_gap' in feature_errors, got {feature_set.feature_errors}"
-    )
+    assert any(
+        "compute_volatility_gap" in e for e in feature_set.feature_errors
+    ), f"expected 'compute_volatility_gap' in feature_errors, got {feature_set.feature_errors}"
     # Other signals still computed — degraded mode, no cascade failure
     assert feature_set.volatility_gaps == []
     assert feature_set.supply_shock_probability is not None
@@ -390,7 +389,7 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
         ).fetchone()
     assert row is not None, "expected FeatureSet written to DB even on partial failure"
     errors_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-    assert isinstance(errors_data, list) and len(errors_data) >= 1, (
-        f"expected non-empty feature_errors in DB, got {errors_data}"
-    )
+    assert (
+        isinstance(errors_data, list) and len(errors_data) >= 1
+    ), f"expected non-empty feature_errors in DB, got {errors_data}"
     assert any("compute_volatility_gap" in e for e in errors_data)
