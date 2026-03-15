@@ -85,7 +85,13 @@ def _make_feature_set(
 
 @pytest.mark.integration
 def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
-    """Evaluate strategies and assert DB rows written with correct fields."""
+    """Verify evaluate_strategies() persists candidates with correct schema fields.
+
+    AC covered (issue #19):
+    - All DB rows have edge_score BETWEEN 0 AND 1
+    - instrument, structure, expiration, signals fields present and non-null
+    - generated_at is timezone-aware (UTC)
+    """
     fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
 
     with patch(
@@ -125,8 +131,10 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     """Golden scenario: USO gap ~0.067 and sector_dispersion=0.5 produces
     expected edge_score (~0.39).
 
-    The test asserts that a USO long_straddle exists and the edge_score falls
-    within [0.38, 0.58].
+    AC covered (issue #19):
+    - USO long_straddle candidate generated with edge_score in [0.38, 0.58]
+    - signals dict contains volatility_gap='positive' for a positive gap
+    - Candidate persisted to DB with edge_score matching in-memory value
     """
     # Use a realistic Phase-1 gap and dispersion that match Feature Generation golden dataset
     gap = 0.0674
