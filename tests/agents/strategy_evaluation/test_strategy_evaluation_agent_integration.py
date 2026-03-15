@@ -32,6 +32,12 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
 # Disable Testcontainers Reaper (Ryuk) on Windows if not available
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
+# Named constants for golden dataset acceptance criteria (issue #19)
+_GOLDEN_EDGE_SCORE_MIN: float = 0.38   # lower bound of acceptable USO edge_score range
+_GOLDEN_EDGE_SCORE_MAX: float = 0.58   # upper bound of acceptable USO edge_score range
+_EDGE_SCORE_FLOOR: float = 0.0         # minimum valid edge_score (schema constraint)
+_EDGE_SCORE_CEIL: float = 1.0          # maximum valid edge_score (schema constraint)
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS strategy_candidates (
     id            BIGSERIAL       PRIMARY KEY,
@@ -85,7 +91,13 @@ def _make_feature_set(
 
 @pytest.mark.integration
 def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
-    """Evaluate strategies and assert DB rows written with correct fields."""
+    """Verify evaluate_strategies() persists candidates with correct schema fields.
+
+    AC covered (issue #19):
+    - All DB rows have edge_score BETWEEN 0 AND 1
+    - instrument, structure, expiration, signals fields present and non-null
+    - generated_at is timezone-aware (UTC)
+    """
     fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
 
     with patch(
@@ -105,13 +117,24 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
                 """)).fetchall()
 
     assert len(rows) >= 1
+
+    # All rows must satisfy edge_score BETWEEN 0 AND 1
+    for row in rows:
+        row_instrument = row._mapping["instrument"]
+        row_edge_score = float(row._mapping["edge_score"])
+        assert _EDGE_SCORE_FLOOR <= row_edge_score <= _EDGE_SCORE_CEIL, (
+            f"edge_score {row_edge_score} out of [{_EDGE_SCORE_FLOOR}, {_EDGE_SCORE_CEIL}]"
+            f" for {row_instrument}"
+        )
+
     instr, _struct, expiration, edge_score, signals_raw, gen_at = rows[0]
     assert instr == "USO"
     assert expiration == 30
-    assert 0.0 <= float(edge_score) <= 1.0
+    assert _EDGE_SCORE_FLOOR <= float(edge_score) <= _EDGE_SCORE_CEIL
     signals = signals_raw if isinstance(signals_raw, dict) else json.loads(signals_raw or "{}")
     assert "volatility_gap" in signals and "sector_dispersion" in signals
-    assert gen_at is not None
+    # generated_at must be timezone-aware (UTC)
+    assert gen_at.tzinfo is not None, "generated_at must be timezone-aware"
 
 
 @pytest.mark.integration
@@ -119,8 +142,10 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     """Golden scenario: USO gap ~0.067 and sector_dispersion=0.5 produces
     expected edge_score (~0.39).
 
-    The test asserts that a USO long_straddle exists and the edge_score falls
-    within [0.38, 0.58].
+    AC covered (issue #19):
+    - USO long_straddle candidate generated with edge_score in [0.38, 0.58]
+    - signals dict contains volatility_gap='positive' for a positive gap
+    - Candidate persisted to DB with edge_score matching in-memory value
     """
     # Use a realistic Phase-1 gap and dispersion that match Feature Generation golden dataset
     gap = 0.0674
@@ -142,9 +167,15 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
 
     # Compute expected score via the same function to avoid magic numbers
     expected = compute_edge_score("USO", fs)
-    assert 0.0 <= expected <= 1.0
+    assert _EDGE_SCORE_FLOOR <= expected <= _EDGE_SCORE_CEIL
     # Check expected falls inside the broad acceptance band
-    assert 0.38 <= expected <= 0.58
+    assert _GOLDEN_EDGE_SCORE_MIN <= expected <= _GOLDEN_EDGE_SCORE_MAX
+
+    # signals dict must label a positive gap as 'positive'
+    uso_signals = uso.signals if isinstance(uso.signals, dict) else json.loads(uso.signals or "{}")
+    assert uso_signals.get("volatility_gap") == "positive", (
+        f"expected volatility_gap='positive' for gap={gap}, got {uso_signals.get('volatility_gap')!r}"
+    )
 
     # Also verify DB persist occurred
     with pg_engine.connect() as conn:
@@ -157,3 +188,26 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     assert rows, "Expected persisted USO candidate(s)"
     db_edge = float(rows[0][2])
     assert abs(db_edge - expected) < 1e-3
+
+
+@pytest.mark.integration
+def test_all_signals_none_produces_no_candidates(pg_engine: Engine) -> None:
+    """Golden scenario: FeatureSet with no volatility gaps and no sector dispersion
+    produces edge_score=0.0 for all instruments, which falls below the minimum
+    threshold — so evaluate_strategies() returns an empty list and writes no rows.
+    """
+    fs = _make_feature_set([], sector_dispersion=None)
+
+    with patch(
+        "src.agents.strategy_evaluation.strategy_evaluation_agent.get_engine",
+        return_value=pg_engine,
+    ):
+        candidates = evaluate_strategies(fs)
+
+    assert candidates == [], (
+        f"expected no candidates when all signals are None, got {len(candidates)}"
+    )
+
+    with pg_engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM strategy_candidates")).scalar()
+    assert count == 0, f"expected 0 DB rows when all signals None, got {count}"
