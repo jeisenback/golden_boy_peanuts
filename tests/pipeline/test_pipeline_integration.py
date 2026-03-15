@@ -56,18 +56,7 @@ _PATCH_SE_ENGINE = "src.agents.strategy_evaluation.strategy_evaluation_agent.get
 # ---------------------------------------------------------------------------
 _SCHEMA_PATH = pathlib.Path(__file__).parents[2] / "db" / "schema.sql"
 
-# feature_sets is not yet in db/schema.sql (pending human schema review);
-# create it inline for the integration test.
-_FEATURE_SETS_DDL = """
-CREATE TABLE IF NOT EXISTS feature_sets (
-    id                BIGSERIAL     PRIMARY KEY,
-    snapshot_time     TIMESTAMPTZ   NOT NULL,
-    volatility_gaps   JSONB,
-    sector_dispersion NUMERIC(10, 6),
-    feature_errors    JSONB,
-    computed_at       TIMESTAMPTZ   NOT NULL
-);
-"""
+# feature_sets is defined in db/schema.sql alongside the other pipeline tables.
 
 # ---------------------------------------------------------------------------
 # Postgres container image
@@ -158,7 +147,6 @@ def pg_engine() -> Generator[Engine, None, None]:
         engine = create_engine(pg.get_connection_url())
         with engine.begin() as conn:
             conn.exec_driver_sql(_SCHEMA_PATH.read_text(encoding="utf-8"))
-            conn.exec_driver_sql(_FEATURE_SETS_DDL)
         yield engine
 
 
