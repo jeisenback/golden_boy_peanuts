@@ -99,6 +99,12 @@ class TestCheckBranchName:
         findings = _check_branch_name(meta)
         assert len(findings) == 0  # exempted, no blocker
 
+    def test_develop_branch_exempt(self) -> None:
+        # develop is the protected integration branch — exempt from feature-branch naming
+        meta = _make_metadata(head_branch="develop")
+        findings = _check_branch_name(meta)
+        assert len(findings) == 0
+
 
 # ---------------------------------------------------------------------------
 # _check_target_branch
@@ -116,6 +122,12 @@ class TestCheckTargetBranch:
         assert len(findings) == 1
         assert findings[0].severity == ReviewSeverity.BLOCKER
         assert findings[0].rule == "git-workflow:no-direct-to-main"
+
+    def test_develop_to_main_release_exempt(self) -> None:
+        # develop → main is the valid release path; not a direct-to-main violation
+        meta = _make_metadata(head_branch="develop", base_branch="main")
+        findings = _check_target_branch(meta)
+        assert len(findings) == 0
 
 
 # ---------------------------------------------------------------------------
