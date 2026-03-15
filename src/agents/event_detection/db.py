@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import logging
 
+from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
@@ -15,6 +16,9 @@ from src.agents.event_detection.models import DetectedEvent, EIAInventoryRecord
 from src.core.db import get_engine  # noqa: F401
 
 logger = logging.getLogger(__name__)
+
+# Default row limit for read_recent_events; avoids magic number in function signature.
+_DEFAULT_RECENT_EVENTS_LIMIT: int = 100
 
 
 def write_detected_events(events: list[DetectedEvent], engine: Engine) -> int:
@@ -72,7 +76,9 @@ def write_detected_events(events: list[DetectedEvent], engine: Engine) -> int:
     return len(events)
 
 
-def read_recent_events(engine: Engine, limit: int = 100) -> list[DetectedEvent]:
+def read_recent_events(
+    engine: Engine, limit: int = _DEFAULT_RECENT_EVENTS_LIMIT
+) -> list[DetectedEvent]:
     """
     Read the most recent detected events from the database.
 
@@ -101,20 +107,37 @@ def read_recent_events(engine: Engine, limit: int = 100) -> list[DetectedEvent]:
         logger.exception("read_recent_events failed")
         raise
 
-    return [
-        DetectedEvent(
-            event_id=row["event_id"],
-            event_type=row["event_type"],
-            description=row["description"],
-            source=row["source"],
-            confidence_score=float(row["confidence_score"]),
-            intensity=row["intensity"],
-            detected_at=row["detected_at"],
-            affected_instruments=row["affected_instruments"] or [],
-            raw_headline=row["raw_headline"],
-        )
-        for row in rows
-    ]
+    events: list[DetectedEvent] = []
+    for row in rows:
+        # affected_instruments is JSONB; psycopg2 returns a Python list, but some
+        # drivers may return a raw JSON string. Handle both to be driver-agnostic.
+        raw_instruments = row["affected_instruments"]
+        if isinstance(raw_instruments, str):
+            raw_instruments = json.loads(raw_instruments)
+        instruments: list[str] = raw_instruments or []
+
+        try:
+            events.append(
+                DetectedEvent(
+                    event_id=row["event_id"],
+                    event_type=row["event_type"],
+                    description=row["description"],
+                    source=row["source"],
+                    confidence_score=float(row["confidence_score"]),
+                    intensity=row["intensity"],
+                    detected_at=row["detected_at"],
+                    affected_instruments=instruments,
+                    raw_headline=row["raw_headline"],
+                )
+            )
+        except ValidationError:
+            logger.warning(
+                "read_recent_events: skipping malformed row event_id=%r",
+                row.get("event_id"),
+                exc_info=True,
+            )
+
+    return events
 
 
 def write_eia_records(records: list[EIAInventoryRecord], engine: Engine) -> int:

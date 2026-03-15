@@ -174,6 +174,71 @@ class TestReadRecentEvents:
         _, params = conn.execute.call_args.args
         assert params["limit"] == 5
 
+    def test_default_limit_is_100(self) -> None:
+        """Default limit kwarg matches _DEFAULT_RECENT_EVENTS_LIMIT (not a magic 100)."""
+        from src.agents.event_detection.db import _DEFAULT_RECENT_EVENTS_LIMIT
+
+        engine, conn = _make_engine()
+        conn.execute.return_value.mappings.return_value.all.return_value = []
+        read_recent_events(engine)
+        _, params = conn.execute.call_args.args
+        assert params["limit"] == _DEFAULT_RECENT_EVENTS_LIMIT
+
+    def test_affected_instruments_as_json_string_is_parsed(self) -> None:
+        """If the driver returns affected_instruments as a JSON string, it is parsed."""
+        import json as _json
+
+        row = MagicMock()
+        row.__getitem__ = lambda self, key: {  # type: ignore[misc]
+            "event_id": "strjson",
+            "event_type": "supply_disruption",
+            "description": "Test",
+            "source": "newsapi",
+            "confidence_score": 0.5,
+            "intensity": "low",
+            "detected_at": _NOW,
+            "affected_instruments": _json.dumps(["USO", "XLE"]),  # raw JSON string
+            "raw_headline": None,
+        }[key]
+        engine, conn = _make_engine()
+        conn.execute.return_value.mappings.return_value.all.return_value = [row]
+        result = read_recent_events(engine)
+        assert len(result) == 1
+        assert result[0].affected_instruments == ["USO", "XLE"]
+
+    def test_malformed_row_is_skipped_with_warning(self) -> None:
+        """A row that fails Pydantic validation is skipped; valid rows are returned."""
+        good_row = MagicMock()
+        good_row.__getitem__ = lambda self, key: {  # type: ignore[misc]
+            "event_id": "good1",
+            "event_type": "supply_disruption",
+            "description": "Valid event",
+            "source": "newsapi",
+            "confidence_score": 0.8,
+            "intensity": "high",
+            "detected_at": _NOW,
+            "affected_instruments": [],
+            "raw_headline": None,
+        }[key]
+        bad_row = MagicMock()
+        bad_row.__getitem__ = lambda self, key: {  # type: ignore[misc]
+            "event_id": "bad1",
+            "event_type": "not_a_valid_type",  # invalid enum
+            "description": "Bad event",
+            "source": "newsapi",
+            "confidence_score": 99.9,  # out of range
+            "intensity": "ultra",  # invalid enum
+            "detected_at": _NOW,
+            "affected_instruments": [],
+            "raw_headline": None,
+        }[key]
+        bad_row.get = lambda key, default=None: "bad1" if key == "event_id" else default  # type: ignore[misc]
+        engine, conn = _make_engine()
+        conn.execute.return_value.mappings.return_value.all.return_value = [bad_row, good_row]
+        result = read_recent_events(engine)
+        assert len(result) == 1
+        assert result[0].event_id == "good1"
+
     def test_db_exception_propagates(self) -> None:
         engine = MagicMock()
         engine.connect.return_value.__enter__ = MagicMock(side_effect=RuntimeError("timeout"))
