@@ -256,3 +256,16 @@ two independent blocks at the bottom of the file — git merges them as clean ap
 - Sprint issues have changed status but the table has not been updated
 - The last session was >24 hours ago and sprint notes have no new entries
 - Status still says "PLANNING" after sprint_start.sh was run
+
+## Sprint Notes (2026-03-15, Phase 2 Planning)
+
+Phase 1 release complete — v0.1.0 tagged and shipped (PR #99, merge commit ffff9dc).
+
+Phase 2 planning (issue #23) complete:
+- Created Sprint milestones: Sprint 6 (Event Detection Data Layer), Sprint 7 (Event Orchestration & Feature Updates), Sprint 8 (Phase 2 QA & Release)
+- Created 14 issues: #100–#113 covering all Phase 2 scope from PRD §4.2, §8, §10
+- Key decisions recorded: NewsAPI key confirmed, eia_inventory as separate DB table, LLM classification via llm_wrapper.py for classify_event, Phase 2 in new sprints (6–8)
+- Fixed CI false-positives blocking PR #99: PR review agent now exempts develop branch and develop→main release PRs; doc-gen workflow skips push for protected head branches
+- Issue #23 closed.
+
+Sprint 6 ready to start. No blockers.
