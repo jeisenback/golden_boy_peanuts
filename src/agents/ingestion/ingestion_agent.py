@@ -80,58 +80,87 @@ def _nan_to_none_int(val: object) -> int | None:
 @with_retry()
 def fetch_crude_prices() -> list[RawPriceRecord]:
     """
-    Fetch current WTI and Brent crude prices from Alpha Vantage.
+    Fetch current WTI and Brent crude prices.
 
-    Calls the GLOBAL_QUOTE endpoint for CL=F (WTI) and BZ=F (Brent).
+    Primary source: Alpha Vantage GLOBAL_QUOTE endpoint (requires ALPHA_VANTAGE_API_KEY).
+    Fallback source: yfinance fast_info (no API key required) — used when
+    ALPHA_VANTAGE_API_KEY is unset or the response is malformed (e.g. free-tier
+    plan does not serve futures tickers).
+
     Timestamp is set to UTC time of the fetch, not the API's reported quote time.
 
     Returns:
         Validated RawPriceRecord objects for WTI (CL=F) and Brent (BZ=F).
 
     Raises:
-        RuntimeError: If ALPHA_VANTAGE_API_KEY env var is not set.
-        ValueError: If any API response is missing required price fields.
+        ValueError: If both Alpha Vantage and yfinance fail to return a valid
+            price for any symbol.
         Exception: Propagates the last exception after all retry attempts
             are exhausted (reraise=True).
     """
-    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
-    if not api_key:
-        raise RuntimeError("ALPHA_VANTAGE_API_KEY environment variable is not set.")
-
     symbols = ["CL=F", "BZ=F"]
     records: list[RawPriceRecord] = []
-    fetch_time = datetime.now(UTC)
+    fetch_time = datetime.now(tz=UTC)
+    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY")
 
     for symbol in symbols:
-        response = requests.get(
-            "https://www.alphavantage.co/query",
-            params={"function": "GLOBAL_QUOTE", "symbol": symbol, "apikey": api_key},
-            timeout=_HTTP_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
-        data: dict[str, object] = response.json()
+        price: float | None = None
+        volume: int | None = None
+        source: str = "yfinance"
 
-        quote = data.get("Global Quote", {})
-        price_str = quote.get("05. price") if isinstance(quote, dict) else None
-        if not price_str:
-            raise ValueError(f"Malformed Alpha Vantage response for {symbol}: {data}")
-
-        volume_str = quote.get("06. volume") if isinstance(quote, dict) else None
-        volume: int | None = int(volume_str) if volume_str else None
-
-        try:
-            records.append(
-                RawPriceRecord(
-                    instrument=symbol,
-                    instrument_type=InstrumentType.CRUDE_FUTURES,
-                    price=float(price_str),
-                    volume=volume,
-                    timestamp=fetch_time,
-                    source="alpha_vantage",
+        # --- Primary: Alpha Vantage ---
+        if api_key:
+            try:
+                response = requests.get(
+                    "https://www.alphavantage.co/query",
+                    params={
+                        "function": "GLOBAL_QUOTE",
+                        "symbol": symbol,
+                        "apikey": api_key,
+                    },
+                    timeout=_HTTP_TIMEOUT_SECONDS,
                 )
+                response.raise_for_status()
+                data: dict[str, object] = response.json()
+                quote = data.get("Global Quote", {})
+                price_str = quote.get("05. price") if isinstance(quote, dict) else None
+                if price_str:
+                    volume_str = quote.get("06. volume") if isinstance(quote, dict) else None
+                    price = float(price_str)
+                    volume = int(volume_str) if volume_str else None
+                    source = "alpha_vantage"
+                else:
+                    logger.warning(
+                        "Alpha Vantage returned no price for %s (free-tier limit?); "
+                        "falling back to yfinance",
+                        symbol,
+                    )
+            except Exception:
+                logger.warning(
+                    "Alpha Vantage request failed for %s; falling back to yfinance",
+                    symbol,
+                    exc_info=True,
+                )
+
+        # --- Fallback: yfinance ---
+        if price is None:
+            yf_price = yf.Ticker(symbol).fast_info.last_price
+            price = _nan_to_none_float(yf_price)
+            if price is None:
+                raise ValueError(f"yfinance returned no price for {symbol}")
+            source = "yfinance"
+            logger.info("Fetched %s price via yfinance fallback: %.4f", symbol, price)
+
+        records.append(
+            RawPriceRecord(
+                instrument=symbol,
+                instrument_type=InstrumentType.CRUDE_FUTURES,
+                price=price,
+                volume=volume,
+                timestamp=fetch_time,
+                source=source,
             )
-        except Exception as exc:
-            raise ValueError(f"Malformed Alpha Vantage response for {symbol}: {data}") from exc
+        )
 
     return records
 
@@ -157,7 +186,7 @@ def fetch_etf_equity_prices() -> list[RawPriceRecord]:
             exhausted (reraise=True via with_retry).
     """
     records: list[RawPriceRecord] = []
-    fetch_time = datetime.now(UTC)
+    fetch_time = datetime.now(tz=UTC)
 
     for symbol, instrument_type in _ETF_EQUITY_INSTRUMENTS:
         try:
@@ -218,7 +247,7 @@ def fetch_options_chain(instruments: list[str]) -> list[OptionRecord]:
         logger.warning("POLYGON_API_KEY not set; falling back to yfinance for options chain data")
 
     records: list[OptionRecord] = []
-    fetch_time = datetime.now(UTC)
+    fetch_time = datetime.now(tz=UTC)
 
     for symbol in instruments:
         ticker = yf.Ticker(symbol)
@@ -270,7 +299,7 @@ def run_ingestion() -> MarketState:
         indicates a fully successful cycle.
         Never raises — even total feed failure returns an empty-but-valid state.
     """
-    start_time = datetime.now(UTC)
+    start_time = datetime.now(tz=UTC)
     prices: list[RawPriceRecord] = []
     options: list[OptionRecord] = []
     errors: list[str] = []
@@ -318,7 +347,7 @@ def run_ingestion() -> MarketState:
             errors.append(f"write_option_records: {exc}")
 
     # --- Assemble MarketState ---
-    snapshot_time = datetime.now(UTC)
+    snapshot_time = datetime.now(tz=UTC)
     state = MarketState(
         snapshot_time=snapshot_time,
         prices=prices,

@@ -95,6 +95,9 @@ def _check_branch_name(metadata: PRMetadata) -> list[ReviewFinding]:
     """
     if metadata.head_branch.startswith("claude/"):
         return []
+    # Protected integration branches are exempt from feature-branch naming.
+    if metadata.head_branch in {"develop", "main"}:
+        return []
     if not _BRANCH_RE.match(metadata.head_branch):
         return [
             ReviewFinding(
@@ -124,6 +127,9 @@ def _check_target_branch(metadata: PRMetadata) -> list[ReviewFinding]:
     Returns:
         List of findings; empty if the target branch is compliant.
     """
+    # develop → main is the valid release path; exempt it.
+    if metadata.base_branch == "main" and metadata.head_branch == "develop":
+        return []
     if metadata.base_branch == "main":
         return [
             ReviewFinding(

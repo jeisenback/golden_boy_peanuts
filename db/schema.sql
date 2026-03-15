@@ -22,7 +22,7 @@
 --   SELECT create_hypertable('options_chain', 'timestamp');
 --
 -- Apply:  psql $DATABASE_URL -f db/schema.sql
--- Verify: \d market_prices    \d options_chain
+-- Verify: \d market_prices    \d options_chain    \d feature_sets    \d strategy_candidates
 -- =============================================================================
 
 
@@ -71,3 +71,44 @@ CREATE TABLE IF NOT EXISTS options_chain (
 
 CREATE INDEX IF NOT EXISTS idx_options_chain_instrument_expiration
     ON options_chain (instrument, expiration_date);
+
+
+-- -----------------------------------------------------------------------------
+-- strategy_candidates
+--
+-- Stores generated strategy candidates from the Strategy Evaluation Agent.
+-- Fields mirror PRD Section 9 output schema and are written by
+-- `write_strategy_candidates()` as part of the Phase 1 pipeline.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS strategy_candidates (
+    id            BIGSERIAL       PRIMARY KEY,
+    instrument    TEXT            NOT NULL,
+    structure     TEXT            NOT NULL CHECK (structure IN ('long_straddle','call_spread','put_spread','calendar_spread')),
+    expiration    INTEGER         NOT NULL,
+    edge_score    NUMERIC(5,4)    NOT NULL CHECK (edge_score BETWEEN 0 AND 1),
+    signals       JSONB           NOT NULL,
+    generated_at  TIMESTAMPTZ     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_candidates_generated_edge
+    ON strategy_candidates (generated_at DESC, edge_score DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- feature_sets
+--
+-- Stores computed FeatureSet snapshots written by the Feature Generation Agent
+-- (write_feature_set). volatility_gaps and feature_errors are JSONB arrays;
+-- sector_dispersion is a coefficient of variation in [0.0, 1.0].
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS feature_sets (
+    id                BIGSERIAL       PRIMARY KEY,
+    snapshot_time     TIMESTAMPTZ     NOT NULL,
+    volatility_gaps   JSONB,
+    sector_dispersion NUMERIC(10, 6),
+    feature_errors    JSONB,
+    computed_at       TIMESTAMPTZ     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_feature_sets_snapshot_time
+    ON feature_sets (snapshot_time DESC);

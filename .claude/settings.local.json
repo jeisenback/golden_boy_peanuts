@@ -1,0 +1,51 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/ -m \"not integration\" -q)",
+      "Bash(git ls-tree:*)",
+      "Bash(git merge:*)",
+      "Bash(gh issue:*)",
+      "Bash(python -m pytest tests/ -m \"not integration\" --cov=src/agents/strategy_evaluation --cov-report=term-missing -q)",
+      "Bash(python -m pytest tests/ -m \"not integration\" --cov=src/agents/feature_generation --cov-report=term-missing -q)",
+      "Bash(gh run:*)",
+      "Bash(python -m ruff check tests/integration/test_strategy_evaluation_integration.py tests/agents/strategy_evaluation/test_strategy_evaluation_agent_integration.py)",
+      "Bash(python -m ruff check tests/integration/test_strategy_evaluation_integration.py tests/agents/strategy_evaluation/test_strategy_evaluation_agent_integration.py tests/agents/feature_generation/test_feature_generation_agent_integration.py)",
+      "Bash(python -m ruff check --fix tests/integration/test_strategy_evaluation_integration.py)",
+      "Bash(python -m ruff check tests/integration/test_strategy_evaluation_integration.py)",
+      "Bash(python -m ruff check tests/)",
+      "Bash(python -m black --diff tests/agents/feature_generation/test_feature_generation_agent_integration.py)",
+      "Bash(python -m black tests/agents/feature_generation/test_feature_generation_agent_integration.py)",
+      "Bash(python -m ruff check tests/agents/feature_generation/test_feature_generation_agent_integration.py)",
+      "Bash(python -m black --check src/ tests/)",
+      "Bash(python -m ruff check src/ tests/)",
+      "Bash(python -m ruff check tests/agents/strategy_evaluation/test_strategy_evaluation_agent_integration.py)",
+      "Bash(python -m black --check tests/agents/strategy_evaluation/test_strategy_evaluation_agent_integration.py)",
+      "Bash(python -m black tests/agents/strategy_evaluation/test_strategy_evaluation_agent_integration.py)",
+      "Bash(gh api:*)",
+      "Bash(xargs grep:*)",
+      "Bash(python -m ruff check tests/pipeline/test_pipeline_integration.py)",
+      "Bash(python -m black --check tests/pipeline/test_pipeline_integration.py)",
+      "Bash(python -m ruff check --fix tests/pipeline/test_pipeline_integration.py)",
+      "Bash(python -m black tests/pipeline/test_pipeline_integration.py)",
+      "Bash(pytest -q -m \"not integration\")",
+      "Bash(python -m ruff check src/pipeline.py)",
+      "Bash(python -m black --check src/pipeline.py)",
+      "Bash(psql postgresql+psycopg2://postgres:password@localhost:5432/energy_options -f db/schema.sql)",
+      "Bash(python -c \":*)",
+      "Bash(set -a)",
+      "Bash(source .env)",
+      "Bash(set +a)",
+      "Bash(python -m ruff check tests/pipeline/test_pipeline_integration.py src/pipeline.py db/schema.sql)",
+      "Bash(python -m black --check tests/pipeline/test_pipeline_integration.py src/pipeline.py)",
+      "Bash(python -m ruff check src/agents/ingestion/ingestion_agent.py)",
+      "Bash(python -m black --check src/agents/ingestion/ingestion_agent.py)",
+      "Bash(python -m ruff check --fix scripts/backfill_prices.py)",
+      "Bash(python -m ruff check scripts/backfill_prices.py)",
+      "Bash(python -m black tests/agents/ingestion/test_ingestion_agent.py)",
+      "Bash(python -m ruff check tests/agents/ingestion/test_ingestion_agent.py)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}

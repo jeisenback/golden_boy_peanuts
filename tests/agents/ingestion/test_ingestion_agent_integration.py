@@ -106,7 +106,7 @@ def _make_price(instrument: str = "CL=F", price: float = 75.50) -> RawPriceRecor
         instrument_type=InstrumentType.CRUDE_FUTURES,
         price=price,
         volume=123456,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(tz=UTC),
         source="test",
     )
 
@@ -120,7 +120,7 @@ def _make_option(instrument: str = "USO", option_type: str = "call") -> OptionRe
         open_interest=500,
         volume=200,
         option_type=option_type,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(tz=UTC),
         source="test",
     )
 

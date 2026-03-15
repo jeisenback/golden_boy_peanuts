@@ -1,0 +1,101 @@
+name: Daily Pipeline Run
+
+# Runs the full Phase 1 pipeline at market close every trading day.
+# 20:00 UTC = 4:00pm ET (accounts for EST; during EDT offset is 16:00 → 20:00 UTC).
+# Weekdays only (1-5 = Monday through Friday).
+#
+# Manual trigger available via workflow_dispatch for ad-hoc runs.
+
+on:
+  schedule:
+    - cron: "0 20 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  run-pipeline:
+    name: Run Phase 1 Pipeline
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: energy_options
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d energy_options"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply schema
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:password@localhost:5432/energy_options
+        run: |
+          python - <<'EOF'
+          import pathlib, sqlalchemy, os
+          e = sqlalchemy.create_engine(os.environ["DATABASE_URL"])
+          with e.begin() as c:
+              c.exec_driver_sql(pathlib.Path("db/schema.sql").read_text())
+          print("Schema applied.")
+          EOF
+
+      - name: Backfill price history if DB is empty
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:password@localhost:5432/energy_options
+          PYTHONPATH: .
+        run: |
+          python - <<'EOF'
+          import os
+          from sqlalchemy import create_engine, text
+          e = create_engine(os.environ["DATABASE_URL"])
+          with e.connect() as conn:
+              count = conn.execute(text("SELECT COUNT(*) FROM market_prices")).scalar()
+          if count == 0:
+              print("market_prices is empty — running backfill (30 trading days)...")
+              import subprocess, sys
+              result = subprocess.run(
+                  [sys.executable, "scripts/backfill_prices.py", "--days", "30"],
+                  check=True,
+              )
+          else:
+              print(f"market_prices has {count} row(s) — skipping backfill.")
+          EOF
+
+      - name: Run pipeline
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:password@localhost:5432/energy_options
+          ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          POLYGON_API_KEY: ${{ secrets.POLYGON_API_KEY }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          PYTHONPATH: .
+        run: |
+          python - <<'EOF'
+          import logging
+          logging.basicConfig(
+              level=logging.INFO,
+              format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+          )
+          from src.pipeline import run_pipeline
+          candidates = run_pipeline()
+          print(f"\nPipeline complete: {len(candidates)} candidate(s)")
+          for c in sorted(candidates, key=lambda x: x.edge_score, reverse=True):
+              print(f"  {c.instrument:6s} {c.structure.value:20s} edge={c.edge_score:.4f}")
+          EOF

@@ -58,28 +58,6 @@ The Sprint Issues table is updated only by:
 
 ---
 
-## Issue Status: GitHub Is Authoritative
-
-The Sprint Issues table above shows sprint scope and the final merged/closed state of each
-issue. It is **not** updated by agents during a sprint.
-
-To see live status for any issue:
-```
-gh issue view <N>                                             # assignee = who has claimed it
-gh issue list --milestone "Sprint 2 — Core Infrastructure" --state open  # full sprint view
-```
-
-An issue is **claimed** when it has an assignee (`gh issue assign <N> --self`).
-The `in-progress` label means actively being worked. The `needs-review` label means PR is open.
-These transitions happen on the GitHub issue — not in this file.
-
-The Sprint Issues table is updated only by:
-- `bash scripts/sprint_start.sh` — writes the initial table at sprint start
-- `bash scripts/sprint_close.sh` — updates final Merged/Closed rows at sprint end
-- Human lead (manual corrections only)
-
----
-
 ## Current Active Branch
 
 none
@@ -150,21 +128,6 @@ Sprint 3 started. Issues #8 and #9 implemented; #8 merged, #9 in review:
 - `#9` — `fetch_etf_equity_prices()`: yfinance fast_info for USO/XLE (ETF) and XOM/CVX (EQUITY); no API key required; per-ticker exceptions logged and re-raised; 5 unit tests. PR #67 open.
 - Pre-existing ruff/black/mypy lint errors from PR #60 fixed on both branches to pass gate.
 - PR #64 merged: chore/fix-workflow-pythonpath — adds PYTHONPATH=. to pr-review and issue-refinement CI workflows.
-
-## Sprint Notes (2026-03-13)
-
-Ad-hoc chore (no issue — retroactively noted):
-- `pr-review/branch-name` — fixed false-positive BLOCKER in `_check_branch_name()`:
-  `claude/` prefixed session branches are now exempt from the `<type>/<issue>-<slug>`
-  convention check. Commit `a848e07` on `claude/system-evaluation-analysis-6WgIJ`.
-  Future: open a proper chore issue if this needs backporting to develop.
-
-Also committed in this session (docs, same branch):
-- ADLC §2b Lightweight Track added (`c360196`) — reduces ceremony for small changes.
-- CLAUDE.md updated to reference §2b in Session Startup step 4 and Your Role section.
-
-Process note: session did not follow CLAUDE.md Before-You-Code checklist (no sprint issue,
-no pytest gate before edits). Corrected going forward.
 
 ## Sprint Notes (2026-03-13)
 
