@@ -42,6 +42,8 @@ jobs:
             --output-dir docs/generated
 
       - name: Commit generated docs to PR branch
+        # Skip push for protected branches (e.g. develop → main release PRs).
+        if: github.head_ref != 'develop'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
