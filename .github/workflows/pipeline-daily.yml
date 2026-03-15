@@ -57,6 +57,28 @@ jobs:
           print("Schema applied.")
           EOF
 
+      - name: Backfill price history if DB is empty
+        env:
+          DATABASE_URL: postgresql+psycopg2://postgres:password@localhost:5432/energy_options
+          PYTHONPATH: .
+        run: |
+          python - <<'EOF'
+          import os
+          from sqlalchemy import create_engine, text
+          e = create_engine(os.environ["DATABASE_URL"])
+          with e.connect() as conn:
+              count = conn.execute(text("SELECT COUNT(*) FROM market_prices")).scalar()
+          if count == 0:
+              print("market_prices is empty — running backfill (30 trading days)...")
+              import subprocess, sys
+              result = subprocess.run(
+                  [sys.executable, "scripts/backfill_prices.py", "--days", "30"],
+                  check=True,
+              )
+          else:
+              print(f"market_prices has {count} row(s) — skipping backfill.")
+          EOF
+
       - name: Run pipeline
         env:
           DATABASE_URL: postgresql+psycopg2://postgres:password@localhost:5432/energy_options
@@ -66,7 +88,7 @@ jobs:
           PYTHONPATH: .
         run: |
           python - <<'EOF'
-          import logging, json
+          import logging
           logging.basicConfig(
               level=logging.INFO,
               format="%(asctime)s %(levelname)s %(name)s — %(message)s",
