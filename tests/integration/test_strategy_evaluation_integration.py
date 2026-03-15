@@ -10,7 +10,7 @@ Prerequisites:
 - `db/schema.sql` present in repository root
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 import pytest
@@ -64,7 +64,7 @@ def test_strategy_evaluation_writes_candidates_and_golden_range() -> None:
                 raise RuntimeError(f"failed to apply schema.sql: {exc}") from exc
 
         # Build a FeatureSet: USO gap=0.1, sector_dispersion=0.1
-        snapshot = datetime.now(tz=datetime.UTC)
+        snapshot = datetime.now(tz=timezone.utc)  # noqa: UP017
         vg = VolatilityGap(
             instrument="USO",
             realized_vol=REALIZED_VOL,
