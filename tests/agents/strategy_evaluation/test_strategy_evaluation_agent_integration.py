@@ -105,13 +105,19 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
                 """)).fetchall()
 
     assert len(rows) >= 1
+
+    # All rows must satisfy edge_score BETWEEN 0 AND 1
+    for row in rows:
+        assert 0.0 <= float(row[3]) <= 1.0, f"edge_score {row[3]} out of [0, 1] for {row[0]}"
+
     instr, _struct, expiration, edge_score, signals_raw, gen_at = rows[0]
     assert instr == "USO"
     assert expiration == 30
     assert 0.0 <= float(edge_score) <= 1.0
     signals = signals_raw if isinstance(signals_raw, dict) else json.loads(signals_raw or "{}")
     assert "volatility_gap" in signals and "sector_dispersion" in signals
-    assert gen_at is not None
+    # generated_at must be timezone-aware (UTC)
+    assert gen_at.tzinfo is not None, "generated_at must be timezone-aware"
 
 
 @pytest.mark.integration
@@ -146,6 +152,12 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     # Check expected falls inside the broad acceptance band
     assert 0.38 <= expected <= 0.58
 
+    # signals dict must label a positive gap as 'positive'
+    uso_signals = uso.signals if isinstance(uso.signals, dict) else json.loads(uso.signals or "{}")
+    assert uso_signals.get("volatility_gap") == "positive", (
+        f"expected volatility_gap='positive' for gap={gap}, got {uso_signals.get('volatility_gap')!r}"
+    )
+
     # Also verify DB persist occurred
     with pg_engine.connect() as conn:
         rows = conn.execute(text("""
@@ -157,3 +169,26 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     assert rows, "Expected persisted USO candidate(s)"
     db_edge = float(rows[0][2])
     assert abs(db_edge - expected) < 1e-3
+
+
+@pytest.mark.integration
+def test_all_signals_none_produces_no_candidates(pg_engine: Engine) -> None:
+    """Golden scenario: FeatureSet with no volatility gaps and no sector dispersion
+    produces edge_score=0.0 for all instruments, which falls below the minimum
+    threshold — so evaluate_strategies() returns an empty list and writes no rows.
+    """
+    fs = _make_feature_set([], sector_dispersion=None)
+
+    with patch(
+        "src.agents.strategy_evaluation.strategy_evaluation_agent.get_engine",
+        return_value=pg_engine,
+    ):
+        candidates = evaluate_strategies(fs)
+
+    assert candidates == [], (
+        f"expected no candidates when all signals are None, got {len(candidates)}"
+    )
+
+    with pg_engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM strategy_candidates")).scalar()
+    assert count == 0, f"expected 0 DB rows when all signals None, got {count}"
