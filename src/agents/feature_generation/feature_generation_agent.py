@@ -47,6 +47,11 @@ _CV_CAP: float = 1.0
 # Guard: mean sector price must exceed this before CV division is safe
 _MEAN_PRICE_ZERO: float = 0.0
 
+# Intensity weights for supply shock probability estimation
+_INTENSITY_WEIGHT_LOW: float = 0.33
+_INTENSITY_WEIGHT_MEDIUM: float = 0.66
+_INTENSITY_WEIGHT_HIGH: float = 1.0
+
 
 def compute_volatility_gap(market_state: MarketState) -> list[VolatilityGap]:
     """
@@ -207,9 +212,9 @@ def compute_supply_shock_probability(events: list[DetectedEvent]) -> float:
 
     # Intensity weights (low, medium, high)
     intensity_weight = {
-        EventIntensity.LOW: 0.33,
-        EventIntensity.MEDIUM: 0.66,
-        EventIntensity.HIGH: 1.0,
+        EventIntensity.LOW: _INTENSITY_WEIGHT_LOW,
+        EventIntensity.MEDIUM: _INTENSITY_WEIGHT_MEDIUM,
+        EventIntensity.HIGH: _INTENSITY_WEIGHT_HIGH,
     }
 
     # Supply-related event types to consider
