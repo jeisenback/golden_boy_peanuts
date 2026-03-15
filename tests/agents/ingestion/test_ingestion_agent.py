@@ -73,42 +73,59 @@ class TestFetchCrudePrices:
         assert result[0].timestamp.tzinfo == UTC
         assert result[0].timestamp == result[1].timestamp
 
-    def test_malformed_response_missing_price_raises_value_error(
+    def test_malformed_response_falls_back_to_yfinance(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """ValueError raised when '05. price' is absent; raw response included in message."""
+        """When Alpha Vantage returns a malformed response, yfinance fallback is used."""
         monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
 
         mock_resp = MagicMock()
         mock_resp.raise_for_status.return_value = None
         mock_resp.json.return_value = {"Global Quote": {}}  # price key missing
 
-        with patch("src.agents.ingestion.ingestion_agent.requests.get", return_value=mock_resp):
-            with patch("time.sleep"):  # suppress tenacity backoff waits
-                with pytest.raises(ValueError, match="Malformed Alpha Vantage response"):
-                    fetch_crude_prices()
+        mock_fast_info = MagicMock()
+        mock_fast_info.last_price = 75.50
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info = mock_fast_info
 
-    def test_malformed_response_missing_global_quote_raises_value_error(
+        with patch("src.agents.ingestion.ingestion_agent.requests.get", return_value=mock_resp):
+            with patch("src.agents.ingestion.ingestion_agent.yf.Ticker", return_value=mock_ticker):
+                result = fetch_crude_prices()
+
+        assert len(result) == 2
+        assert all(r.source == "yfinance" for r in result)
+        assert result[0].price == pytest.approx(75.50)
+
+    def test_missing_api_key_falls_back_to_yfinance(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """ValueError raised when 'Global Quote' key is absent entirely."""
-        monkeypatch.setenv("ALPHA_VANTAGE_API_KEY", "test-key")
-
-        mock_resp = MagicMock()
-        mock_resp.raise_for_status.return_value = None
-        mock_resp.json.return_value = {"Note": "API call frequency exceeded"}
-
-        with patch("src.agents.ingestion.ingestion_agent.requests.get", return_value=mock_resp):
-            with patch("time.sleep"):
-                with pytest.raises(ValueError, match="Malformed Alpha Vantage response"):
-                    fetch_crude_prices()
-
-    def test_missing_api_key_raises_runtime_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """RuntimeError raised immediately when ALPHA_VANTAGE_API_KEY is not set."""
+        """When ALPHA_VANTAGE_API_KEY is unset, yfinance is used without error."""
         monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
 
-        with patch("time.sleep"):
-            with pytest.raises(RuntimeError, match="ALPHA_VANTAGE_API_KEY"):
+        mock_fast_info = MagicMock()
+        mock_fast_info.last_price = 80.0
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info = mock_fast_info
+
+        with patch("src.agents.ingestion.ingestion_agent.yf.Ticker", return_value=mock_ticker):
+            result = fetch_crude_prices()
+
+        assert len(result) == 2
+        assert all(r.source == "yfinance" for r in result)
+
+    def test_both_sources_fail_raises_value_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ValueError raised when both Alpha Vantage and yfinance return no price."""
+        monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
+
+        mock_fast_info = MagicMock()
+        mock_fast_info.last_price = None  # yfinance also returns nothing
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info = mock_fast_info
+
+        with patch("src.agents.ingestion.ingestion_agent.yf.Ticker", return_value=mock_ticker):
+            with pytest.raises(ValueError, match="yfinance returned no price"):
                 fetch_crude_prices()
 
 
