@@ -23,7 +23,12 @@ import os
 from pydantic import ValidationError
 import requests
 
-from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
+from src.agents.event_detection.models import (
+    ClassifyLLMResponse,
+    DetectedEvent,
+    EventIntensity,
+    EventType,
+)
 from src.core.llm_wrapper import LLMWrapper
 from src.core.retry import with_retry
 
@@ -43,6 +48,7 @@ _GDELT_TIMESPAN_MINUTES: int = 1440  # 24 hours
 
 # LLM model for event classification — Haiku for speed and cost efficiency
 _CLASSIFY_MODEL_ID: str = "claude-haiku-4-5-20251001"
+_CLASSIFY_MAX_TOKENS: int = 256
 
 # Prompt template for LLM event classification (kept ≤ 500 tokens)
 _CLASSIFY_PROMPT_TEMPLATE: str = """\
@@ -186,6 +192,27 @@ def fetch_gdelt_events() -> list[dict[str, object]]:
     return articles
 
 
+@with_retry()
+def _call_llm_classify(prompt: str) -> str:
+    """
+    Invoke the LLM and return the raw text response.
+
+    Decorated with @with_retry() so transient network/rate-limit errors are
+    retried before propagating to classify_event.
+
+    Args:
+        prompt: Formatted classification prompt.
+
+    Returns:
+        Raw string content from the LLM response.
+
+    Raises:
+        requests.HTTPError / tenacity.RetryError: After all retry attempts.
+    """
+    llm = LLMWrapper(model_id=_CLASSIFY_MODEL_ID)
+    return llm.complete(prompt, temperature=0.0, max_tokens=_CLASSIFY_MAX_TOKENS).content
+
+
 def classify_event(article: dict[str, object]) -> DetectedEvent | None:
     """
     Classify a raw article dict into a typed, scored DetectedEvent using an LLM.
@@ -224,11 +251,18 @@ def classify_event(article: dict[str, object]) -> DetectedEvent | None:
     )
 
     try:
-        llm = LLMWrapper(model_id=_CLASSIFY_MODEL_ID)
-        response = llm.complete(prompt, temperature=0.0, max_tokens=256)
-        parsed: dict[str, object] = json.loads(response.content)
+        raw_content = _call_llm_classify(prompt)
+        parsed_dict: object = json.loads(raw_content)
+        classified = ClassifyLLMResponse.model_validate(parsed_dict)
     except json.JSONDecodeError:
         logger.warning("classify_event: LLM returned non-JSON for event_id=%s; skipping", event_id)
+        return None
+    except ValidationError:
+        logger.warning(
+            "classify_event: LLM response failed schema validation for event_id=%s; skipping",
+            event_id,
+            exc_info=True,
+        )
         return None
     except Exception:
         logger.warning(
@@ -238,7 +272,7 @@ def classify_event(article: dict[str, object]) -> DetectedEvent | None:
         )
         return None
 
-    if not parsed.get("is_relevant", True):
+    if not classified.is_relevant:
         logger.debug("classify_event: article not relevant, event_id=%s", event_id)
         return None
 
@@ -252,25 +286,21 @@ def classify_event(article: dict[str, object]) -> DetectedEvent | None:
     except ValueError:
         detected_at = datetime.now(tz=UTC)
 
-    raw_instruments = parsed.get("affected_instruments", [])
-    instruments: list[str] = (
-        [str(i) for i in raw_instruments] if isinstance(raw_instruments, list) else []
-    )
     try:
         event = DetectedEvent(
             event_id=event_id,
-            event_type=EventType(str(parsed.get("event_type", "unknown"))),
-            description=str(parsed.get("description", title)),
+            event_type=EventType(classified.event_type),
+            description=classified.description,
             source=source_name,
-            confidence_score=float(parsed.get("confidence_score", 0.5)),  # type: ignore[arg-type]
-            intensity=EventIntensity(str(parsed.get("intensity", "low"))),
+            confidence_score=classified.confidence_score,
+            intensity=EventIntensity(classified.intensity),
             detected_at=detected_at,
-            affected_instruments=instruments,
+            affected_instruments=classified.affected_instruments,
             raw_headline=title,
         )
     except (ValidationError, TypeError, ValueError):
         logger.warning(
-            "classify_event: Pydantic validation failed for event_id=%s; skipping",
+            "classify_event: DetectedEvent construction failed for event_id=%s; skipping",
             event_id,
             exc_info=True,
         )
