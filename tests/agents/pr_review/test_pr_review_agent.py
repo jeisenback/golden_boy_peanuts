@@ -93,12 +93,11 @@ class TestCheckBranchName:
         findings = _check_branch_name(meta)
         assert len(findings) == 1
 
-    def test_claude_branch_prefix_fails(self) -> None:
-        # claude/* branches are agent scaffolding, not SDLC branches
+    def test_claude_branch_prefix_exempt(self) -> None:
+        # claude/* branches are system-assigned session branches — exempt from SDLC naming
         meta = _make_metadata(head_branch="claude/create-pr-review-agent-4c3hy")
         findings = _check_branch_name(meta)
-        assert len(findings) == 1
-        assert findings[0].severity == ReviewSeverity.BLOCKER
+        assert len(findings) == 0  # exempted, no blocker
 
 
 # ---------------------------------------------------------------------------
