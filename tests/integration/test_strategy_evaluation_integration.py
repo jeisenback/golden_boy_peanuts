@@ -7,14 +7,18 @@ import pytest
 # Run integrations only in CI (local machines often lack testcontainers support).
 # Guard must come before testcontainers import so ImportError doesn't fire first.
 if not os.environ.get("CI"):
-    pytest.skip("Integration tests run in CI only. Set CI=1 to run locally.", allow_module_level=True)
+    pytest.skip(
+        "Integration tests run in CI only. Set CI=1 to run locally.",
+        allow_module_level=True,
+    )
 
 from sqlalchemy import create_engine, text  # noqa: E402
-
 from testcontainers.postgres import PostgresContainer  # noqa: E402
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap  # noqa: E402
-from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies  # noqa: E402
+from src.agents.strategy_evaluation.strategy_evaluation_agent import (  # noqa: E402
+    evaluate_strategies,
+)
 
 # Named constants — avoid magic numbers in assertions
 USO_REALIZED_VOL: float = 0.2
@@ -74,5 +78,6 @@ def test_strategy_evaluation_writes_candidates_and_golden_range() -> None:
 
         edge_score = float(long_rows[0][2])
         assert EDGE_SCORE_LOW <= edge_score <= EDGE_SCORE_HIGH, (
-            f"edge_score {edge_score} outside golden range [{EDGE_SCORE_LOW}, {EDGE_SCORE_HIGH}]"
+            f"edge_score {edge_score} outside golden range"
+            f" [{EDGE_SCORE_LOW}, {EDGE_SCORE_HIGH}]"
         )
