@@ -21,6 +21,8 @@ import pandas as pd
 DEFAULT_ROLLING_WINDOW: int = 14  # default rolling window (days)
 ROLLING_MIN_PERIODS_FLOOR: int = 3  # minimum observations for rolling stats
 MIN_PERIODS_DIVISOR: int = 4  # divisor to compute adaptive min_periods from window
+DEFAULT_ZSCORE_THRESHOLD: float = 2.0  # z-score threshold for GDELT burst detection
+REALIZED_RETURN_MIN_PERIODS: int = 1  # min_periods for realized return rolling sum
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +93,9 @@ def load_prices(path: pathlib.Path) -> pd.DataFrame:
 
 
 def detect_events(
-    gdelt: pd.DataFrame, window: int = DEFAULT_ROLLING_WINDOW, threshold: float = 2.0
+    gdelt: pd.DataFrame,
+    window: int = DEFAULT_ROLLING_WINDOW,
+    threshold: float = DEFAULT_ZSCORE_THRESHOLD,
 ) -> pd.Series:
     """Detect volume burst events using a rolling z-score on article counts.
 
@@ -106,7 +110,11 @@ def detect_events(
     s = gdelt["articles"].astype(float)
     minp = max(ROLLING_MIN_PERIODS_FLOOR, window // MIN_PERIODS_DIVISOR)
     mu = s.rolling(window=window, min_periods=minp).mean()
-    sigma = s.rolling(window=window, min_periods=minp).std().replace(0, np.nan)
+    sigma = s.rolling(window=window, min_periods=minp).std()
+    # Warn operators if rolling std contains zeros — indicates degenerate window
+    if (sigma == 0).any():
+        logger.warning("detect_events: rolling std contains zero values in window=%s; replacing with NaN", window)
+    sigma = sigma.replace(0, np.nan)
     z = (s - mu) / sigma
     return z.fillna(0) > threshold
 
@@ -122,7 +130,11 @@ def realized_abs_return_series(prices: pd.DataFrame, hold: int) -> pd.Series:
         Series of realized absolute returns aligned to the window start.
     """
     abs_ret = prices["ret"].abs()
-    return abs_ret.rolling(window=hold, min_periods=1).sum().shift(-hold + 1)
+    return (
+        abs_ret.rolling(window=hold, min_periods=REALIZED_RETURN_MIN_PERIODS)
+        .sum()
+        .shift(-hold + 1)
+    )
 
 
 def _stats(s: pd.Series) -> dict[str, Any]:
@@ -150,64 +162,94 @@ def evaluate(
     out_events: pathlib.Path | None = None,
     plot: bool = False,
 ) -> dict[str, Any]:
-    gd = load_gdelt(gdelt_path)
-    pr = load_prices(prices_path)
+    """Evaluate GDELT-driven realized-return separation.
 
-    events = detect_events(gd, window=DEFAULT_ROLLING_WINDOW, threshold=threshold)
+    Runs a backtest that detects volume burst events in `gdelt_path` and
+    computes forward realized absolute returns from `prices_path` over a
+    `hold`-day horizon. The function returns summary statistics for event and
+    non-event realized returns along with the input parameters.
 
-    # Align dates robustly: compute union index and reindex prices (ffill closes)
-    union_idx = gd.index.union(pr.index).sort_values()
-    pr_reindexed = pr.reindex(union_idx).ffill()
-    rv = realized_abs_return_series(pr_reindexed, hold=hold)
+    Args:
+        gdelt_path: Path to GDELT CSV with an `articles` column.
+        prices_path: Path to prices CSV with a `close` column.
+        threshold: Z-score threshold used to flag GDELT volume events.
+        hold: Number of days used to compute realized absolute returns.
+        out_events: Optional path to write per-event CSV rows.
+        plot: If True, save diagnostic plots to `backtests/`.
 
-    df = pd.DataFrame(
-        {
-            "articles": gd["articles"].reindex(union_idx),
-            "event": events.reindex(union_idx).fillna(False),
+    Returns:
+        A dict containing `threshold`, `hold_days`, `events`, and `non_events`
+        summary statistics (count, mean, median, std).
+    """
+
+    try:
+        gd = load_gdelt(gdelt_path)
+        pr = load_prices(prices_path)
+
+        events = detect_events(gd, window=DEFAULT_ROLLING_WINDOW, threshold=threshold)
+
+        # Align dates robustly: compute union index and reindex prices (ffill closes)
+        union_idx = gd.index.union(pr.index).sort_values()
+        pr_reindexed = pr.reindex(union_idx).ffill()
+        rv = realized_abs_return_series(pr_reindexed, hold=hold)
+
+        df = pd.DataFrame(
+            {
+                "articles": gd["articles"].reindex(union_idx),
+                "event": events.reindex(union_idx).fillna(False),
+            }
+        )
+        df = df.join(pr_reindexed["close"], how="left")
+        df = df.join(rv.rename("realized_abs_return"), how="left")
+
+        # drop rows without realized returns (end of series)
+        df = df.dropna(subset=["realized_abs_return"]).copy()
+
+        event_rows = df[df["event"]]
+        non_event_rows = df[~df["event"]]
+
+        out = {
+            "threshold": threshold,
+            "hold_days": hold,
+            "events": _stats(event_rows["realized_abs_return"]),
+            "non_events": _stats(non_event_rows["realized_abs_return"]),
         }
-    )
-    df = df.join(pr_reindexed["close"], how="left")
-    df = df.join(rv.rename("realized_abs_return"), how="left")
 
-    # drop rows without realized returns (end of series)
-    df = df.dropna(subset=["realized_abs_return"]).copy()
+        # Optional: write per-event CSV
+        if out_events and event_rows.shape[0] > 0:
+            event_rows_to_save = event_rows[["articles", "close", "realized_abs_return"]].reset_index()
+            event_rows_to_save.to_csv(out_events, index=False)
 
-    event_rows = df[df["event"]]
-    non_event_rows = df[~df["event"]]
+        # Optional plotting (import locally to avoid matplotlib as strict dependency)
+        if plot:
+            try:
+                import matplotlib.pyplot as plt
 
-    out = {
-        "threshold": threshold,
-        "hold_days": hold,
-        "events": _stats(event_rows["realized_abs_return"]),
-        "non_events": _stats(non_event_rows["realized_abs_return"]),
-    }
+                fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+                ax[0].plot(df.index, df["articles"], label="articles")
+                ax[0].scatter(event_rows.index, event_rows["articles"], color="red", label="events")
+                ax[0].legend()
+                ax[1].plot(df.index, df["realized_abs_return"], label="realized_abs_return")
+                ax[1].legend()
+                fig.tight_layout()
+                fig_path = (
+                    pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
+                )
+                fig.savefig(fig_path)
+            except Exception as e:
+                # plotting is optional; log and continue
+                logger.warning("Plotting failed: %s", e)
 
-    # Optional: write per-event CSV
-    if out_events and event_rows.shape[0] > 0:
-        event_rows_to_save = event_rows[["articles", "close", "realized_abs_return"]].reset_index()
-        event_rows_to_save.to_csv(out_events, index=False)
-
-    # Optional plotting (import locally to avoid matplotlib as strict dependency)
-    if plot:
-        try:
-            import matplotlib.pyplot as plt
-
-            fig, ax = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
-            ax[0].plot(df.index, df["articles"], label="articles")
-            ax[0].scatter(event_rows.index, event_rows["articles"], color="red", label="events")
-            ax[0].legend()
-            ax[1].plot(df.index, df["realized_abs_return"], label="realized_abs_return")
-            ax[1].legend()
-            fig.tight_layout()
-            fig_path = (
-                pathlib.Path("backtests") / f"gdelt_backtest_threshold_{threshold}_hold_{hold}.png"
-            )
-            fig.savefig(fig_path)
-        except Exception as e:
-            # plotting is optional; log and continue
-            logger.warning("Plotting failed: %s", e)
-
-    return out
+        return out
+    except Exception:
+        logger.exception(
+            "evaluate() failed: gdelt=%s prices=%s threshold=%s hold=%s",
+            gdelt_path,
+            prices_path,
+            threshold,
+            hold,
+        )
+        raise
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -6,11 +6,12 @@ repos:
         args: ["--baseline", ".secrets.baseline"]
 
   - repo: https://github.com/psf/black
-    rev: stable
+    rev: 26.1.0
     hooks:
       - id: black
 
-  - repo: https://github.com/charliermarsh/ruff
-    rev: v0.18.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
     hooks:
       - id: ruff
+        args: [--fix]
