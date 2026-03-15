@@ -96,9 +96,7 @@ class TestFetchCrudePrices:
         assert all(r.source == "yfinance" for r in result)
         assert result[0].price == pytest.approx(75.50)
 
-    def test_missing_api_key_falls_back_to_yfinance(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_api_key_falls_back_to_yfinance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """When ALPHA_VANTAGE_API_KEY is unset, yfinance is used without error."""
         monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
 
@@ -113,9 +111,7 @@ class TestFetchCrudePrices:
         assert len(result) == 2
         assert all(r.source == "yfinance" for r in result)
 
-    def test_both_sources_fail_raises_value_error(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_both_sources_fail_raises_value_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """ValueError raised when both Alpha Vantage and yfinance return no price."""
         monkeypatch.delenv("ALPHA_VANTAGE_API_KEY", raising=False)
 
