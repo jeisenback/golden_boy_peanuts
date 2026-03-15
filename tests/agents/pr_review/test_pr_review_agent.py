@@ -93,6 +93,10 @@ class TestCheckBranchName:
         findings = _check_branch_name(meta)
         assert len(findings) == 1
 
+    def test_valid_infra_branch_passes(self) -> None:
+        meta = _make_metadata(head_branch="infra/100-detected-events-schema")
+        assert _check_branch_name(meta) == []
+
     def test_claude_branch_prefix_exempt(self) -> None:
         # claude/* branches are system-assigned session branches — exempt from SDLC naming
         meta = _make_metadata(head_branch="claude/create-pr-review-agent-4c3hy")
