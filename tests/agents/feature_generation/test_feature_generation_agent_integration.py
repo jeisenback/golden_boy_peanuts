@@ -328,14 +328,10 @@ def test_run_feature_generation_writes_feature_set(pg_engine: Engine) -> None:
 
 
 @pytest.mark.integration
-def test_run_feature_generation_partial_failure_populates_feature_errors(
-    pg_engine: Engine,
-) -> None:
+def test_run_feature_generation_happy_path_no_feature_errors(pg_engine: Engine) -> None:
     """
-    With the supply-shock estimator implemented, run_feature_generation() should
-    compute a numeric `supply_shock_probability` (possibly 0.0) and not record
-    a compute_supply_shock_probability error in `feature_errors` for the happy
-    path where no supply events are present.
+    Happy path: all signal computations succeed → feature_errors is empty in
+    both the returned FeatureSet and the persisted DB row.
     """
     _seed_prices(pg_engine, "USO", _GOLDEN_PRICES)
     market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
@@ -343,15 +339,57 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
     with patch(_PATCH_ENGINE, return_value=pg_engine):
         feature_set = run_feature_generation(market_state, events=[])
 
-    # supply_shock now returns a numeric probability (no error recorded)
+    assert (
+        feature_set.feature_errors == []
+    ), f"expected no feature_errors on happy path, got {feature_set.feature_errors}"
     assert feature_set.supply_shock_probability is not None
-    assert not any("compute_supply_shock_probability" in e for e in feature_set.feature_errors)
 
     with pg_engine.connect() as conn:
         row = conn.execute(text("SELECT feature_errors FROM feature_sets LIMIT 1")).fetchone()
-
     assert row is not None
     errors_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-    assert isinstance(errors_data, list)
-    # No compute_supply_shock_probability error expected for empty events
-    assert not any("compute_supply_shock_probability" in e for e in errors_data)
+    assert errors_data == []
+
+
+@pytest.mark.integration
+def test_run_feature_generation_partial_failure_populates_feature_errors(
+    pg_engine: Engine,
+) -> None:
+    """
+    Partial signal failure: compute_volatility_gap raises → feature_errors is
+    non-empty in both the FeatureSet and the persisted DB row; other signals
+    still computed and FeatureSet still written (degraded-mode guarantee).
+
+    AC covered (issue #16):
+    - partial signal failure → feature_errors non-empty in DB row
+    """
+    _seed_prices(pg_engine, "USO", _GOLDEN_PRICES)
+    market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
+
+    _patch_vol_gap = "src.agents.feature_generation.feature_generation_agent.compute_volatility_gap"
+    with (
+        patch(_PATCH_ENGINE, return_value=pg_engine),
+        patch(_patch_vol_gap, side_effect=RuntimeError("simulated vol gap failure")),
+    ):
+        feature_set = run_feature_generation(market_state, events=[])
+
+    # feature_errors must be non-empty and mention the failed signal
+    assert feature_set.feature_errors, "expected feature_errors to be non-empty after failure"
+    assert any(
+        "compute_volatility_gap" in e for e in feature_set.feature_errors
+    ), f"expected 'compute_volatility_gap' in feature_errors, got {feature_set.feature_errors}"
+    # Other signals still computed — degraded mode, no cascade failure
+    assert feature_set.volatility_gaps == []
+    assert feature_set.supply_shock_probability is not None
+
+    # DB row still written despite partial failure
+    with pg_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT feature_errors, volatility_gaps FROM feature_sets LIMIT 1")
+        ).fetchone()
+    assert row is not None, "expected FeatureSet written to DB even on partial failure"
+    errors_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+    assert (
+        isinstance(errors_data, list) and len(errors_data) >= 1
+    ), f"expected non-empty feature_errors in DB, got {errors_data}"
+    assert any("compute_volatility_gap" in e for e in errors_data)

@@ -33,10 +33,10 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 # Named constants for golden dataset acceptance criteria (issue #19)
-_GOLDEN_EDGE_SCORE_MIN: float = 0.38   # lower bound of acceptable USO edge_score range
-_GOLDEN_EDGE_SCORE_MAX: float = 0.58   # upper bound of acceptable USO edge_score range
-_EDGE_SCORE_FLOOR: float = 0.0         # minimum valid edge_score (schema constraint)
-_EDGE_SCORE_CEIL: float = 1.0          # maximum valid edge_score (schema constraint)
+_GOLDEN_EDGE_SCORE_MIN: float = 0.38  # lower bound of acceptable USO edge_score range
+_GOLDEN_EDGE_SCORE_MAX: float = 0.58  # upper bound of acceptable USO edge_score range
+_EDGE_SCORE_FLOOR: float = 0.0  # minimum valid edge_score (schema constraint)
+_EDGE_SCORE_CEIL: float = 1.0  # maximum valid edge_score (schema constraint)
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS strategy_candidates (
@@ -174,7 +174,8 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     # signals dict must label a positive gap as 'positive'
     uso_signals = uso.signals if isinstance(uso.signals, dict) else json.loads(uso.signals or "{}")
     assert uso_signals.get("volatility_gap") == "positive", (
-        f"expected volatility_gap='positive' for gap={gap}, got {uso_signals.get('volatility_gap')!r}"
+        f"expected volatility_gap='positive' for gap={gap}, "
+        f"got {uso_signals.get('volatility_gap')!r}"
     )
 
     # Also verify DB persist occurred
@@ -204,9 +205,9 @@ def test_all_signals_none_produces_no_candidates(pg_engine: Engine) -> None:
     ):
         candidates = evaluate_strategies(fs)
 
-    assert candidates == [], (
-        f"expected no candidates when all signals are None, got {len(candidates)}"
-    )
+    assert (
+        candidates == []
+    ), f"expected no candidates when all signals are None, got {len(candidates)}"
 
     with pg_engine.connect() as conn:
         count = conn.execute(text("SELECT COUNT(*) FROM strategy_candidates")).scalar()
