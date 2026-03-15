@@ -107,17 +107,33 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
         try:
             structure = OptionStructure(structure_raw)
         except Exception:
-            # Fallback: treat unknown structure as long_straddle
+            logger.warning(
+                "read_top_candidates: unknown structure value %r for instrument %s; "
+                "falling back to LONG_STRADDLE",
+                structure_raw,
+                instrument,
+            )
             structure = OptionStructure.LONG_STRADDLE
 
-        candidate = StrategyCandidate(
-            instrument=instrument,
-            structure=structure,
-            expiration=expiration,
-            edge_score=edge_score,
-            signals=signals,
-            generated_at=generated_at,
-        )
+        try:
+            candidate = StrategyCandidate(
+                instrument=instrument,
+                structure=structure,
+                expiration=expiration,
+                edge_score=edge_score,
+                signals=signals,
+                generated_at=generated_at,
+            )
+        except Exception:
+            logger.warning(
+                "read_top_candidates: skipping malformed row for instrument %s "
+                "(edge_score=%s, structure=%s)",
+                instrument,
+                edge_score,
+                structure,
+                exc_info=True,
+            )
+            continue
         result.append(candidate)
 
     return result

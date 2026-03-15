@@ -64,7 +64,7 @@ def _run(cmd: list[str], check: bool = True) -> str:
     Raises:
         subprocess.CalledProcessError: On non-zero exit when check=True.
     """
-    result = subprocess.run(cmd, capture_output=True, text=True, check=check)
+    result = subprocess.run(cmd, capture_output=True, text=True, check=check)  # noqa: S603
     return result.stdout.strip()
 
 
@@ -241,27 +241,28 @@ def main() -> int:
     # Run DoR check
     result = refine_issue(metadata)
 
-    # Print summary to stdout
-    print("\n" + "=" * 70)
-    print(
-        f"Issue #{result.issue_number} DoR Check — "
-        f"{result.refined_at.strftime('%Y-%m-%d %H:%M UTC')}"
+    # Log summary to stdout via logger
+    logger.info("%s", "\n" + "=" * 70)
+    logger.info(
+        "Issue #%d DoR Check — %s",
+        result.issue_number,
+        result.refined_at.strftime("%Y-%m-%d %H:%M UTC"),
     )
-    print("=" * 70)
-    print(result.summary)
+    logger.info("%s", "=" * 70)
+    logger.info(result.summary)
 
     if result.findings:
-        print(f"\nFindings ({len(result.findings)}):")
+        logger.info("Findings (%d):", len(result.findings))
         for f in result.findings:
             emoji = _SEVERITY_EMOJI.get(f.severity, "")
-            print(f"  {emoji} [{f.severity.value.upper()}] {f.rule} @ {f.location}")
-            print(f"     {f.message}")
+            logger.info("  %s [%s] %s @ %s", emoji, f.severity.value.upper(), f.rule, f.location)
+            logger.info("     %s", f.message)
             if f.suggestion:
-                print(f"     → {f.suggestion}")
+                logger.info("     → %s", f.suggestion)
     else:
-        print("\nNo findings — issue is DoR ready.")
+        logger.info("No findings — issue is DoR ready.")
 
-    print("=" * 70 + "\n")
+    logger.info("%s", "=" * 70 + "\n")
 
     # Optionally post comment and update labels
     if args.post_comment:
