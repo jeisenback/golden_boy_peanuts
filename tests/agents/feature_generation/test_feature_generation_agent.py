@@ -54,7 +54,7 @@ def _make_price_record(instrument: str = "USO", price: float = 103.0) -> RawPric
         instrument=instrument,
         instrument_type=InstrumentType.ETF,
         price=price,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(tz=UTC),
         source="test",
     )
 
@@ -71,7 +71,7 @@ def _make_option(
         expiration_date=datetime.strptime(expiry, "%Y-%m-%d").replace(tzinfo=UTC),
         implied_volatility=iv,
         option_type="call",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(tz=UTC),
         source="test",
     )
 
@@ -82,7 +82,7 @@ def _make_market_state(
     options: list[OptionRecord] | None = None,
 ) -> MarketState:
     return MarketState(
-        snapshot_time=datetime.now(UTC),
+        snapshot_time=datetime.now(tz=UTC),
         prices=[_make_price_record(instrument, price)],
         options=options if options is not None else [_make_option(instrument)],
     )
@@ -221,12 +221,12 @@ def _make_sector_state(prices: dict[str, float]) -> MarketState:
             instrument=instr,
             instrument_type=_SECTOR_TYPES[instr],
             price=price,
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(tz=UTC),
             source="test",
         )
         for instr, price in prices.items()
     ]
-    return MarketState(snapshot_time=datetime.now(UTC), prices=records, options=[])
+    return MarketState(snapshot_time=datetime.now(tz=UTC), prices=records, options=[])
 
 
 class TestComputeSectorDispersion:
@@ -274,27 +274,27 @@ class TestComputeSectorDispersion:
     def test_non_sector_instruments_are_ignored(self) -> None:
         """CL=F and BZ=F prices do not influence the sector CV."""
         state = MarketState(
-            snapshot_time=datetime.now(UTC),
+            snapshot_time=datetime.now(tz=UTC),
             prices=[
                 RawPriceRecord(
                     instrument="CL=F",
                     instrument_type=InstrumentType.CRUDE_FUTURES,
                     price=9999.0,  # would dominate if included
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(tz=UTC),
                     source="test",
                 ),
                 RawPriceRecord(
                     instrument="XOM",
                     instrument_type=InstrumentType.EQUITY,
                     price=100.0,
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(tz=UTC),
                     source="test",
                 ),
                 RawPriceRecord(
                     instrument="CVX",
                     instrument_type=InstrumentType.EQUITY,
                     price=100.0,
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(tz=UTC),
                     source="test",
                 ),
             ],
