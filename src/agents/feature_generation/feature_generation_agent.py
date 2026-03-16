@@ -21,11 +21,14 @@ import logging
 import math
 import statistics
 
+import yfinance as yf
+
 from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.db import read_price_history, write_feature_set
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.ingestion.models import MarketState, OptionRecord
 from src.core.db import get_engine
+from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +49,86 @@ _CV_CAP: float = 1.0
 
 # Guard: mean sector price must exceed this before CV division is safe
 _MEAN_PRICE_ZERO: float = 0.0
+
+# Front-month WTI futures instrument in market_state.prices
+_FRONT_MONTH_INSTRUMENT: str = "CL=F"
+
+# Second-month WTI futures ticker for yfinance fetch
+_SECOND_MONTH_TICKER: str = "CLG=F"
+
+
+@with_retry()
+def _fetch_second_month_price(ticker: str = _SECOND_MONTH_TICKER) -> float:
+    """Fetch the second-month WTI futures price via yfinance.
+
+    Decorated with @with_retry() so transient network failures are retried
+    before propagating to compute_futures_curve_steepness.
+
+    Args:
+        ticker: yfinance ticker symbol for the second-month contract.
+
+    Returns:
+        Last price as a float.
+
+    Raises:
+        RuntimeError: If yfinance returns no price data.
+    """
+    info = yf.Ticker(ticker).fast_info
+    price: float | None = getattr(info, "last_price", None)
+    if price is None:
+        raise RuntimeError(f"yfinance returned no price for {ticker}")
+    return float(price)
+
+
+def compute_futures_curve_steepness(market_state: MarketState) -> float | None:
+    """Compute WTI futures curve slope from front-month and second-month prices.
+
+    Formula: (second_month - front_month) / front_month
+
+    Positive values indicate contango (second month > front month);
+    negative values indicate backwardation (typical during supply constraints).
+
+    Args:
+        market_state: Current validated market snapshot from Ingestion Agent.
+
+    Returns:
+        Normalized spread as a float, or None if front-month price is absent
+        from market_state or the second-month fetch fails (WARNING logged).
+    """
+    front_record = next(
+        (r for r in market_state.prices if r.instrument == _FRONT_MONTH_INSTRUMENT),
+        None,
+    )
+    if front_record is None:
+        logger.warning(
+            "Front-month instrument %s not in market_state.prices — "
+            "cannot compute futures curve steepness",
+            _FRONT_MONTH_INSTRUMENT,
+        )
+        return None
+
+    front_price = front_record.price
+    if front_price <= 0.0 or not math.isfinite(front_price):
+        logger.warning(
+            "Front-month price %s is non-positive or non-finite — "
+            "cannot compute futures curve steepness",
+            front_price,
+        )
+        return None
+
+    try:
+        second_price = _fetch_second_month_price()
+    except Exception as exc:
+        logger.warning(
+            "Failed to fetch second-month price (%s): %s — "
+            "cannot compute futures curve steepness",
+            _SECOND_MONTH_TICKER,
+            exc,
+        )
+        return None
+
+    return (second_price - front_price) / front_price
+
 
 # Type weights for supply shock probability (issue #106)
 # Event-type weights for supply shock probability estimation.
@@ -251,6 +334,7 @@ def run_feature_generation(
     feature_errors: list[str] = []
     volatility_gaps: list[VolatilityGap] = []
     sector_dispersion: float | None = None
+    futures_curve_steepness: float | None = None
     supply_shock_probability: float | None = None
 
     try:
@@ -268,6 +352,13 @@ def run_feature_generation(
         feature_errors.append(msg)
 
     try:
+        futures_curve_steepness = compute_futures_curve_steepness(market_state)
+    except Exception as exc:
+        msg = f"compute_futures_curve_steepness failed: {exc}"
+        logger.warning(msg)
+        feature_errors.append(msg)
+
+    try:
         supply_shock_probability = compute_supply_shock_probability(events)
     except Exception as exc:
         msg = f"compute_supply_shock_probability failed: {exc}"
@@ -278,6 +369,7 @@ def run_feature_generation(
         snapshot_time=market_state.snapshot_time,
         volatility_gaps=volatility_gaps,
         sector_dispersion=sector_dispersion,
+        futures_curve_steepness=futures_curve_steepness,
         supply_shock_probability=supply_shock_probability,
         feature_errors=feature_errors,
     )

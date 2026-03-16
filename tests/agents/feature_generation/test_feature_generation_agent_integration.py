@@ -40,11 +40,11 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
+from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.feature_generation.feature_generation_agent import (
     compute_volatility_gap,
     run_feature_generation,
 )
-from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.ingestion.models import InstrumentType, MarketState, OptionRecord, RawPriceRecord
 
 # A single high-confidence supply disruption event for tests that assert supply_shock_probability
