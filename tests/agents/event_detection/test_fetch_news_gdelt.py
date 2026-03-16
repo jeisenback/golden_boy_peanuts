@@ -8,6 +8,7 @@ are mocked via unittest.mock.patch so no API keys or connectivity are required.
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 
@@ -167,7 +168,7 @@ class TestFetchGdeltEvents:
         with patch("requests.get", return_value=mock_resp) as mock_get:
             fetch_gdelt_events()
         url = mock_get.call_args.args[0]
-        assert url.startswith("http://api.gdeltproject.org")
+        assert urlparse(url).netloc == "api.gdeltproject.org"
 
     def test_malformed_seendate_preserved_as_is(self) -> None:
         """Articles with unparseable seendate are included with the raw value."""
