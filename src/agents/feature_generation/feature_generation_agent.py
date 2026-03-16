@@ -47,10 +47,28 @@ _CV_CAP: float = 1.0
 # Guard: mean sector price must exceed this before CV division is safe
 _MEAN_PRICE_ZERO: float = 0.0
 
-# Intensity weights for supply shock probability estimation
-_INTENSITY_WEIGHT_LOW: float = 0.33
-_INTENSITY_WEIGHT_MEDIUM: float = 0.66
-_INTENSITY_WEIGHT_HIGH: float = 1.0
+# Type weights for supply shock probability (issue #106)
+# Event-type weights for supply shock probability estimation.
+# Values reflect domain calibration of relative market impact severity
+# (issue #106): supply disruptions and refinery outages are direct supply
+# shocks; geopolitical/sanctions are indirect; unknown events are near-zero.
+_TYPE_WEIGHT: dict[str, float] = {
+    "supply_disruption": 1.0,
+    "refinery_outage": 0.9,
+    "tanker_chokepoint": 0.7,
+    "geopolitical": 0.5,
+    "sanctions": 0.4,
+    "unknown": 0.1,
+}
+
+# Intensity weights for supply shock probability estimation.
+# Values calibrated per issue #106: high=1.0 (full weight), medium=0.6,
+# low=0.3 (rounded from prior 0.66/0.33 to cleaner calibration points).
+_INTENSITY_WEIGHT: dict[str, float] = {
+    "high": 1.0,
+    "medium": 0.6,  # rounded from 0.66 per issue #106 calibration
+    "low": 0.3,  # rounded from 0.33 per issue #106 calibration
+}
 
 
 def compute_volatility_gap(market_state: MarketState) -> list[VolatilityGap]:
@@ -182,68 +200,33 @@ def compute_sector_dispersion(market_state: MarketState) -> float | None:
     return min(cv, _CV_CAP)
 
 
-def compute_supply_shock_probability(events: list[DetectedEvent]) -> float:
+def compute_supply_shock_probability(events: list[DetectedEvent]) -> float | None:
     """
-    Estimate supply shock probability based on detected events.
+    Estimate supply shock probability from a list of DetectedEvent objects.
+
+    Score formula: for each event, compute
+        weight = TYPE_WEIGHT[event_type] * INTENSITY_WEIGHT[intensity] * confidence_score
+    Sum all weights and cap the result at 1.0.
+
+    Returns None when the event list is empty to signal "no data available"
+    (distinct from 0.0, which means "data present but no shock detected").
 
     Args:
-        events: DetectedEvent objects from Event Detection Agent.
+        events: DetectedEvent objects from the Event Detection Agent.
 
     Returns:
-        Float in [0.0, 1.0] representing supply shock probability.
-
-    Raises:
-        NotImplementedError: Until implemented.
+        Float in [0.0, 1.0], or None if events is empty.
     """
-    # Phase 1 lightweight heuristic:
-    # - Consider events that are supply-related (EventType values indicating
-    #   supply disruption, refinery outage, or tanker chokepoint, plus sanctions)
-    # - Map intensity to a numeric weight and treat confidence_score as an
-    #   independent probability that the event represents a true supply shock.
-    # - Combine multiple events by computing the probability that at least one
-    #   of the supply events materializes: 1 - prod(1 - p_i).
     if not events:
-        return 0.0
+        return None
 
-    from src.agents.event_detection.models import (
-        EventIntensity,
-        EventType,
-    )
-
-    # Intensity weights (low, medium, high)
-    intensity_weight = {
-        EventIntensity.LOW: _INTENSITY_WEIGHT_LOW,
-        EventIntensity.MEDIUM: _INTENSITY_WEIGHT_MEDIUM,
-        EventIntensity.HIGH: _INTENSITY_WEIGHT_HIGH,
-    }
-
-    # Supply-related event types to consider
-    supply_types = {
-        EventType.SUPPLY_DISRUPTION,
-        EventType.REFINERY_OUTAGE,
-        EventType.TANKER_CHOKEPOINT,
-        EventType.SANCTIONS,
-    }
-
-    probs: list[float] = []
+    total = 0.0
     for ev in events:
-        if ev.event_type in supply_types:
-            weight = intensity_weight.get(ev.intensity, 0.0)
-            p = max(0.0, min(1.0, ev.confidence_score * weight))
-            probs.append(p)
+        type_w = _TYPE_WEIGHT.get(ev.event_type.value, 0.0)
+        intensity_w = _INTENSITY_WEIGHT.get(ev.intensity.value, 0.0)
+        total += type_w * intensity_w * ev.confidence_score
 
-    if not probs:
-        return 0.0
-
-    # Combine independent-event probabilities into a single probability that
-    # at least one supply shock occurs (1 - product(1 - p_i)).
-    prod = 1.0
-    for p in probs:
-        prod *= 1.0 - p
-
-    result = 1.0 - prod
-    # Clamp to [0.0, 1.0]
-    return max(0.0, min(1.0, result))
+    return min(total, 1.0)
 
 
 def run_feature_generation(
