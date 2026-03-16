@@ -48,6 +48,10 @@ _CV_CAP: float = 1.0
 _MEAN_PRICE_ZERO: float = 0.0
 
 # Type weights for supply shock probability (issue #106)
+# Event-type weights for supply shock probability estimation.
+# Values reflect domain calibration of relative market impact severity
+# (issue #106): supply disruptions and refinery outages are direct supply
+# shocks; geopolitical/sanctions are indirect; unknown events are near-zero.
 _TYPE_WEIGHT: dict[str, float] = {
     "supply_disruption": 1.0,
     "refinery_outage": 0.9,
@@ -57,11 +61,13 @@ _TYPE_WEIGHT: dict[str, float] = {
     "unknown": 0.1,
 }
 
-# Intensity weights for supply shock probability estimation
+# Intensity weights for supply shock probability estimation.
+# Values calibrated per issue #106: high=1.0 (full weight), medium=0.6,
+# low=0.3 (rounded from prior 0.66/0.33 to cleaner calibration points).
 _INTENSITY_WEIGHT: dict[str, float] = {
     "high": 1.0,
-    "medium": 0.6,
-    "low": 0.3,
+    "medium": 0.6,  # rounded from 0.66 per issue #106 calibration
+    "low": 0.3,  # rounded from 0.33 per issue #106 calibration
 }
 
 
@@ -216,8 +222,8 @@ def compute_supply_shock_probability(events: list[DetectedEvent]) -> float | Non
 
     total = 0.0
     for ev in events:
-        type_w = _TYPE_WEIGHT.get(str(ev.event_type), 0.0)
-        intensity_w = _INTENSITY_WEIGHT.get(str(ev.intensity), 0.0)
+        type_w = _TYPE_WEIGHT.get(ev.event_type.value, 0.0)
+        intensity_w = _INTENSITY_WEIGHT.get(ev.intensity.value, 0.0)
         total += type_w * intensity_w * ev.confidence_score
 
     return min(total, 1.0)

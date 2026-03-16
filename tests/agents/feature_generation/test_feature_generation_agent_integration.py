@@ -44,7 +44,20 @@ from src.agents.feature_generation.feature_generation_agent import (
     compute_volatility_gap,
     run_feature_generation,
 )
+from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.ingestion.models import InstrumentType, MarketState, OptionRecord, RawPriceRecord
+
+# A single high-confidence supply disruption event for tests that assert supply_shock_probability
+_SAMPLE_EVENT = DetectedEvent(
+    event_id="abc123",
+    event_type=EventType.SUPPLY_DISRUPTION,
+    description="Major pipeline outage detected",
+    source="newsapi",
+    confidence_score=1.0,
+    intensity=EventIntensity.HIGH,
+    detected_at=datetime(2026, 1, 1, tzinfo=UTC),
+    affected_instruments=["USO", "XLE"],
+)
 
 # ---------------------------------------------------------------------------
 # Patch target for get_engine used inside the feature generation agent
@@ -337,7 +350,7 @@ def test_run_feature_generation_happy_path_no_feature_errors(pg_engine: Engine) 
     market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
 
     with patch(_PATCH_ENGINE, return_value=pg_engine):
-        feature_set = run_feature_generation(market_state, events=[])
+        feature_set = run_feature_generation(market_state, events=[_SAMPLE_EVENT])
 
     assert (
         feature_set.feature_errors == []
@@ -371,7 +384,7 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
         patch(_PATCH_ENGINE, return_value=pg_engine),
         patch(_patch_vol_gap, side_effect=RuntimeError("simulated vol gap failure")),
     ):
-        feature_set = run_feature_generation(market_state, events=[])
+        feature_set = run_feature_generation(market_state, events=[_SAMPLE_EVENT])
 
     # feature_errors must be non-empty and mention the failed signal
     assert feature_set.feature_errors, "expected feature_errors to be non-empty after failure"
