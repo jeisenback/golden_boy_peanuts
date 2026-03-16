@@ -7,6 +7,7 @@ All HTTP calls are mocked — no real EIA API key or network required.
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 
@@ -157,7 +158,7 @@ class TestFetchEIADataHappyPath:
             fetch_eia_data()
 
         urls = [c.args[0] for c in mock_get.call_args_list]
-        assert all(u.startswith("http://eia-mock.internal") for u in urls)
+        assert all(urlparse(u).netloc == "eia-mock.internal" for u in urls)
 
 
 # ---------------------------------------------------------------------------
