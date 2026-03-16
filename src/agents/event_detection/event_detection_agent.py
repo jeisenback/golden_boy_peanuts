@@ -23,6 +23,7 @@ import os
 from pydantic import ValidationError
 import requests
 
+from src.agents.event_detection.db import write_detected_events, write_eia_records
 from src.agents.event_detection.models import (
     ClassifyLLMResponse,
     DetectedEvent,
@@ -30,6 +31,7 @@ from src.agents.event_detection.models import (
     EventIntensity,
     EventType,
 )
+from src.core.db import get_engine
 from src.core.llm_wrapper import LLMWrapper
 from src.core.retry import with_retry
 
@@ -440,18 +442,94 @@ def classify_event(article: dict[str, object]) -> DetectedEvent | None:
     return event
 
 
+_MS_PER_SECOND: int = 1000
+
+
 def run_event_detection() -> list[DetectedEvent]:
     """
     Execute one full event detection cycle.
 
-    Returns:
-        List of DetectedEvent objects detected in this cycle.
+    Fetches articles from NewsAPI and GDELT, classifies each with the LLM,
+    persists detected events and EIA inventory records to PostgreSQL, and
+    emits a structured JSON cycle-complete log.
 
-    Raises:
-        NotImplementedError: Until implemented in issue #105.
+    Each source and DB write runs in an independent try/except — one failure
+    never aborts the others. The function never raises.
+
+    Returns:
+        List of DetectedEvent objects classified in this cycle. EIA records
+        are persisted to eia_inventory and not included in the return value.
     """
-    raise NotImplementedError(
-        "run_event_detection not yet implemented. "
-        "TODO: Orchestrate fetch_news_events, fetch_gdelt_events, classify_event, "
-        "write_detected_events. See issue #105."
+    start_time = datetime.now(tz=UTC)
+    errors: list[str] = []
+    news_articles: list[dict[str, object]] = []
+    gdelt_articles: list[dict[str, object]] = []
+
+    # --- Fetch feeds ---
+    try:
+        news_articles = fetch_news_events()
+    except Exception as exc:
+        logger.exception("fetch_news_events failed")
+        errors.append(f"fetch_news_events: {exc}")
+
+    try:
+        gdelt_articles = fetch_gdelt_events()
+    except Exception as exc:
+        logger.exception("fetch_gdelt_events failed")
+        errors.append(f"fetch_gdelt_events: {exc}")
+
+    # --- Classify articles ---
+    all_articles = news_articles + gdelt_articles
+    events: list[DetectedEvent] = []
+    for article in all_articles:
+        result = classify_event(article)
+        if result is not None:
+            events.append(result)
+
+    # --- Persist to PostgreSQL ---
+    events_written = 0
+    _engine = None
+    try:
+        _engine = get_engine()
+    except Exception as exc:
+        logger.exception("run_event_detection: failed to acquire DB engine")
+        errors.append(f"get_engine: {exc}")
+
+    if _engine is not None and events:
+        try:
+            events_written = write_detected_events(events, _engine)
+        except Exception as exc:
+            logger.exception("write_detected_events failed; events not persisted")
+            errors.append(f"write_detected_events: {exc}")
+
+    # --- Fetch and persist EIA inventory ---
+    try:
+        eia_records = fetch_eia_data()
+        if _engine is not None and eia_records:
+            try:
+                write_eia_records(eia_records, _engine)
+            except Exception as exc:
+                logger.exception("write_eia_records failed; EIA records not persisted")
+                errors.append(f"write_eia_records: {exc}")
+    except Exception as exc:
+        logger.exception("fetch_eia_data failed")
+        errors.append(f"fetch_eia_data: {exc}")
+
+    # --- Structured cycle log ---
+    end_time = datetime.now(tz=UTC)
+    duration_ms = int((end_time - start_time).total_seconds() * _MS_PER_SECOND)
+    logger.info(
+        json.dumps(
+            {
+                "event": "event_detection_cycle_complete",
+                "news_articles": len(news_articles),
+                "gdelt_articles": len(gdelt_articles),
+                "events_classified": len(events),
+                "events_written": events_written,
+                "error_count": len(errors),
+                "duration_ms": duration_ms,
+            }
+        )
     )
+
+    return events
