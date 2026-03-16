@@ -26,6 +26,7 @@ import requests
 from src.agents.event_detection.models import (
     ClassifyLLMResponse,
     DetectedEvent,
+    EIAInventoryRecord,
     EventIntensity,
     EventType,
 )
@@ -45,6 +46,11 @@ _NEWSAPI_PAGE_SIZE: int = 20
 _GDELT_QUERY: str = "crude oil supply disruption OR OPEC OR refinery"
 _GDELT_MAX_RECORDS: int = 20
 _GDELT_TIMESPAN_MINUTES: int = 1440  # 24 hours
+
+# EIA API v2 endpoints and fetch parameters
+_EIA_CRUDE_STOCKS_PATH: str = "/v2/petroleum/sum/sndw/data/"
+_EIA_REFINERY_UTIL_PATH: str = "/v2/petroleum/pnp/wiup/data/"
+_EIA_FETCH_WEEKS: int = 4  # most recent 4 weeks per fetch
 
 # LLM model for event classification — Haiku for speed and cost efficiency
 _CLASSIFY_MODEL_ID: str = "claude-haiku-4-5-20251001"
@@ -190,6 +196,126 @@ def fetch_gdelt_events() -> list[dict[str, object]]:
 
     logger.info("fetch_gdelt_events: retrieved %d article(s) from GDELT", len(articles))
     return articles
+
+
+def _fetch_eia_series(
+    base_url: str,
+    api_key: str,
+    path: str,
+) -> dict[str, float | None]:
+    """
+    Fetch one EIA API v2 data series and return a period → value mapping.
+
+    Args:
+        base_url: EIA API base URL (e.g. https://api.eia.gov).
+        api_key: EIA API key.
+        path: Series path (e.g. /v2/petroleum/sum/sndw/data/).
+
+    Returns:
+        Dict mapping period string (YYYY-WW) to float value or None if
+        the EIA record has a null value for that period.
+
+    Raises:
+        requests.HTTPError: Propagates on non-2xx response.
+    """
+    params: dict[str, str | int] = {
+        "api_key": api_key,
+        "frequency": "weekly",
+        "data[0]": "value",
+        "sort[0][column]": "period",
+        "sort[0][direction]": "desc",
+        "length": _EIA_FETCH_WEEKS,
+    }
+    response = requests.get(
+        f"{base_url}{path}",
+        params=params,
+        timeout=_HTTP_TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    data: dict[str, object] = response.json()
+
+    raw_inner: object = data.get("response", {})
+    inner: dict[str, object] = raw_inner if isinstance(raw_inner, dict) else {}
+    raw_records: object = inner.get("data", [])
+    records: list[dict[str, object]] = raw_records if isinstance(raw_records, list) else []
+
+    result: dict[str, float | None] = {}
+    for record in records:
+        period_raw = record.get("period", "")
+        period: str = period_raw if isinstance(period_raw, str) else ""
+        if not period:
+            continue
+        raw_value = record.get("value")
+        value: float | None = None
+        if raw_value is not None:
+            try:
+                value = float(raw_value)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                logger.warning(
+                    "_fetch_eia_series: unparseable value %r for period=%r in %s",
+                    raw_value,
+                    period,
+                    path,
+                )
+        result[period] = value
+    return result
+
+
+@with_retry()
+def fetch_eia_data() -> list[EIAInventoryRecord]:
+    """
+    Fetch weekly EIA petroleum inventory data for the most recent 4 weeks.
+
+    Queries two EIA API v2 series:
+      - /v2/petroleum/sum/sndw/data/ : U.S. crude oil stocks (millions of barrels)
+      - /v2/petroleum/pnp/wiup/data/ : U.S. refinery utilization rate (percent)
+
+    Records from both series are merged by period and returned as a list of
+    EIAInventoryRecord objects sorted newest-first.
+
+    If EIA_API_KEY is not set, logs a WARNING and returns [] (degraded mode).
+    Override the base URL for testing via the EIA_BASE_URL env var.
+
+    Returns:
+        List of EIAInventoryRecord, one per reporting period, newest first.
+        Empty list if the API key is absent or both series return no data.
+
+    Raises:
+        requests.HTTPError: Propagates after all retry attempts if either
+            series endpoint returns a non-2xx status.
+    """
+    api_key = os.environ.get("EIA_API_KEY")
+    if not api_key:
+        logger.warning("EIA_API_KEY not set; skipping EIA fetch (degraded mode)")
+        return []
+
+    base_url = os.environ.get("EIA_BASE_URL", "https://api.eia.gov")
+    fetched_at = datetime.now(tz=UTC)
+
+    crude_by_period = _fetch_eia_series(base_url, api_key, _EIA_CRUDE_STOCKS_PATH)
+    refinery_by_period = _fetch_eia_series(base_url, api_key, _EIA_REFINERY_UTIL_PATH)
+
+    all_periods: set[str] = set(crude_by_period) | set(refinery_by_period)
+    records: list[EIAInventoryRecord] = []
+    for period in all_periods:
+        try:
+            record = EIAInventoryRecord(
+                period=period,
+                crude_stocks_mb=crude_by_period.get(period),
+                refinery_utilization_pct=refinery_by_period.get(period),
+                fetched_at=fetched_at,
+            )
+            records.append(record)
+        except Exception:
+            logger.warning(
+                "fetch_eia_data: skipping malformed record for period=%r",
+                period,
+                exc_info=True,
+            )
+
+    records.sort(key=lambda r: r.period, reverse=True)
+    logger.info("fetch_eia_data: retrieved %d EIA record(s)", len(records))
+    return records
 
 
 @with_retry()
