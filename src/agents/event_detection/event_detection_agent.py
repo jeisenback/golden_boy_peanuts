@@ -182,6 +182,11 @@ def fetch_gdelt_events() -> list[dict[str, object]]:
             dt = datetime.strptime(seendate, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
             normalized_seendate: str = dt.isoformat()
         except (ValueError, TypeError):
+            logger.warning(
+                "fetch_gdelt_events: unparseable seendate %r for url=%r; using raw value",
+                seendate,
+                article.get("url", ""),
+            )
             normalized_seendate = seendate
         articles.append(
             {
