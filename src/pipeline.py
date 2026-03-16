@@ -8,17 +8,8 @@ Wires the four agents into a single end-to-end evaluation cycle:
 This module is the entry point for running the full pipeline. Individual
 agents can also be called in isolation for testing or partial runs.
 
-Phase notes (from PRD Section 3):
-
-  Phase 1 (current): Event Detection runs in parallel with Ingestion but
-    its results are NOT yet fed into Feature Generation. The call:
-
-        run_feature_generation(market_state, events=[])
-
-    The empty events list is intentional. When Phase 2 is implemented,
-    replace the hardcoded [] with the return value of run_event_detection().
-
-  Phase 2+: run_event_detection() results flow into run_feature_generation().
+Phase 2: Event Detection results flow into Feature Generation. If event
+detection fails, the pipeline continues in degraded mode with events=[].
 
 ESOD constraints: Python 3.11+, type hints on all public functions,
 no langchain.*/langgraph.* imports, DATABASE_URL from environment.
@@ -28,6 +19,8 @@ from __future__ import annotations
 
 import logging
 
+from src.agents.event_detection.event_detection_agent import run_event_detection
+from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.feature_generation_agent import run_feature_generation
 from src.agents.ingestion.ingestion_agent import run_ingestion
 from src.agents.strategy_evaluation.models import StrategyCandidate
@@ -42,16 +35,17 @@ def run_pipeline() -> list[StrategyCandidate]:
 
     Call sequence:
         1. run_ingestion()            → MarketState
-        2. run_feature_generation(    → FeatureSet
+        2. run_event_detection()      → list[DetectedEvent]
+        3. run_feature_generation(    → FeatureSet
                market_state,
-               events=[],             ← Phase 1: Event Detection not yet implemented
+               events,
            )
-        3. evaluate_strategies(       → list[StrategyCandidate]
+        4. evaluate_strategies(       → list[StrategyCandidate]
                feature_set
            )
 
-    Phase 1 note: Event Detection (run_event_detection) raises NotImplementedError
-    and is skipped. Replace events=[] with run_event_detection() results in Phase 2.
+    Event Detection failures are non-fatal: if run_event_detection() raises,
+    the error is logged and the pipeline continues with events=[].
 
     Returns:
         Ranked list of StrategyCandidate objects, sorted by edge_score descending.
@@ -70,13 +64,19 @@ def run_pipeline() -> list[StrategyCandidate]:
         len(market_state.ingestion_errors),
     )
 
-    # Phase 1: Event Detection not yet implemented — pass empty events list.
-    # Phase 2: replace [] with run_event_detection() result.
-    feature_set = run_feature_generation(market_state, events=[])
+    events: list[DetectedEvent] = []
+    try:
+        events = run_event_detection()
+    except Exception as exc:
+        logger.warning("Event detection failed; continuing with events=[]: %s", exc)
+    logger.info("Event detection complete: %d event(s)", len(events))
+
+    feature_set = run_feature_generation(market_state, events=events)
     logger.info(
-        "Feature generation complete: %d gap(s), dispersion=%s, %d error(s)",
+        "Feature generation complete: %d gap(s), dispersion=%s, supply_shock=%s, %d error(s)",
         len(feature_set.volatility_gaps),
         feature_set.sector_dispersion,
+        feature_set.supply_shock_probability,
         len(feature_set.feature_errors),
     )
 
