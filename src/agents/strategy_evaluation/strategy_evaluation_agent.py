@@ -73,6 +73,10 @@ _MIN_EDGE_SCORE: float = 0.10
 _DISPERSION_HIGH_THRESHOLD: float = 0.15  # CV > 15% = high dispersion
 _DISPERSION_MEDIUM_THRESHOLD: float = 0.05  # CV > 5%  = medium dispersion
 
+# Thresholds for supply shock probability labels
+_SUPPLY_SHOCK_HIGH_THRESHOLD: float = 0.60  # probability > 60% = high
+_SUPPLY_SHOCK_MEDIUM_THRESHOLD: float = 0.30  # probability > 30% = medium
+
 # Phase 2 multiplier weights for supply shock and futures curve steepness
 _SUPPLY_SHOCK_WEIGHT: float = 0.30
 _CURVE_STEEPNESS_WEIGHT: float = 0.15
@@ -92,8 +96,8 @@ def compute_edge_score(
     amplify the base score when present.
 
     Formula:
-        base = vol_gap_norm * 0.70 + disp_norm * 0.30
-        score = base * (1 + 0.30 * supply_shock) * (1 + 0.15 * |curve_steepness|)
+        base = vol_gap_norm * _VOL_GAP_WEIGHT + disp_norm * _DISPERSION_WEIGHT
+        score = base * (1 + _SUPPLY_SHOCK_WEIGHT * supply_shock) * (1 + _CURVE_STEEPNESS_WEIGHT * |curve_steepness|)
         return min(score, 1.0)
 
     When supply_shock_probability or futures_curve_steepness is None, the
@@ -102,8 +106,10 @@ def compute_edge_score(
     Args:
         instrument: Ticker symbol of the instrument to evaluate.
         feature_set: Computed signals from Feature Generation Agent.
-        supply_shock_probability: From FeatureSet, or None if unavailable.
-        futures_curve_steepness: From FeatureSet, or None if unavailable.
+        supply_shock_probability: Float in [0.0, 1.0], or None if unavailable.
+            Pydantic validation on FeatureSet.supply_shock_probability enforces range.
+        futures_curve_steepness: Unbounded float (WTI futures curve slope; contango > 0).
+            None if unavailable.
 
     Returns:
         Float in [0.0, 1.0]. Higher = stronger signal confluence.
@@ -176,15 +182,15 @@ def _supply_shock_label(feature_set: FeatureSet) -> str:
         feature_set: Current FeatureSet from Feature Generation Agent.
 
     Returns:
-        'high' if probability > 0.6, 'medium' if > 0.3, 'low' if > 0,
-        'none' if None or 0.
+        'high' if probability > _SUPPLY_SHOCK_HIGH_THRESHOLD, 'medium' if > _SUPPLY_SHOCK_MEDIUM_THRESHOLD,
+        'low' if > 0, 'none' if None or 0.
     """
     prob = feature_set.supply_shock_probability
     if prob is None or prob == 0.0:
         return "none"
-    if prob > 0.6:
+    if prob > _SUPPLY_SHOCK_HIGH_THRESHOLD:
         return "high"
-    if prob > 0.3:
+    if prob > _SUPPLY_SHOCK_MEDIUM_THRESHOLD:
         return "medium"
     return "low"
 
