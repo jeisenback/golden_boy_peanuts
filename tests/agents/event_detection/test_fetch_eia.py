@@ -49,9 +49,7 @@ def _mock_response(payload: dict) -> MagicMock:
 
 
 class TestFetchEIADataDegradedMode:
-    def test_missing_key_returns_empty_list(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_key_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("EIA_API_KEY", raising=False)
         result = fetch_eia_data()
         assert result == []
@@ -73,9 +71,7 @@ class TestFetchEIADataDegradedMode:
 
 
 class TestFetchEIADataHappyPath:
-    def test_returns_list_of_eia_inventory_records(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_returns_list_of_eia_inventory_records(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         with patch("requests.get") as mock_get:
             mock_get.side_effect = [
@@ -87,9 +83,7 @@ class TestFetchEIADataHappyPath:
         assert len(result) == 2
         assert all(isinstance(r, EIAInventoryRecord) for r in result)
 
-    def test_records_sorted_newest_first(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_records_sorted_newest_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         with patch("requests.get") as mock_get:
             mock_get.side_effect = [
@@ -116,9 +110,7 @@ class TestFetchEIADataHappyPath:
         assert latest.crude_stocks_mb == pytest.approx(423.5)
         assert latest.refinery_utilization_pct == pytest.approx(87.4)
 
-    def test_fetched_at_is_utc_datetime(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_fetched_at_is_utc_datetime(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         with patch("requests.get") as mock_get:
             mock_get.side_effect = [
@@ -130,9 +122,7 @@ class TestFetchEIADataHappyPath:
         for record in result:
             assert record.fetched_at.tzinfo is not None
 
-    def test_source_defaults_to_eia(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_source_defaults_to_eia(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         with patch("requests.get") as mock_get:
             mock_get.side_effect = [
@@ -143,9 +133,7 @@ class TestFetchEIADataHappyPath:
 
         assert all(r.source == "eia" for r in result)
 
-    def test_api_key_sent_in_params(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_api_key_sent_in_params(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "my-secret-key")
         with patch("requests.get") as mock_get:
             mock_get.side_effect = [
@@ -158,9 +146,7 @@ class TestFetchEIADataHappyPath:
             params = c.kwargs.get("params", {})
             assert params.get("api_key") == "my-secret-key"
 
-    def test_eia_base_url_env_var_used(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_eia_base_url_env_var_used(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         monkeypatch.setenv("EIA_BASE_URL", "http://eia-mock.internal")
         with patch("requests.get") as mock_get:
@@ -180,9 +166,7 @@ class TestFetchEIADataHappyPath:
 
 
 class TestFetchEIADataMalformedResponse:
-    def test_empty_data_array_returns_empty_list(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_empty_data_array_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         empty = {"response": {"data": []}}
         with patch("requests.get") as mock_get:
@@ -194,9 +178,7 @@ class TestFetchEIADataMalformedResponse:
 
         assert result == []
 
-    def test_null_value_in_series_yields_none_field(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_null_value_in_series_yields_none_field(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         crude_with_null = {"response": {"data": [{"period": "2024-10", "value": None}]}}
         with patch("requests.get") as mock_get:
@@ -209,9 +191,7 @@ class TestFetchEIADataMalformedResponse:
         assert len(result) == 1
         assert result[0].crude_stocks_mb is None
 
-    def test_missing_period_key_skipped(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_missing_period_key_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EIA_API_KEY", "test-key")
         bad_crude = {"response": {"data": [{"value": "400.0"}]}}  # no period key
         with patch("requests.get") as mock_get:
@@ -223,9 +203,7 @@ class TestFetchEIADataMalformedResponse:
 
         assert result == []
 
-    def test_http_error_propagates(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_http_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import requests as req_mod
 
         monkeypatch.setenv("EIA_API_KEY", "test-key")
