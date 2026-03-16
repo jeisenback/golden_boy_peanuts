@@ -252,7 +252,10 @@ def test_run_event_detection_full_cycle(pg_engine: Engine) -> None:
     event = _make_event(event_id="cycle-001")
 
     with (
-        patch(_PATCH_FETCH_NEWS, return_value=[{"title": "Oil disruption", "url": "http://example.com/1"}]),
+        patch(
+            _PATCH_FETCH_NEWS,
+            return_value=[{"title": "Oil disruption", "url": "http://example.com/1"}],
+        ),
         patch(_PATCH_FETCH_GDELT, return_value=[]),
         patch(_PATCH_FETCH_EIA, return_value=[]),
         patch(_PATCH_CLASSIFY, return_value=event),
@@ -276,7 +279,10 @@ def test_run_event_detection_partial_failure(pg_engine: Engine) -> None:
 
     with (
         patch(_PATCH_FETCH_NEWS, side_effect=RuntimeError("NewsAPI down")),
-        patch(_PATCH_FETCH_GDELT, return_value=[{"title": "GDELT article", "url": "http://gdelt.example.com/1"}]),
+        patch(
+            _PATCH_FETCH_GDELT,
+            return_value=[{"title": "GDELT article", "url": "http://gdelt.example.com/1"}],
+        ),
         patch(_PATCH_FETCH_EIA, return_value=[]),
         patch(_PATCH_CLASSIFY, return_value=event),
         patch(_PATCH_GET_ENGINE, return_value=pg_engine),
