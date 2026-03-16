@@ -167,7 +167,7 @@ class TestFetchGdeltEvents:
         with patch("requests.get", return_value=mock_resp) as mock_get:
             fetch_gdelt_events()
         url = mock_get.call_args.args[0]
-        assert "gdeltproject.org" in url
+        assert url.startswith("http://api.gdeltproject.org")
 
     def test_malformed_seendate_preserved_as_is(self) -> None:
         """Articles with unparseable seendate are included with the raw value."""
