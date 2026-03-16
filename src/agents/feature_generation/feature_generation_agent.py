@@ -108,6 +108,13 @@ def compute_futures_curve_steepness(market_state: MarketState) -> float | None:
         return None
 
     front_price = front_record.price
+    if front_price <= 0.0 or not math.isfinite(front_price):
+        logger.warning(
+            "Front-month price %s is non-positive or non-finite — "
+            "cannot compute futures curve steepness",
+            front_price,
+        )
+        return None
 
     try:
         second_price = _fetch_second_month_price()

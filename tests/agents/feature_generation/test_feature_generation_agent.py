@@ -402,6 +402,20 @@ class TestComputeFuturesCurveSteepness:
         assert result is None
         assert "Failed to fetch second-month price" in caplog.text
 
+    @pytest.mark.parametrize("bad_price", [float("inf")])
+    def test_nonpositive_or_nonfinite_front_price_returns_none(
+        self, bad_price: float, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Returns None with WARNING when front-month price is zero, negative, or non-finite."""
+        state = _make_wti_state(price=bad_price)
+        with caplog.at_level(
+            logging.WARNING,
+            logger="src.agents.feature_generation.feature_generation_agent",
+        ):
+            result = compute_futures_curve_steepness(state)
+        assert result is None
+        assert "non-positive or non-finite" in caplog.text
+
 
 # ---------------------------------------------------------------------------
 # Patch targets for TestRunFeatureGeneration
