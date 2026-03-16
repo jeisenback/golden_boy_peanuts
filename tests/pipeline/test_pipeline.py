@@ -10,15 +10,13 @@ Validates that run_pipeline():
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.ingestion.models import InstrumentType, MarketState, OptionStructure, RawPriceRecord
 from src.agents.strategy_evaluation.models import StrategyCandidate
-from src.pipeline import run_pipeline  # noqa: F401 — force module load for patching
+from src.pipeline import run_pipeline
 
 # ---------------------------------------------------------------------------
 # Patch targets
