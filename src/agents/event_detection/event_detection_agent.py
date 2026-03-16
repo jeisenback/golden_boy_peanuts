@@ -527,6 +527,7 @@ def run_event_detection() -> list[DetectedEvent]:
                 "events_classified": len(events),
                 "events_written": events_written,
                 "error_count": len(errors),
+                "errors": errors,
                 "duration_ms": duration_ms,
             }
         )

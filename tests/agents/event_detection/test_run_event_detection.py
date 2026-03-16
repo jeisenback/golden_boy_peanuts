@@ -261,3 +261,4 @@ class TestRunEventDetectionDBFailure:
         assert "duration_ms" in payload
         assert "events_classified" in payload
         assert "error_count" in payload
+        assert "errors" in payload
