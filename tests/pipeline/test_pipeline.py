@@ -13,6 +13,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.feature_generation.models import FeatureSet
 from src.agents.ingestion.models import MarketState
@@ -85,6 +87,18 @@ class TestRunPipeline:
 
         mock_fg.assert_called_once_with(ms, events=[])
         assert result == []
+
+    def test_non_recoverable_exception_propagates(self) -> None:
+        """Non-recoverable exceptions (e.g. AttributeError) propagate, not caught as degraded mode."""
+        ms = _make_market_state()
+
+        with (
+            patch(_PATCH_INGESTION, return_value=ms),
+            patch(_PATCH_EVENT_DETECTION, side_effect=AttributeError("Programming error")),
+        ):
+            # AttributeError is not in the caught exception set, so it should propagate
+            with pytest.raises(AttributeError, match="Programming error"):
+                run_pipeline()
 
     def test_returns_strategy_candidates(self) -> None:
         """run_pipeline() returns the list from evaluate_strategies()."""

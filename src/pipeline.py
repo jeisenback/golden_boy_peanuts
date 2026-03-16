@@ -26,6 +26,8 @@ from __future__ import annotations
 
 import logging
 
+import requests
+
 from src.agents.event_detection.event_detection_agent import run_event_detection
 from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.feature_generation_agent import run_feature_generation
@@ -51,12 +53,20 @@ def run_pipeline() -> list[StrategyCandidate]:
                feature_set
            )
 
-    Event detection runs independently and its failure is non-fatal:
-    on exception the pipeline logs a WARNING and continues with events=[].
+    Degraded Mode:
+        Event detection runs independently and may fail (network outage, API rate limits,
+        LLM service unavailable, etc.). On failure, the pipeline logs a WARNING and
+        continues with events=[], allowing ingestion and feature generation to produce
+        candidates based on market signals alone.
+
+        This graceful degradation ensures a partial outage in the event detection layer
+        does not suppress the entire pipeline. The returned candidate list is valid but
+        may lack event-driven signals.
 
     Returns:
         Ranked list of StrategyCandidate objects, sorted by edge_score descending.
         Returns an empty list if no viable candidates are found.
+        May return candidates with degraded signal set (no events) on event detection failure.
 
     Raises:
         RuntimeError: If DATABASE_URL is not set or run_ingestion() fails fatally.
@@ -74,8 +84,8 @@ def run_pipeline() -> list[StrategyCandidate]:
     events: list[DetectedEvent] = []
     try:
         events = run_event_detection()
-    except Exception as exc:
-        logger.warning("Event detection failed; continuing with events=[]: %s", exc)
+    except (requests.RequestException, RuntimeError) as exc:
+        logger.warning("Event detection failed (degraded mode); continuing with events=[]: %s", exc)
     logger.info("Event detection complete: %d event(s)", len(events))
 
     feature_set = run_feature_generation(market_state, events=events)
