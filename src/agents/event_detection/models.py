@@ -65,3 +65,19 @@ class EIAInventoryRecord(BaseModel):
     )
     source: str = Field(default="eia", description="Data source identifier")
     fetched_at: datetime = Field(..., description="UTC timestamp of the fetch")
+
+
+class ClassifyLLMResponse(BaseModel):
+    """
+    Pydantic boundary model for the LLM JSON response from classify_event.
+
+    Validates the raw dict returned by json.loads() before any field is accessed,
+    satisfying ESOD-1 (Pydantic at every module boundary).
+    """
+
+    is_relevant: bool
+    event_type: str
+    confidence_score: float = Field(..., ge=0.0, le=1.0)
+    intensity: str
+    description: str
+    affected_instruments: list[str] = Field(default_factory=list)
