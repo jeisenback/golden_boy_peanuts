@@ -73,17 +73,43 @@ _MIN_EDGE_SCORE: float = 0.10
 _DISPERSION_HIGH_THRESHOLD: float = 0.15  # CV > 15% = high dispersion
 _DISPERSION_MEDIUM_THRESHOLD: float = 0.05  # CV > 5%  = medium dispersion
 
+# Thresholds for supply shock probability labels
+_SUPPLY_SHOCK_HIGH_THRESHOLD: float = 0.60  # probability > 60% = high
+_SUPPLY_SHOCK_MEDIUM_THRESHOLD: float = 0.30  # probability > 30% = medium
 
-def compute_edge_score(instrument: str, feature_set: FeatureSet) -> float:
+# Phase 2 multiplier weights for supply shock and futures curve steepness
+_SUPPLY_SHOCK_WEIGHT: float = 0.30
+_CURVE_STEEPNESS_WEIGHT: float = 0.15
+
+
+def compute_edge_score(
+    instrument: str,
+    feature_set: FeatureSet,
+    supply_shock_probability: float | None = None,
+    futures_curve_steepness: float | None = None,
+) -> float:
     """
     Compute a composite edge score for a given instrument from the FeatureSet.
 
-    Scoring is static/heuristic for Phase 1 MVP.
-    ML-based dynamic weighting is explicitly deferred (ESOD Section 8).
+    Phase 1 base score: weighted sum of volatility gap and sector dispersion.
+    Phase 2 multipliers: supply shock probability and futures curve steepness
+    amplify the base score when present.
+
+    Formula:
+        base = vol_gap_norm * _VOL_GAP_WEIGHT + disp_norm * _DISPERSION_WEIGHT
+        score = base * (1 + _SUPPLY_SHOCK_WEIGHT * supply_shock) * (1 + _CURVE_STEEPNESS_WEIGHT * |curve_steepness|)
+        return min(score, 1.0)
+
+    When supply_shock_probability or futures_curve_steepness is None, the
+    corresponding multiplier is 1.0 (no effect), preserving Phase 1 behavior.
 
     Args:
         instrument: Ticker symbol of the instrument to evaluate.
         feature_set: Computed signals from Feature Generation Agent.
+        supply_shock_probability: Float in [0.0, 1.0], or None if unavailable.
+            Pydantic validation on FeatureSet.supply_shock_probability enforces range.
+        futures_curve_steepness: Unbounded float (WTI futures curve slope; contango > 0).
+            None if unavailable.
 
     Returns:
         Float in [0.0, 1.0]. Higher = stronger signal confluence.
@@ -104,7 +130,13 @@ def compute_edge_score(instrument: str, feature_set: FeatureSet) -> float:
     disp_norm = feature_set.sector_dispersion if feature_set.sector_dispersion is not None else 0.0
     disp_contribution = disp_norm * _DISPERSION_WEIGHT
 
-    return vol_gap_contribution + disp_contribution
+    base_score = vol_gap_contribution + disp_contribution
+
+    # --- Phase 2 multipliers ---
+    shock_multiplier = 1.0 + _SUPPLY_SHOCK_WEIGHT * (supply_shock_probability or 0.0)
+    curve_multiplier = 1.0 + _CURVE_STEEPNESS_WEIGHT * abs(futures_curve_steepness or 0.0)
+
+    return min(base_score * shock_multiplier * curve_multiplier, 1.0)
 
 
 def _vol_gap_label(instrument: str, feature_set: FeatureSet) -> str:
@@ -143,6 +175,41 @@ def _dispersion_label(feature_set: FeatureSet) -> str:
     return "low"
 
 
+def _supply_shock_label(feature_set: FeatureSet) -> str:
+    """Return human-readable supply shock probability label.
+
+    Args:
+        feature_set: Current FeatureSet from Feature Generation Agent.
+
+    Returns:
+        'high' if probability > _SUPPLY_SHOCK_HIGH_THRESHOLD, 'medium' if > _SUPPLY_SHOCK_MEDIUM_THRESHOLD,
+        'low' if > 0, 'none' if None or 0.
+    """
+    prob = feature_set.supply_shock_probability
+    if prob is None or prob == 0.0:
+        return "none"
+    if prob > _SUPPLY_SHOCK_HIGH_THRESHOLD:
+        return "high"
+    if prob > _SUPPLY_SHOCK_MEDIUM_THRESHOLD:
+        return "medium"
+    return "low"
+
+
+def _curve_steepness_label(feature_set: FeatureSet) -> str:
+    """Return human-readable futures curve steepness label.
+
+    Args:
+        feature_set: Current FeatureSet from Feature Generation Agent.
+
+    Returns:
+        'contango' if steepness > 0, 'backwardation' if < 0, 'flat' if None or 0.
+    """
+    steep = feature_set.futures_curve_steepness
+    if steep is None or steep == 0.0:
+        return "flat"
+    return "contango" if steep > 0 else "backwardation"
+
+
 def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     """
     Evaluate all eligible option structures across all in-scope instruments.
@@ -164,13 +231,20 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     candidates: list[StrategyCandidate] = []
 
     for instrument in INSTRUMENTS_IN_SCOPE:
-        edge_score = compute_edge_score(instrument, feature_set)
+        edge_score = compute_edge_score(
+            instrument,
+            feature_set,
+            supply_shock_probability=feature_set.supply_shock_probability,
+            futures_curve_steepness=feature_set.futures_curve_steepness,
+        )
         if edge_score < _MIN_EDGE_SCORE:
             continue
 
         signals: dict[str, str] = {
             "volatility_gap": _vol_gap_label(instrument, feature_set),
             "sector_dispersion": _dispersion_label(feature_set),
+            "supply_shock_probability": _supply_shock_label(feature_set),
+            "futures_curve_steepness": _curve_steepness_label(feature_set),
         }
 
         for structure in _PHASE_1_STRUCTURES:
