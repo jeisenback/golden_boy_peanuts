@@ -277,3 +277,4 @@ Issue #128 implemented on `test/128-degraded-mode-pipeline`:
 - Regression now asserts `run_pipeline()` logs a WARNING containing "degraded mode" when `run_event_detection()` raises `EventDetectionError`.
 - Regression now asserts degraded mode still returns a non-empty list of `StrategyCandidate` objects and that event-driven signal labels stay at defaults (`supply_shock_probability="none"`, `futures_curve_steepness="flat"`).
 - Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
+- #128 In Review, PR #139 opened 2026-03-18
