@@ -104,7 +104,10 @@ class TestComputeEdgeScore:
         """When supply_shock and curve_steepness are None, score matches Phase 1."""
         fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
         score_none = compute_edge_score(
-            "USO", fs, supply_shock_probability=None, futures_curve_steepness=None,
+            "USO",
+            fs,
+            supply_shock_probability=None,
+            futures_curve_steepness=None,
         )
         score_base = compute_edge_score("USO", fs)
         assert score_none == score_base
@@ -129,7 +132,10 @@ class TestComputeEdgeScore:
         shock_only = compute_edge_score("USO", fs, supply_shock_probability=0.5)
         curve_only = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
         both = compute_edge_score(
-            "USO", fs, supply_shock_probability=0.5, futures_curve_steepness=0.05,
+            "USO",
+            fs,
+            supply_shock_probability=0.5,
+            futures_curve_steepness=0.05,
         )
         assert both > shock_only
         assert both > curve_only
@@ -138,7 +144,10 @@ class TestComputeEdgeScore:
         """Even with large multipliers, score is capped at 1.0."""
         fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=1.0)
         score = compute_edge_score(
-            "USO", fs, supply_shock_probability=1.0, futures_curve_steepness=0.5,
+            "USO",
+            fs,
+            supply_shock_probability=1.0,
+            futures_curve_steepness=0.5,
         )
         assert score == 1.0
 
@@ -263,7 +272,9 @@ class TestEvaluateStrategies:
     def test_supply_shock_label_high(self) -> None:
         """supply_shock_probability > 0.6 → 'high' label."""
         fs = _make_feature_set(
-            [_make_vg("USO", 0.20)], sector_dispersion=0.5, supply_shock_probability=0.8,
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            supply_shock_probability=0.8,
         )
         with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
             result = evaluate_strategies(fs)
@@ -279,7 +290,9 @@ class TestEvaluateStrategies:
     def test_curve_steepness_label_contango(self) -> None:
         """Positive futures_curve_steepness → 'contango' label."""
         fs = _make_feature_set(
-            [_make_vg("USO", 0.20)], sector_dispersion=0.5, futures_curve_steepness=0.03,
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            futures_curve_steepness=0.03,
         )
         with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
             result = evaluate_strategies(fs)
@@ -288,7 +301,9 @@ class TestEvaluateStrategies:
     def test_curve_steepness_label_backwardation(self) -> None:
         """Negative futures_curve_steepness → 'backwardation' label."""
         fs = _make_feature_set(
-            [_make_vg("USO", 0.20)], sector_dispersion=0.5, futures_curve_steepness=-0.02,
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            futures_curve_steepness=-0.02,
         )
         with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
             result = evaluate_strategies(fs)
