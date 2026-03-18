@@ -71,6 +71,11 @@ def run_pipeline() -> list[StrategyCandidate]:
 
     Raises:
         RuntimeError: If DATABASE_URL is not set or run_ingestion() fails fatally.
+
+    Note:
+        EventDetectionError is intentionally caught and not re-raised. Event detection
+        failure is non-fatal: the pipeline continues with events=[] (degraded mode) and
+        still returns candidates based on market signals alone.
     """
     logger.info("Pipeline cycle starting")
 
