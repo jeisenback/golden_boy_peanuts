@@ -37,6 +37,15 @@ from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
+
+class EventDetectionError(RuntimeError):
+    """Raised by run_event_detection() on unrecoverable failure.
+
+    Allows pipeline.py to catch event detection failures without depending
+    on the underlying HTTP library (requests, httpx, etc.).
+    """
+
+
 _HTTP_TIMEOUT_SECONDS: int = 10
 
 # NewsAPI query for energy market relevance

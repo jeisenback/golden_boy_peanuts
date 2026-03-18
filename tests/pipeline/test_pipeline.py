@@ -15,6 +15,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.event_detection.event_detection_agent import EventDetectionError
 from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.feature_generation.models import FeatureSet
 from src.agents.ingestion.models import MarketState
@@ -79,7 +80,7 @@ class TestRunPipeline:
 
         with (
             patch(_PATCH_INGESTION, return_value=ms),
-            patch(_PATCH_EVENT_DETECTION, side_effect=RuntimeError("API down")),
+            patch(_PATCH_EVENT_DETECTION, side_effect=EventDetectionError("API down")),
             patch(_PATCH_FEATURE_GENERATION, return_value=fs) as mock_fg,
             patch(_PATCH_EVALUATE, return_value=[]),
         ):
