@@ -26,9 +26,10 @@ from __future__ import annotations
 
 import logging
 
-import requests
-
-from src.agents.event_detection.event_detection_agent import run_event_detection
+from src.agents.event_detection.event_detection_agent import (
+    EventDetectionError,
+    run_event_detection,
+)
 from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.feature_generation_agent import run_feature_generation
 from src.agents.ingestion.ingestion_agent import run_ingestion
@@ -70,6 +71,11 @@ def run_pipeline() -> list[StrategyCandidate]:
 
     Raises:
         RuntimeError: If DATABASE_URL is not set or run_ingestion() fails fatally.
+
+    Note:
+        EventDetectionError is intentionally caught and not re-raised. Event detection
+        failure is non-fatal: the pipeline continues with events=[] (degraded mode) and
+        still returns candidates based on market signals alone.
     """
     logger.info("Pipeline cycle starting")
 
@@ -84,7 +90,7 @@ def run_pipeline() -> list[StrategyCandidate]:
     events: list[DetectedEvent] = []
     try:
         events = run_event_detection()
-    except (requests.RequestException, RuntimeError) as exc:
+    except EventDetectionError as exc:
         logger.warning("Event detection failed (degraded mode); continuing with events=[]: %s", exc)
     logger.info("Event detection complete: %d event(s)", len(events))
 

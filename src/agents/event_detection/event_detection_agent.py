@@ -37,6 +37,15 @@ from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
 
+
+class EventDetectionError(RuntimeError):
+    """Raised by run_event_detection() on unrecoverable failure.
+
+    Allows pipeline.py to catch event detection failures without depending
+    on the underlying HTTP library (requests, httpx, etc.).
+    """
+
+
 _HTTP_TIMEOUT_SECONDS: int = 10
 
 # NewsAPI query for energy market relevance
@@ -454,11 +463,16 @@ def run_event_detection() -> list[DetectedEvent]:
     emits a structured JSON cycle-complete log.
 
     Each source and DB write runs in an independent try/except — one failure
-    never aborts the others. The function never raises.
+    never aborts the others.
 
     Returns:
         List of DetectedEvent objects classified in this cycle. EIA records
         are persisted to eia_inventory and not included in the return value.
+
+    Raises:
+        EventDetectionError: On unrecoverable failure. In normal operation all
+            internal errors are caught and accumulated; this exception is the
+            documented signal for callers (e.g. run_pipeline) to enter degraded mode.
     """
     start_time = datetime.now(tz=UTC)
     errors: list[str] = []
