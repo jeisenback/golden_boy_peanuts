@@ -89,7 +89,7 @@ class TestRunPipeline:
         assert result == []
 
     def test_non_recoverable_exception_propagates(self) -> None:
-        """Non-recoverable exceptions (e.g. AttributeError) propagate, not caught as degraded mode."""
+        """Non-recoverable exceptions (e.g. AttributeError) propagate."""
         ms = _make_market_state()
 
         with (

@@ -97,7 +97,8 @@ def compute_edge_score(
 
     Formula:
         base = vol_gap_norm * _VOL_GAP_WEIGHT + disp_norm * _DISPERSION_WEIGHT
-        score = base * (1 + _SUPPLY_SHOCK_WEIGHT * supply_shock) * (1 + _CURVE_STEEPNESS_WEIGHT * |curve_steepness|)
+        score = base * (1 + _SUPPLY_SHOCK_WEIGHT * supply_shock)
+              * (1 + _CURVE_STEEPNESS_WEIGHT * |curve_steepness|)
         return min(score, 1.0)
 
     When supply_shock_probability or futures_curve_steepness is None, the
@@ -182,8 +183,8 @@ def _supply_shock_label(feature_set: FeatureSet) -> str:
         feature_set: Current FeatureSet from Feature Generation Agent.
 
     Returns:
-        'high' if probability > _SUPPLY_SHOCK_HIGH_THRESHOLD, 'medium' if > _SUPPLY_SHOCK_MEDIUM_THRESHOLD,
-        'low' if > 0, 'none' if None or 0.
+        'high' if probability > _SUPPLY_SHOCK_HIGH_THRESHOLD,
+        'medium' if > _SUPPLY_SHOCK_MEDIUM_THRESHOLD, 'low' if > 0, 'none' if None or 0.
     """
     prob = feature_set.supply_shock_probability
     if prob is None or prob == 0.0:
