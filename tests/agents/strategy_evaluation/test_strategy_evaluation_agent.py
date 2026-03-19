@@ -113,10 +113,10 @@ class TestComputeEdgeScore:
         assert score_none == score_base
 
     def test_supply_shock_increases_score(self) -> None:
-        """Non-zero supply_shock_probability increases edge score."""
+        """supply_shock_probability=0.8 increases score vs None."""
         fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
         base = compute_edge_score("USO", fs)
-        boosted = compute_edge_score("USO", fs, supply_shock_probability=0.5)
+        boosted = compute_edge_score("USO", fs, supply_shock_probability=0.8)
         assert boosted > base
 
     def test_curve_steepness_increases_score(self) -> None:
@@ -157,6 +157,23 @@ class TestComputeEdgeScore:
         pos = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
         neg = compute_edge_score("USO", fs, futures_curve_steepness=-0.05)
         assert abs(pos - neg) < 1e-9
+
+    def test_zero_effect_inputs_equivalent_to_none(self) -> None:
+        """supply_shock=0.0 and curve_steepness=0.0 match None/None behavior."""
+        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
+        score_none = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=None,
+            futures_curve_steepness=None,
+        )
+        score_zero = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=0.0,
+            futures_curve_steepness=0.0,
+        )
+        assert score_zero == score_none
 
 
 class TestEvaluateStrategies:
