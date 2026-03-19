@@ -296,3 +296,13 @@ Issue #127 implemented on `test/127-phase2-multiplier-zero-effect`:
 - Existing coverage for curve steepness increase (`0.05`) and max-value clamping (`<= 1.0`) remains in place and passes.
 - Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
 - #127 In Review, PR #141 opened 2026-03-18
+- #127 In Review, PR #141 opened 2026-03-18
+
+## Sprint Notes (2026-03-18, session 4)
+
+Issue #111 implemented on `chore/111-timescaledb-migration-plan`:
+- Created `db/migrate_timescaledb.sql`: idempotent migration script enabling `CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE` and `create_hypertable` calls (with `if_not_exists => TRUE`) for all four partition candidates: `market_prices.timestamp`, `options_chain.timestamp`, `eia_inventory.fetched_at`, `detected_events.detected_at`. Full rollback procedure documented as inline comments.
+- Created `docs/timescaledb_migration.md`: migration guide covering PRD §6.2 trigger criteria, pre-migration checklist, step-by-step apply/verify commands, rollback procedure, and Docker Compose note.
+- AC audit: `db/schema.sql` header and `docker-compose.yml` TimescaleDB image were both already satisfying their respective ACs (pre-existing); no existing files modified.
+- Gate: `pytest -m "not integration"` 248 passed; `bash scripts/local_check.sh` ALL STAGES PASSED.
+- #111 In Review, PR #142 opened 2026-03-18
