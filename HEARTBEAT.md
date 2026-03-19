@@ -269,3 +269,12 @@ Phase 2 planning (issue #23) complete:
 - Issue #23 closed.
 
 Sprint 6 ready to start. No blockers.
+
+## Sprint Notes (2026-03-18, session 1)
+
+Issue #128 implemented on `test/128-degraded-mode-pipeline`:
+- Strengthened `tests/pipeline/test_pipeline.py` degraded-mode coverage to mock only `run_ingestion()`, `run_event_detection()`, and `run_feature_generation()` while exercising real `evaluate_strategies()`.
+- Regression now asserts `run_pipeline()` logs a WARNING containing "degraded mode" when `run_event_detection()` raises `EventDetectionError`.
+- Regression now asserts degraded mode still returns a non-empty list of `StrategyCandidate` objects and that event-driven signal labels stay at defaults (`supply_shock_probability="none"`, `futures_curve_steepness="flat"`).
+- Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
+- #128 In Review, PR #139 opened 2026-03-18

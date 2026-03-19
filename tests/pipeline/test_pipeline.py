@@ -11,13 +11,14 @@ Validates:
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.agents.event_detection.event_detection_agent import EventDetectionError
 from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
-from src.agents.feature_generation.models import FeatureSet
+from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.ingestion.models import MarketState
 from src.agents.strategy_evaluation.models import StrategyCandidate
 from src.pipeline import run_pipeline
@@ -39,6 +40,22 @@ def _make_market_state() -> MarketState:
 
 def _make_feature_set() -> FeatureSet:
     return FeatureSet(snapshot_time=datetime.now(tz=UTC))
+
+
+def _make_market_only_feature_set() -> FeatureSet:
+    return FeatureSet(
+        snapshot_time=datetime.now(tz=UTC),
+        volatility_gaps=[
+            VolatilityGap(
+                instrument="USO",
+                realized_vol=0.15,
+                implied_vol=0.25,
+                gap=0.10,
+                computed_at=datetime.now(tz=UTC),
+            )
+        ],
+        sector_dispersion=0.10,
+    )
 
 
 def _make_event(description: str = "Test event") -> DetectedEvent:
@@ -73,21 +90,28 @@ class TestRunPipeline:
 
         mock_fg.assert_called_once_with(ms, events=events)
 
-    def test_degraded_mode_on_event_detection_failure(self) -> None:
-        """Event detection exception → events=[], pipeline still completes."""
+    def test_degraded_mode_on_event_detection_failure(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Event detection exception logs degraded mode and still returns candidates."""
         ms = _make_market_state()
-        fs = _make_feature_set()
+        fs = _make_market_only_feature_set()
 
         with (
             patch(_PATCH_INGESTION, return_value=ms),
             patch(_PATCH_EVENT_DETECTION, side_effect=EventDetectionError("API down")),
             patch(_PATCH_FEATURE_GENERATION, return_value=fs) as mock_fg,
-            patch(_PATCH_EVALUATE, return_value=[]),
         ):
-            result = run_pipeline()
+            with caplog.at_level(logging.WARNING):
+                result = run_pipeline()
 
         mock_fg.assert_called_once_with(ms, events=[])
-        assert result == []
+        assert result
+        assert all(isinstance(candidate, StrategyCandidate) for candidate in result)
+        assert "degraded mode" in caplog.text
+        assert all(candidate.signals["supply_shock_probability"] == "none" for candidate in result)
+        assert all(candidate.signals["futures_curve_steepness"] == "flat" for candidate in result)
 
     def test_non_recoverable_exception_propagates(self) -> None:
         """Non-recoverable exceptions (e.g. AttributeError) propagate."""
