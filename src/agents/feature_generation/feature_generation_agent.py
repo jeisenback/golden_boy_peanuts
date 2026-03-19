@@ -57,8 +57,51 @@ _FRONT_MONTH_INSTRUMENT: str = "CL=F"
 _SECOND_MONTH_TICKER: str = "CLG=F"
 
 
+def _month_code_for(month: int) -> str:
+    """Return CME futures month code for a 1..12 month."""
+    codes = [
+        "F",
+        "G",
+        "H",
+        "J",
+        "K",
+        "M",
+        "N",
+        "Q",
+        "U",
+        "V",
+        "X",
+        "Z",
+    ]
+    return codes[(month - 1) % 12]
+
+
+def _resolve_second_month_ticker(lookahead_months: int = 6) -> str | None:
+    """Try to resolve a valid second-month WTI ticker by probing nearby month codes.
+
+    Attempts up to `lookahead_months` months ahead from current UTC month and
+    returns the first ticker whose yfinance `fast_info.last_price` is present.
+    Returns None if no candidate yields a price.
+    """
+    now = datetime.now(UTC)
+    for i in range(1, lookahead_months + 1):
+        candidate_month = ((now.month - 1 + i) % 12) + 1
+        code = _month_code_for(candidate_month)
+        ticker = f"CL{code}=F"
+        try:
+            info = yf.Ticker(ticker).fast_info
+            price = getattr(info, "last_price", None)
+            if price is not None:
+                return ticker
+        except Exception:
+            # ignore and try next candidate
+            continue
+    return None
+
+
+
 @with_retry()
-def _fetch_second_month_price(ticker: str = _SECOND_MONTH_TICKER) -> float:
+def _fetch_second_month_price(ticker: str | None = None) -> float:
     """Fetch the second-month WTI futures price via yfinance.
 
     Decorated with @with_retry() so transient network failures are retried
@@ -73,6 +116,14 @@ def _fetch_second_month_price(ticker: str = _SECOND_MONTH_TICKER) -> float:
     Raises:
         RuntimeError: If yfinance returns no price data.
     """
+    # If caller did not provide a ticker, attempt dynamic resolution first.
+    if not ticker:
+        resolved = _resolve_second_month_ticker()
+        if resolved:
+            ticker = resolved
+        else:
+            ticker = _SECOND_MONTH_TICKER  # fallback-only default
+
     info = yf.Ticker(ticker).fast_info
     price: float | None = getattr(info, "last_price", None)
     if price is None:
