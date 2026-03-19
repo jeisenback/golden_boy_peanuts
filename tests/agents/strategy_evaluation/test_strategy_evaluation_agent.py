@@ -331,3 +331,50 @@ class TestEvaluateStrategies:
         with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
             result_none = evaluate_strategies(fs_none)
         assert result[0].edge_score > result_none[0].edge_score
+
+    def test_correlated_instruments_yield_18_equal_score_candidates(self) -> None:
+        """All 6 in-scope instruments above threshold produce 18 deterministic candidates.
+
+        18 candidates is expected behavior when all instruments are correlated;
+        see concentration filter issue #132 for future de-duplication behavior.
+        """
+        instruments = ["USO", "XLE", "XOM", "CVX", "CL=F", "BZ=F"]
+        fs = _make_feature_set(
+            [_make_vg(instrument, 0.20) for instrument in instruments],
+            sector_dispersion=0.50,
+        )
+
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+
+        assert len(result) == 18
+        assert len({candidate.edge_score for candidate in result}) == 1
+
+        # All scores are equal, so sorted(desc) preserves insertion order (stable sort).
+        assert [candidate.edge_score for candidate in result] == sorted(
+            (candidate.edge_score for candidate in result),
+            reverse=True,
+        )
+
+        expected_order = [
+            ("USO", "long_straddle"),
+            ("USO", "call_spread"),
+            ("USO", "put_spread"),
+            ("XLE", "long_straddle"),
+            ("XLE", "call_spread"),
+            ("XLE", "put_spread"),
+            ("XOM", "long_straddle"),
+            ("XOM", "call_spread"),
+            ("XOM", "put_spread"),
+            ("CVX", "long_straddle"),
+            ("CVX", "call_spread"),
+            ("CVX", "put_spread"),
+            ("CL=F", "long_straddle"),
+            ("CL=F", "call_spread"),
+            ("CL=F", "put_spread"),
+            ("BZ=F", "long_straddle"),
+            ("BZ=F", "call_spread"),
+            ("BZ=F", "put_spread"),
+        ]
+        actual_order = [(candidate.instrument, candidate.structure) for candidate in result]
+        assert actual_order == expected_order
