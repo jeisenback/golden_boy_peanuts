@@ -306,3 +306,9 @@ Issue #111 implemented on `chore/111-timescaledb-migration-plan`:
 - AC audit: `db/schema.sql` header and `docker-compose.yml` TimescaleDB image were both already satisfying their respective ACs (pre-existing); no existing files modified.
 - Gate: `pytest -m "not integration"` 248 passed; `bash scripts/local_check.sh` ALL STAGES PASSED.
 - #111 In Review, PR #142 opened 2026-03-18
+
+
+## Sprint Notes (2026-03-19, session 1)
+
+- #125 Closed — all AC verified ✓, merged in PR #143 (merged 2026-03-19)
+
