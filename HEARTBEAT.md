@@ -278,3 +278,12 @@ Issue #128 implemented on `test/128-degraded-mode-pipeline`:
 - Regression now asserts degraded mode still returns a non-empty list of `StrategyCandidate` objects and that event-driven signal labels stay at defaults (`supply_shock_probability="none"`, `futures_curve_steepness="flat"`).
 - Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
 - #128 In Review, PR #139 opened 2026-03-18
+
+## Sprint Notes (2026-03-18, session 2)
+
+Issue #129 implemented on `test/129-correlated-instruments-candidate-count`:
+- Added `test_correlated_instruments_yield_18_equal_score_candidates()` to `tests/agents/strategy_evaluation/test_strategy_evaluation_agent.py`.
+- Regression asserts exactly 18 candidates (6 in-scope instruments × 3 structures), identical edge scores across all candidates, and deterministic order under equal-score stable sorting.
+- Test docstring documents that 18 correlated candidates are expected behavior and references concentration filter issue #132 for future de-duplication.
+- Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
+- #129 In Review, PR #140 opened 2026-03-18
