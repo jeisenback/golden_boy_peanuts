@@ -287,3 +287,12 @@ Issue #129 implemented on `test/129-correlated-instruments-candidate-count`:
 - Test docstring documents that 18 correlated candidates are expected behavior and references concentration filter issue #132 for future de-duplication.
 - Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
 - #129 In Review, PR #140 opened 2026-03-18
+
+## Sprint Notes (2026-03-18, session 3)
+
+Issue #127 implemented on `test/127-phase2-multiplier-zero-effect`:
+- Updated `test_supply_shock_increases_score()` in `tests/agents/strategy_evaluation/test_strategy_evaluation_agent.py` to use the explicit AC value `supply_shock_probability=0.8`.
+- Added `test_zero_effect_inputs_equivalent_to_none()` to assert zero-effect equivalence (`supply_shock_probability=0.0`, `futures_curve_steepness=0.0`) versus `None` inputs.
+- Existing coverage for curve steepness increase (`0.05`) and max-value clamping (`<= 1.0`) remains in place and passes.
+- Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
+- #127 In Review, PR #141 opened 2026-03-18
