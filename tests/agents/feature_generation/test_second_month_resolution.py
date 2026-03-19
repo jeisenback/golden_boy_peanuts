@@ -21,7 +21,7 @@ class DummyTicker:
         self.fast_info = DummyInfo(price)
 
 
-def test_resolve_second_month_ticker_picks_first_available(monkeypatch):
+def test_resolve_second_month_ticker_picks_first_available(monkeypatch) -> None:
     # Simulate yfinance returning None for CLF=F then price for CLG=F
     calls = {}
 
@@ -40,7 +40,7 @@ def test_resolve_second_month_ticker_picks_first_available(monkeypatch):
     assert ticker.startswith("CL") and ticker.endswith("=F")
 
 
-def test_resolve_second_month_ticker_returns_none_when_no_price(monkeypatch):
+def test_resolve_second_month_ticker_returns_none_when_no_price(monkeypatch) -> None:
     def fake_ticker(symbol):
         return DummyTicker(None)
 
