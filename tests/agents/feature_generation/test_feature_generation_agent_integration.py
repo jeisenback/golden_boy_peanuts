@@ -1,31 +1,33 @@
 from __future__ import annotations
 
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
+import json
+import math
 import os
+import statistics
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
+
 # Disable testcontainers Reaper (Ryuk) early — required on Windows where the
 # Reaper container's port mapping is unavailable. Must be set before any
 # testcontainers import.
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
-from datetime import datetime, timedelta, timezone
-
-import pytest
-from sqlalchemy import create_engine, text
-
 from testcontainers.postgres import PostgresContainer
 
 from src.agents.feature_generation.feature_generation_agent import (
     compute_volatility_gap,
+    run_feature_generation,
 )
-from src.agents.ingestion.models import RawPriceRecord, OptionRecord, MarketState
-from collections.abc import Generator
-from datetime import UTC
-import json
-import math
-import statistics
-from unittest.mock import patch
-from sqlalchemy.engine import Engine
-
-from src.agents.feature_generation.feature_generation_agent import run_feature_generation
-from src.agents.ingestion.models import InstrumentType
+from src.agents.ingestion.models import (
+    InstrumentType,
+    MarketState,
+    OptionRecord,
+    RawPriceRecord,
+)
 
 
 @pytest.mark.integration
@@ -59,19 +61,22 @@ def test_compute_volatility_gap_integration():
 
         # Apply schema (assume pytest CWD is project root)
         schema_path = os.path.join(os.getcwd(), "db", "schema.sql")
-        with open(schema_path, "r", encoding="utf-8") as f:
+        with open(schema_path, encoding="utf-8") as f:
             sql = f.read()
         with engine.begin() as conn:
             conn.exec_driver_sql(sql)
 
         # Insert price rows (oldest -> newest)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with engine.begin() as conn:
             for i, p in enumerate(prices):
                 ts = now - timedelta(days=(len(prices) - i))
                 conn.execute(
                     text(
-                        "INSERT INTO market_prices (instrument, instrument_type, price, volume, source, timestamp) VALUES (:instrument, :instrument_type, :price, :volume, :source, :timestamp)"
+                        "INSERT INTO market_prices (instrument, instrument_type, price, volume, "
+                        "source, timestamp) "
+                        "VALUES (:instrument, :instrument_type, :price, "
+                        ":volume, :source, :timestamp)"
                     ),
                     {
                         "instrument": "USO",
