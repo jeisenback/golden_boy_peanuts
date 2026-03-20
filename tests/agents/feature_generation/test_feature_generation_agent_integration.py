@@ -43,14 +43,14 @@ def test_compute_volatility_gap_integration():
 
     # Create a deterministic series of 30 prices with daily log-return stdev
     # that will annualize to approximately 15%: daily_stdev ~= 0.15 / sqrt(252)
-    daily_stdev = 0.15 / (252 ** 0.5)
+    daily_stdev = 0.15 / (252**0.5)
     base_price = 100.0
 
     # Build 30 prices via alternating small returns to create the expected stdev
     prices = [base_price]
     for i in range(30 - 1):
         r = daily_stdev if i % 2 == 0 else -daily_stdev
-        prices.append(prices[-1] * (2.718281828459045 ** r))
+        prices.append(prices[-1] * (2.718281828459045**r))
 
     # Start Postgres testcontainer
     with PostgresContainer("postgres:15") as pg:
@@ -129,6 +129,8 @@ def test_compute_volatility_gap_integration():
         # implied_vol (0.22) - realized_vol ~= 0.07 ± 0.01
         gap = g.gap
         assert abs(gap - 0.07) < 0.01, f"gap {gap} not within tolerance"
+
+
 """
 Integration tests for the Feature Generation Agent.
 
