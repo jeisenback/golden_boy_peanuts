@@ -18,18 +18,25 @@ An autonomous pipeline that identifies options trading opportunities driven by o
   workflows/            # ci.yml, integration.yml, runtime-check.yml, security.yml
   pull_request_template.md
 
+db/
+  schema.sql                      # Full DDL: market_prices, options_chain, eia_inventory, detected_events
+  migrate_timescaledb.sql         # Idempotent TimescaleDB hypertable migration (run post-Phase-1)
+
 docs/
   energy_options_prd.md           # Product requirements and phasing
   energy_options_esod.md          # Engineering standards (non-negotiable constraints)
   energy_options_agent_design_doc.md  # System architecture and data flow
   energy_options_sdlc.md          # Branching, CI/CD, sprint workflow
   energy_options_adlc.md          # Agent-assisted development loop (10 steps)
-  prompts/                        # Claude Code prompt templates (5 task types)
+  timescaledb_migration.md        # Migration guide: when to run, how to verify, rollback
+  uat_reports/                    # Phase UAT reports (signed-off before release)
+  generated/                      # Auto-generated user guides (do not edit manually)
 
 scripts/
   new_branch.sh         # Interactive branch creator (enforces SDLC naming + develop base)
   local_check.sh        # Pre-push gate: ruff → black → mypy → import scan
   post_session.sh       # ADLC post-session checklist (run after every agent session)
+  uat_run.py            # Phase UAT runner — validates end-to-end pipeline behavior
 
 src/
   core/
@@ -78,7 +85,6 @@ python .github/scripts/check_runtime_imports.py
 
 # 5. Run the test suite
 pytest tests/ -m "not integration" -v
-# Expected: all tests XFAIL until agents are implemented
 
 # 6. Run integration tests (requires Docker — uses testcontainers, not docker-compose)
 pytest tests/ -m integration -v
@@ -156,9 +162,9 @@ All work follows the 10-step ADLC loop defined in `docs/energy_options_adlc.md`.
 
 | Phase | Scope | Status |
 |-------|-------|--------|
-| 1 | Core market signals: crude, ETF/equity prices, options surface, long straddles, spreads | Scaffold only |
-| 2 | Supply augmentation: EIA inventory, event detection, supply disruption index | Not started |
-| 3 | Alternative signals: insider trades, narrative velocity, shipping data | Not started |
+| 1 | Core market signals: crude, ETF/equity prices, options surface, long straddles, spreads | **Complete** (v0.1.0) |
+| 2 | Supply augmentation: EIA inventory, event detection, supply disruption index | **Complete** (v0.2.0) |
+| 3 | Alternative signals: insider trades, narrative velocity, shipping data, backtesting harness | In Progress (Sprint 9) |
 | 4 | Optional enhancements: exotic structures, automated execution | Deferred |
 
 ---
@@ -170,3 +176,6 @@ All work follows the 10-step ADLC loop defined in `docs/energy_options_adlc.md`.
 - `docs/energy_options_agent_design_doc.md` — module responsibilities, data models, DB schema
 - `docs/energy_options_sdlc.md` — branching rules, CI stages, sprint cadence
 - `docs/energy_options_adlc.md` — development loop, prompt templates, post-session checklist
+- `docs/timescaledb_migration.md` — how and when to migrate from PostgreSQL to TimescaleDB
+- `HEARTBEAT.md` — active sprint, current issue, and session notes (read before every session)
+- `TODOS.md` — deferred work items with full context for future sprints
