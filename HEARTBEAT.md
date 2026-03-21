@@ -370,3 +370,21 @@ Human lead approved 2026-03-21.
 - #172 — DB migration: backtest_candidates + backtest_outcomes tables
 - #166 — Backtesting harness (HistoricalLoader, run_backtest_pipeline, BacktestReport)
 - #164 — Outcome tracking
+
+## Sprint Notes (2026-03-21, session 2)
+
+**#172 IN REVIEW** — DB migration and backtest DB layer implemented. PR opened.
+
+Two-table isolation design complete:
+- `db/migrations/add_backtest_tables.sql` — backtest_candidates (UUID PK, snapshot_time, edge_score,
+  signals JSONB) + backtest_outcomes (UUID PK, FK→backtest_candidates, profitable BOOL nullable).
+  Migration idempotent (IF NOT EXISTS); pgcrypto extension included.
+- `src/backtest/backtest.py` — write_backtest_candidate() returns DB-assigned UUID;
+  record_outcome() supports profitable=None audit row (yfinance data gap).
+- `src/backtest/models.py` — BacktestCandidate and BacktestOutcome Pydantic boundary models.
+- `tests/integration/test_backtest_integration.py` — 5 testcontainers tests covering both tables,
+  FK constraint, idempotent migration, and profitable=None audit row.
+- All 5 local_check.sh stages pass (ruff, black, mypy, import scan, 250 unit tests).
+
+**HUMAN SIGN-OFF REQUIRED before running migration on any live DB (ESOD Hard Stop).**
+Next unblocked: #166 (HistoricalLoader) — depends on #172 merged.
