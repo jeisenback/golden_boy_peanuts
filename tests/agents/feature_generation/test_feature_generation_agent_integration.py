@@ -168,47 +168,7 @@ Golden dataset (USO):
   - With sector_dispersion=0.50: edge_score ≈ 0.39 > 0.35 (validates #19 forward ref)
 """
 
-<<<<<<< HEAD
-=======
-from __future__ import annotations
-
-import os
-
-# Disable testcontainers Reaper (Ryuk) — required on Windows where the Reaper
-# container's port mapping is unavailable. Must be set before any testcontainers import.
-os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
-
-from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
-import json
-import math
-import statistics
-from unittest.mock import patch
-
-import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
-
-from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
-from src.agents.feature_generation.feature_generation_agent import (
-    compute_volatility_gap,
-    run_feature_generation,
-)
-from src.agents.ingestion.models import InstrumentType, MarketState, OptionRecord, RawPriceRecord
-
-# A single high-confidence supply disruption event for tests that assert supply_shock_probability
-_SAMPLE_EVENT = DetectedEvent(
-    event_id="abc123",
-    event_type=EventType.SUPPLY_DISRUPTION,
-    description="Major pipeline outage detected",
-    source="newsapi",
-    confidence_score=1.0,
-    intensity=EventIntensity.HIGH,
-    detected_at=datetime(2026, 1, 1, tzinfo=UTC),
-    affected_instruments=["USO", "XLE"],
-)
-
->>>>>>> origin/develop
+ 
 # ---------------------------------------------------------------------------
 # Patch target for get_engine used inside the feature generation agent
 # ---------------------------------------------------------------------------
