@@ -42,7 +42,7 @@ from src.core.llm_wrapper import LLMWrapper
 logger = logging.getLogger(__name__)
 
 # Regex patterns for static rule checks (git_workflow.md)
-_BRANCH_RE = re.compile(r"^(feature|fix|refactor|chore|test|docs)/\d+-[a-z0-9-]+$")
+_BRANCH_RE = re.compile(r"^(feature|fix|refactor|chore|test|docs|infra)/\d+-[a-z0-9-]+$")
 _COMMIT_ISSUE_RE = re.compile(r"#\d+")
 _LANGCHAIN_RE = re.compile(r"^\s*(import|from)\s+(langchain|langgraph)", re.MULTILINE)
 _TYPE_HINT_DEF_RE = re.compile(r"^def\s+[a-z_][a-zA-Z0-9_]*\s*\([^)]*\)(?!\s*->)", re.MULTILINE)

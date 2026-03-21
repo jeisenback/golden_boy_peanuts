@@ -1,3 +1,160 @@
+from __future__ import annotations
+
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
+import json
+import math
+import os
+import statistics
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
+
+# Disable testcontainers Reaper (Ryuk) early — required on Windows where the
+# Reaper container's port mapping is unavailable. Must be set before any
+# testcontainers import.
+os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+from testcontainers.postgres import PostgresContainer
+
+from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
+from src.agents.feature_generation.feature_generation_agent import (
+    compute_volatility_gap,
+    run_feature_generation,
+)
+from src.agents.ingestion.models import (
+    InstrumentType,
+    MarketState,
+    OptionRecord,
+    RawPriceRecord,
+)
+
+# A single high-confidence supply disruption event for tests that assert supply_shock_probability
+_SAMPLE_EVENT = DetectedEvent(
+    event_id="abc123",
+    event_type=EventType.SUPPLY_DISRUPTION,
+    description="Major pipeline outage detected",
+    source="newsapi",
+    confidence_score=1.0,
+    intensity=EventIntensity.HIGH,
+    detected_at=datetime(2026, 1, 1, tzinfo=UTC),
+    affected_instruments=["USO", "XLE"],
+)
+
+
+_POSTGRES_TEST_IMAGE = "postgres:15"  # minimum version required for JSONB and TIMESTAMPTZ
+
+
+@pytest.mark.integration
+def test_compute_volatility_gap_integration() -> None:
+    """Integration test: seed market_prices and verify volatility gap math.
+
+    - Seeds 30 deterministic daily prices for `USO` producing ~15% annualized
+      realized volatility.
+    - Provides an ATM implied volatility of 22% via an OptionRecord in the
+      MarketState input.
+    - Asserts computed gap (implied - realized) is ~0.07 (±0.01).
+    """
+
+    # Create a deterministic series of 30 prices with daily log-return stdev
+    # that will annualize to approximately 15%: daily_stdev ~= 0.15 / sqrt(252)
+    daily_stdev = 0.15 / (252**0.5)
+    base_price = 100.0
+
+    # Build 30 prices via alternating small returns to create the expected stdev
+    prices = [base_price]
+    for i in range(30 - 1):
+        r = daily_stdev if i % 2 == 0 else -daily_stdev
+        prices.append(prices[-1] * math.exp(r))
+
+    _original_db_url = os.environ.get("DATABASE_URL")
+    # Start Postgres testcontainer; restore DATABASE_URL on exit to avoid
+    # leaking a stale URL pointing to a stopped container into subsequent tests.
+    try:
+        with PostgresContainer(_POSTGRES_TEST_IMAGE) as pg:
+            database_url = pg.get_connection_url()
+            os.environ["DATABASE_URL"] = database_url
+
+            engine = create_engine(database_url)
+
+            # Apply schema (assume pytest CWD is project root)
+            schema_path = os.path.join(os.getcwd(), "db", "schema.sql")
+            with open(schema_path, encoding="utf-8") as f:
+                sql = f.read()
+            with engine.begin() as conn:
+                conn.exec_driver_sql(sql)
+
+            # Insert price rows (oldest -> newest)
+            now = datetime.now(UTC)
+            with engine.begin() as conn:
+                for i, p in enumerate(prices):
+                    ts = now - timedelta(days=(len(prices) - i))
+                    conn.execute(
+                        text(
+                            "INSERT INTO market_prices "
+                            "(instrument, instrument_type, price, volume, source, timestamp) "
+                            "VALUES (:instrument, :instrument_type, :price, :volume, "
+                            ":source, :timestamp)"
+                        ),
+                        {
+                            "instrument": "USO",
+                            "instrument_type": "etf",
+                            "price": float(p),
+                            "volume": 1000,
+                            "source": "test",
+                            "timestamp": ts,
+                        },
+                    )
+
+            # Build MarketState with current price and an ATM OptionRecord
+            snapshot_time = now
+            current_price = prices[-1]
+            market_state = MarketState(
+                snapshot_time=snapshot_time,
+                prices=[
+                    RawPriceRecord(
+                        instrument="USO",
+                        instrument_type="etf",
+                        price=float(current_price),
+                        volume=1000,
+                        timestamp=snapshot_time,
+                        source="test",
+                    )
+                ],
+                options=[
+                    OptionRecord(
+                        instrument="USO",
+                        strike=float(current_price),
+                        expiration_date=snapshot_time + timedelta(days=7),
+                        implied_volatility=0.22,
+                        open_interest=100,
+                        volume=10,
+                        option_type="call",
+                        timestamp=snapshot_time,
+                        source="test",
+                    )
+                ],
+                ingestion_errors=[],
+            )
+
+            # Compute the volatility gaps
+            gaps = compute_volatility_gap(market_state)
+
+            assert gaps, "Expected at least one volatility gap computed"
+            g = next((gg for gg in gaps if gg.instrument == "USO"), None)
+            assert g is not None
+
+            # implied_vol (0.22) - realized_vol ~= 0.07 ± 0.01
+            gap = g.gap
+            assert abs(gap - 0.07) < 0.01, f"gap {gap} not within tolerance"
+    finally:
+        if _original_db_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = _original_db_url
+
+
 """
 Integration tests for the Feature Generation Agent.
 
@@ -21,30 +178,6 @@ Golden dataset (USO):
   - With sector_dispersion=0.50: edge_score ≈ 0.39 > 0.35 (validates #19 forward ref)
 """
 
-from __future__ import annotations
-
-import os
-
-# Disable testcontainers Reaper (Ryuk) — required on Windows where the Reaper
-# container's port mapping is unavailable. Must be set before any testcontainers import.
-os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
-
-from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
-import json
-import math
-import statistics
-from unittest.mock import patch
-
-import pytest
-from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
-
-from src.agents.feature_generation.feature_generation_agent import (
-    compute_volatility_gap,
-    run_feature_generation,
-)
-from src.agents.ingestion.models import InstrumentType, MarketState, OptionRecord, RawPriceRecord
 
 # ---------------------------------------------------------------------------
 # Patch target for get_engine used inside the feature generation agent
@@ -118,7 +251,7 @@ def pg_engine() -> Generator[Engine, None, None]:
     """Start a PostgresContainer, apply schema, yield engine, stop container."""
     from testcontainers.postgres import PostgresContainer
 
-    with PostgresContainer("postgres:15") as pg:
+    with PostgresContainer(_POSTGRES_TEST_IMAGE) as pg:
         engine = create_engine(pg.get_connection_url())
         with engine.begin() as conn:
             conn.execute(text(_DDL))
@@ -337,7 +470,7 @@ def test_run_feature_generation_happy_path_no_feature_errors(pg_engine: Engine) 
     market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
 
     with patch(_PATCH_ENGINE, return_value=pg_engine):
-        feature_set = run_feature_generation(market_state, events=[])
+        feature_set = run_feature_generation(market_state, events=[_SAMPLE_EVENT])
 
     assert (
         feature_set.feature_errors == []
@@ -371,7 +504,7 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
         patch(_PATCH_ENGINE, return_value=pg_engine),
         patch(_patch_vol_gap, side_effect=RuntimeError("simulated vol gap failure")),
     ):
-        feature_set = run_feature_generation(market_state, events=[])
+        feature_set = run_feature_generation(market_state, events=[_SAMPLE_EVENT])
 
     # feature_errors must be non-empty and mention the failed signal
     assert feature_set.feature_errors, "expected feature_errors to be non-empty after failure"
