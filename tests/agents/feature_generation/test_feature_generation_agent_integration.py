@@ -43,8 +43,11 @@ _SAMPLE_EVENT = DetectedEvent(
 )
 
 
+_POSTGRES_TEST_IMAGE = "postgres:15"  # minimum version required for JSONB and TIMESTAMPTZ
+
+
 @pytest.mark.integration
-def test_compute_volatility_gap_integration():
+def test_compute_volatility_gap_integration() -> None:
     """Integration test: seed market_prices and verify volatility gap math.
 
     - Seeds 30 deterministic daily prices for `USO` producing ~15% annualized
@@ -63,85 +66,93 @@ def test_compute_volatility_gap_integration():
     prices = [base_price]
     for i in range(30 - 1):
         r = daily_stdev if i % 2 == 0 else -daily_stdev
-        prices.append(prices[-1] * (2.718281828459045**r))
+        prices.append(prices[-1] * math.exp(r))
 
-    # Start Postgres testcontainer
-    with PostgresContainer("postgres:15") as pg:
-        database_url = pg.get_connection_url()
-        os.environ["DATABASE_URL"] = database_url
+    _original_db_url = os.environ.get("DATABASE_URL")
+    # Start Postgres testcontainer; restore DATABASE_URL on exit to avoid
+    # leaking a stale URL pointing to a stopped container into subsequent tests.
+    try:
+        with PostgresContainer(_POSTGRES_TEST_IMAGE) as pg:
+            database_url = pg.get_connection_url()
+            os.environ["DATABASE_URL"] = database_url
 
-        engine = create_engine(database_url)
+            engine = create_engine(database_url)
 
-        # Apply schema (assume pytest CWD is project root)
-        schema_path = os.path.join(os.getcwd(), "db", "schema.sql")
-        with open(schema_path, encoding="utf-8") as f:
-            sql = f.read()
-        with engine.begin() as conn:
-            conn.exec_driver_sql(sql)
+            # Apply schema (assume pytest CWD is project root)
+            schema_path = os.path.join(os.getcwd(), "db", "schema.sql")
+            with open(schema_path, encoding="utf-8") as f:
+                sql = f.read()
+            with engine.begin() as conn:
+                conn.exec_driver_sql(sql)
 
-        # Insert price rows (oldest -> newest)
-        now = datetime.now(UTC)
-        with engine.begin() as conn:
-            for i, p in enumerate(prices):
-                ts = now - timedelta(days=(len(prices) - i))
-                conn.execute(
-                    text(
-                        "INSERT INTO market_prices (instrument, instrument_type, price, volume, "
-                        "source, timestamp) "
-                        "VALUES (:instrument, :instrument_type, :price, "
-                        ":volume, :source, :timestamp)"
-                    ),
-                    {
-                        "instrument": "USO",
-                        "instrument_type": "etf",
-                        "price": float(p),
-                        "volume": 1000,
-                        "source": "test",
-                        "timestamp": ts,
-                    },
-                )
+            # Insert price rows (oldest -> newest)
+            now = datetime.now(UTC)
+            with engine.begin() as conn:
+                for i, p in enumerate(prices):
+                    ts = now - timedelta(days=(len(prices) - i))
+                    conn.execute(
+                        text(
+                            "INSERT INTO market_prices "
+                            "(instrument, instrument_type, price, volume, source, timestamp) "
+                            "VALUES (:instrument, :instrument_type, :price, :volume, "
+                            ":source, :timestamp)"
+                        ),
+                        {
+                            "instrument": "USO",
+                            "instrument_type": "etf",
+                            "price": float(p),
+                            "volume": 1000,
+                            "source": "test",
+                            "timestamp": ts,
+                        },
+                    )
 
-        # Build MarketState with current price and an ATM OptionRecord
-        snapshot_time = now
-        current_price = prices[-1]
-        market_state = MarketState(
-            snapshot_time=snapshot_time,
-            prices=[
-                RawPriceRecord(
-                    instrument="USO",
-                    instrument_type="etf",
-                    price=float(current_price),
-                    volume=1000,
-                    timestamp=snapshot_time,
-                    source="test",
-                )
-            ],
-            options=[
-                OptionRecord(
-                    instrument="USO",
-                    strike=float(current_price),
-                    expiration_date=snapshot_time + timedelta(days=7),
-                    implied_volatility=0.22,
-                    open_interest=100,
-                    volume=10,
-                    option_type="call",
-                    timestamp=snapshot_time,
-                    source="test",
-                )
-            ],
-            ingestion_errors=[],
-        )
+            # Build MarketState with current price and an ATM OptionRecord
+            snapshot_time = now
+            current_price = prices[-1]
+            market_state = MarketState(
+                snapshot_time=snapshot_time,
+                prices=[
+                    RawPriceRecord(
+                        instrument="USO",
+                        instrument_type="etf",
+                        price=float(current_price),
+                        volume=1000,
+                        timestamp=snapshot_time,
+                        source="test",
+                    )
+                ],
+                options=[
+                    OptionRecord(
+                        instrument="USO",
+                        strike=float(current_price),
+                        expiration_date=snapshot_time + timedelta(days=7),
+                        implied_volatility=0.22,
+                        open_interest=100,
+                        volume=10,
+                        option_type="call",
+                        timestamp=snapshot_time,
+                        source="test",
+                    )
+                ],
+                ingestion_errors=[],
+            )
 
-        # Compute the volatility gaps
-        gaps = compute_volatility_gap(market_state)
+            # Compute the volatility gaps
+            gaps = compute_volatility_gap(market_state)
 
-        assert gaps, "Expected at least one volatility gap computed"
-        g = next((gg for gg in gaps if gg.instrument == "USO"), None)
-        assert g is not None
+            assert gaps, "Expected at least one volatility gap computed"
+            g = next((gg for gg in gaps if gg.instrument == "USO"), None)
+            assert g is not None
 
-        # implied_vol (0.22) - realized_vol ~= 0.07 ± 0.01
-        gap = g.gap
-        assert abs(gap - 0.07) < 0.01, f"gap {gap} not within tolerance"
+            # implied_vol (0.22) - realized_vol ~= 0.07 ± 0.01
+            gap = g.gap
+            assert abs(gap - 0.07) < 0.01, f"gap {gap} not within tolerance"
+    finally:
+        if _original_db_url is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = _original_db_url
 
 
 """
@@ -240,7 +251,7 @@ def pg_engine() -> Generator[Engine, None, None]:
     """Start a PostgresContainer, apply schema, yield engine, stop container."""
     from testcontainers.postgres import PostgresContainer
 
-    with PostgresContainer("postgres:15") as pg:
+    with PostgresContainer(_POSTGRES_TEST_IMAGE) as pg:
         engine = create_engine(pg.get_connection_url())
         with engine.begin() as conn:
             conn.execute(text(_DDL))
