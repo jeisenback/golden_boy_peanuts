@@ -322,3 +322,14 @@ Phase 3 planning (issue #24) complete:
 - Issue #24 closed.
 
 Sprint 9 ready to start when human lead initiates.
+
+## Sprint Notes (2026-03-21, CEO review)
+
+/plan-ceo-review run against Phase 1–3 in SCOPE EXPANSION mode. All 6 expansions accepted:
+- #164 Outcome tracking — feedback loop for weight calibration; makes #159 trainable
+- #165 Alerting — email/Slack/Pushover when edge_score > threshold
+- #166 Backtesting harness — historical replay against COVID crash, Ukraine invasion, Houthi disruptions
+- #167 Instrument expansion — add OXY, HAL, MRO, DVN, SLB (6→11 instruments)
+- #168 REST API — FastAPI /candidates, /signals/latest, /health (dep approval needed)
+- #169 thinkorswim ticket generation — .tst output, advisory only
+Plan saved to ~/.gstack/projects/jeisenback-golden-boy-peanuts/2026-03-21-phase3-expansion.md
