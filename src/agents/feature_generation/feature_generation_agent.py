@@ -94,7 +94,9 @@ def _resolve_second_month_ticker(lookahead_months: int = 6) -> str | None:
             if price is not None:
                 return ticker
         except Exception as exc:  # avoid bare except; log and continue
-            logger.debug("_resolve_second_month_ticker: yfinance probe failed for %s: %s", ticker, exc)
+            logger.debug(
+                "_resolve_second_month_ticker: yfinance probe failed for %s: %s", ticker, exc
+            )
             continue
     return None
 
