@@ -113,7 +113,7 @@ No additional spend required.
 - [x] Vendor comparison table populated with actual results
 - [x] Backtest window decision made (Option B — split window)
 - [x] Integration note captured for CL/BZ futures endpoint difference
-- [ ] Human lead approves cost/terms ← **closes #170**
+- [x] Human lead approves cost/terms — approved 2026-03-21 ✓
 
 ## Notes on credentials and security
 - `POLYGON_API_KEY` is already in `.env` — do NOT commit it
