@@ -99,7 +99,6 @@ def _resolve_second_month_ticker(lookahead_months: int = 6) -> str | None:
     return None
 
 
-
 @with_retry()
 def _fetch_second_month_price(ticker: str | None = None) -> float:
     """Fetch the second-month WTI futures price via yfinance.

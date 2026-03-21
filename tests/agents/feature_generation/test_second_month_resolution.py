@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
-import pytest
-
 import yfinance as yf
 
 from src.agents.feature_generation.feature_generation_agent import (

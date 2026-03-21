@@ -18,6 +18,7 @@ from sqlalchemy.engine import Engine
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 from testcontainers.postgres import PostgresContainer
 
+from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.feature_generation.feature_generation_agent import (
     compute_volatility_gap,
     run_feature_generation,
@@ -28,8 +29,6 @@ from src.agents.ingestion.models import (
     OptionRecord,
     RawPriceRecord,
 )
-
-from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 
 # A single high-confidence supply disruption event for tests that assert supply_shock_probability
 _SAMPLE_EVENT = DetectedEvent(
@@ -168,7 +167,7 @@ Golden dataset (USO):
   - With sector_dispersion=0.50: edge_score ≈ 0.39 > 0.35 (validates #19 forward ref)
 """
 
- 
+
 # ---------------------------------------------------------------------------
 # Patch target for get_engine used inside the feature generation agent
 # ---------------------------------------------------------------------------
