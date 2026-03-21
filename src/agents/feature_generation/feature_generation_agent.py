@@ -94,10 +94,9 @@ def _resolve_second_month_ticker(lookahead_months: int = 6) -> str | None:
             if price is not None:
                 return ticker
         except Exception:
-            # ignore and try next candidate
+            logger.warning("Failed to fetch price for %s; trying next candidate", ticker)
             continue
     return None
-
 
 
 @with_retry()
