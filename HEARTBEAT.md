@@ -350,3 +350,23 @@ Plan saved to ~/.gstack/projects/jeisenback-golden-boy-peanuts/2026-03-21-phase3
 | What was slow | Sprint 4 remained ACTIVE past target close (2026-03-20) while Phase 2 release and Phase 3 planning ran; interactive scripts require piped input in agent context |
 | What to change | Close sprints promptly when all issues are done; separate planning sprints from feature sprints |
 
+
+## Sprint Notes (2026-03-21, Sprint 9 gates)
+
+Both Sprint 9 pre-sprint gates cleared — implementation may now begin.
+
+**#170 CLOSED** — Vendor selected: Polygon/Massive (existing `POLYGON_API_KEY`, no new spend).
+Coverage confirmed via controlled scan: CL/USO/XOM/XLE/CVX from Feb 2021 (48+ months),
+BZ from Jan 2022 (27 months — all 2021 empty confirmed with retries).
+Backtest window: Option B split — max history per instrument (not aligned to BZ start).
+Critical integration note: CL/BZ futures options require Polygon futures endpoint, NOT the
+standard `underlying_ticker` Massive contract index. See docs/vendor_evaluation/ for details.
+Human lead approved cost/terms 2026-03-21.
+
+**#171 CLOSED** — ESOD Hard Stop cleared. `src/backtest/` approved as new top-level module.
+Human lead approved 2026-03-21.
+
+**Next implementation issues (unblocked):**
+- #172 — DB migration: backtest_candidates + backtest_outcomes tables
+- #166 — Backtesting harness (HistoricalLoader, run_backtest_pipeline, BacktestReport)
+- #164 — Outcome tracking
