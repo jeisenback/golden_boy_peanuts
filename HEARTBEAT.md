@@ -333,3 +333,24 @@ Sprint 9 ready to start when human lead initiates.
 - #168 REST API — FastAPI /candidates, /signals/latest, /health (dep approval needed)
 - #169 thinkorswim ticket generation — .tst output, advisory only
 Plan saved to ~/.gstack/projects/jeisenback-golden-boy-peanuts/2026-03-21-phase3-expansion.md
+
+---
+
+## Sprint 4 Summary — Closed 2026-03-21
+
+| Field | Value |
+|-------|-------|
+| Goal | QA for ingestion and feature generation; implement compute_edge_score and evaluate_strategies; QA for strategy evaluation |
+| Start | 2026-03-13 |
+| Closed | 2026-03-21 |
+| Issues Closed | 0 |
+| Carry-overs | None |
+
+### Sprint 4 Retro Notes
+
+| | |
+|---|---|
+| What went well | All Phase 3 plan complete: design doc approved, eng review done, 19+ issues created (#148–#172), all assigned to sprint milestones; Phase 2 shipped as v0.2.0 |
+| What was slow | Sprint 4 remained ACTIVE past target close (2026-03-20) while Phase 2 release and Phase 3 planning ran; interactive scripts require piped input in agent context |
+| What to change | Close sprints promptly when all issues are done; separate planning sprints from feature sprints |
+
