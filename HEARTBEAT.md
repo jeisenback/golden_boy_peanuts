@@ -312,3 +312,13 @@ Issue #111 implemented on `chore/111-timescaledb-migration-plan`:
 Issue #113 — Phase 2 release PR opened:
 - All AC items verified: local_check.sh clean on develop, Sprint 6+7 closed, #110/#111/#112/#23 all closed.
 - #113 In Review, PR #147 opened 2026-03-21
+
+## Sprint Notes (2026-03-21, Phase 3 Planning)
+
+Phase 3 planning (issue #24) complete:
+- Created Sprint milestones: Sprint 9 (Alternative Data Ingestion), Sprint 10 (Signal Computation), Sprint 11 (Phase 3 QA & Release)
+- Created 16 issues: #148–#163 covering all Phase 3 scope from PRD §4.3, §8, §10
+- Key decisions: EDGAR/Quiver for insider trades, Reddit+Stocktwits for narrative velocity, MarineTraffic for tanker flows, ML weight scaffold is opt-in via env var, cross-sector correlation implemented as boost multiplier in compute_edge_score
+- Issue #24 closed.
+
+Sprint 9 ready to start when human lead initiates.
