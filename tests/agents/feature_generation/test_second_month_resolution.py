@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
-
-import pytest
-
 import yfinance as yf
 
 from src.agents.feature_generation.feature_generation_agent import (
@@ -23,7 +19,6 @@ class DummyTicker:
 
 def test_resolve_second_month_ticker_picks_first_available(monkeypatch) -> None:
     # Simulate yfinance returning None for CLF=F then price for CLG=F
-    calls = {}
 
     def fake_ticker(symbol):
         # Provide price only for CLG=F
