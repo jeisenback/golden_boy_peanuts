@@ -1,16 +1,10 @@
 # HEARTBEAT.md — Energy Options Opportunity Agent
 # -----------------------------------------------------------------------
-# COMMITTED. Append-only sprint notes. If this file is stale, it is wrong.
+# COMMITTED. Always current. If this file is stale, it is wrong.
 #
-# Claude Code: READ THE REMOTE VERSION — never your local copy without fetching first:
-#   git fetch origin develop --quiet
-#   git show origin/develop:HEARTBEAT.md
-# Your local branch may be hours behind. Always read from origin/develop.
-#
-# The Sprint Issues table shows sprint scope and final merged/closed state only.
-# Live status (In Progress / In Review) is tracked on the GitHub issue via
-# assignee + labels — NOT in this table. To check live status:
-#   gh issue view <N>
+# Claude Code: READ THIS FILE BEFORE DOING ANYTHING ELSE EACH SESSION.
+# It tells you what sprint is active, what you are working on, and
+# what branch to use. If you skip this step, you will work on the wrong thing.
 #
 # Update protocol: see bottom of this file.
 # -----------------------------------------------------------------------
@@ -19,44 +13,46 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 4 |
-| Sprint Name | Sprint 4 — Signal Quality |
-| Goal | QA for ingestion and feature generation; implement compute_edge_score and evaluate_strategies; QA for strategy evaluation |
-| Start Date | 2026-03-13 |
-| Target Close | 2026-03-20 |
+| Sprint Number | 9 |
+| Sprint Name | Sprint 9 — Sprint 9 — Phase 3 Alternative Data Ingestion: Backtesting core and pre-sprint gates: select historical data vendor, get ESOD Hard Stop approval for src/backtest/ module; no feature code until both gates cleared |
+| Goal | Backtesting core and pre-sprint gates: select historical data vendor, get ESOD Hard Stop approval for src/backtest/ module; no feature code until both gates cleared |
+| Start Date | 2026-03-21 |
+| Target Close | 2026-03-28 |
 | Status | ACTIVE |
 
 ## Sprint Issues
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 12 | QA: Ingestion Agent — integration test and coverage sign-off | Not Started | — | — |
-| 16 | QA: Feature Generation Agent — integration test and coverage sign-off | Not Started | — | — |
-| 17 | Implement compute_edge_score — Phase 1 static heuristic scoring | Not Started | — | — |
-| 18 | Implement evaluate_strategies — long straddle, call spread, put spread candidates | Not Started | — | — |
-| 19 | QA: Strategy Evaluation Agent — integration test and coverage sign-off | Not Started | — | Depends on #17, #18 |
+| 172 | feat(backtest): backtest_candidates and backtest_outcomes DB migration | Not Started | — | — |
+| 171 | chore(esod): approve src/backtest/ as new top-level module — ESOD Hard Stop | Not Started | — | — |
+| 170 | chore(backtest): select and confirm historical options data vendor — Sprint 9 blocker | Not Started | — | — |
+| 166 | Backtesting harness — historical replay against 3 known volatility events | Not Started | — | — |
+| 164 | Outcome tracking — record candidate hit/miss and feed into weight calibration | Not Started | — | — |
+| 153 | Implement fetch_tanker_flows — MarineTraffic/VesselFinder tanker movement data | Not Started | — | — |
+| 152 | Implement fetch_stocktwits_sentiment — Stocktwits energy ticker sentiment | Not Started | — | — |
+| 151 | Implement fetch_reddit_sentiment — Reddit API energy subreddit mention velocity | Not Started | — | — |
+| 150 | Implement fetch_quiver_enrichment — Quiver Quantitative optional insider enrichment | Not Started | — | — |
+| 149 | Implement fetch_edgar_insider_trades — SEC EDGAR Form 4 energy insider trades | Not Started | — | — |
+| 148 | DB schema: add insider_trades, shipping_events, narrative_signals tables | Not Started | — | — |
+| 137 | feat(backtesting): harness to compare edge_score predictions against strategy_outcomes | Not Started | — | — |
+| 136 | chore(structure): relocate dev-tooling agents — issue_refinement, pr_review, doc_generation out of src/ | Not Started | — | — |
+| 130 | feat(schema): strategy_outcomes table — track candidate vs. actual price move for edge score validation | Not Started | — | — |
 
-## Issue Status: GitHub Is Authoritative
+## Current Active Branch
 
-The Sprint Issues table above shows sprint scope and the final merged/closed state of each
-issue. It is **not** updated by agents during a sprint.
+`develop` — no active feature branch yet; create branches per issue via `bash scripts/new_branch.sh`
 
-To see live status for any issue:
-```
-gh issue view <N>                                             # assignee = who has claimed it
-gh issue list --milestone "Sprint 2 — Core Infrastructure" --state open  # full sprint view
-```
+## Blockers
 
-An issue is **claimed** when it has an assignee (`gh issue assign <N> --self`).
-The `in-progress` label means actively being worked. The `needs-review` label means PR is open.
-These transitions happen on the GitHub issue — not in this file.
+- None
 
-The Sprint Issues table is updated only by:
-- `bash scripts/sprint_start.sh` — writes the initial table at sprint start
-- `bash scripts/sprint_close.sh` — updates final Merged/Closed rows at sprint end
-- Human lead (manual corrections only)
+## Last Merged PR
+
+- None yet this sprint
 
 ---
+
 
 ## Current Active Branch
 
