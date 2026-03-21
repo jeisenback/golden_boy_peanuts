@@ -306,3 +306,13 @@ Issue #111 implemented on `chore/111-timescaledb-migration-plan`:
 - AC audit: `db/schema.sql` header and `docker-compose.yml` TimescaleDB image were both already satisfying their respective ACs (pre-existing); no existing files modified.
 - Gate: `pytest -m "not integration"` 248 passed; `bash scripts/local_check.sh` ALL STAGES PASSED.
 - #111 In Review, PR #142 opened 2026-03-18
+
+## Sprint Notes (2026-03-20, session 1)
+
+Issue #16 PR review comments addressed and merged (PR #146, merge commit e528269):
+- Added `-> None` return-type annotation to `test_compute_volatility_gap_integration()`.
+- Replaced magic literal `2.718281828459045**r` with `math.exp(r)` using the already-imported `math` module.
+- Wrapped `with PostgresContainer(...)` in `try/finally` to restore `DATABASE_URL` env var after the container exits, preventing stale URL leaking into subsequent tests.
+- Extracted `_POSTGRES_TEST_IMAGE = "postgres:15"` module-level constant; used in both the standalone test and the `pg_engine` fixture.
+- Gate: all 5 stages passed (250 unit tests); pushed and PR merged to develop.
+- #16 merged in PR #146 on 2026-03-21
