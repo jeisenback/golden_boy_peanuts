@@ -1,12 +1,14 @@
 """
 Backtesting pipeline for the Energy Options Opportunity Agent.
 
-Entry point:  run_backtest_pipeline(slices)
+This module currently provides the DB layer for historical backtest data.
 DB writers:   write_backtest_candidate(), record_outcome()
 
+Planned entry point (issue #166):
+  run_backtest_pipeline(slices) — calls compute_* functions directly, never
+  run_feature_generation(), to avoid writing to the live feature_sets table.
+
 Design notes (from eng review 2026-03-21):
-  - run_backtest_pipeline() calls compute_* functions DIRECTLY, never
-    run_feature_generation(), to avoid writing to the live feature_sets table.
   - backtest_candidates is isolated from strategy_candidates — historical replay
     rows never pollute production reporting queries.
   - profitable=None (not skipped) when yfinance returns no history for a date.
@@ -40,7 +42,9 @@ def write_backtest_candidate(candidate: BacktestCandidate, engine: Engine) -> uu
     the database-assigned UUID.
 
     Args:
-        candidate: Validated BacktestCandidate to insert.
+        candidate: Validated BacktestCandidate to insert. candidate.signals
+            (dict) is JSON-serialized internally before the INSERT — callers
+            pass the raw dict and do not need to pre-serialize.
         engine:    SQLAlchemy Engine connected to the target database.
 
     Returns:
