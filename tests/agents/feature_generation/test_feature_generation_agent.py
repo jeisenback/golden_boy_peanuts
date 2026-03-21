@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.feature_generation.feature_generation_agent import (
+    compute_futures_curve_steepness,
     compute_sector_dispersion,
     compute_volatility_gap,
     run_feature_generation,
@@ -54,7 +55,7 @@ def _make_price_record(instrument: str = "USO", price: float = 103.0) -> RawPric
         instrument=instrument,
         instrument_type=InstrumentType.ETF,
         price=price,
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(tz=UTC),
         source="test",
     )
 
@@ -71,7 +72,7 @@ def _make_option(
         expiration_date=datetime.strptime(expiry, "%Y-%m-%d").replace(tzinfo=UTC),
         implied_volatility=iv,
         option_type="call",
-        timestamp=datetime.now(UTC),
+        timestamp=datetime.now(tz=UTC),
         source="test",
     )
 
@@ -82,7 +83,7 @@ def _make_market_state(
     options: list[OptionRecord] | None = None,
 ) -> MarketState:
     return MarketState(
-        snapshot_time=datetime.now(UTC),
+        snapshot_time=datetime.now(tz=UTC),
         prices=[_make_price_record(instrument, price)],
         options=options if options is not None else [_make_option(instrument)],
     )
@@ -221,12 +222,12 @@ def _make_sector_state(prices: dict[str, float]) -> MarketState:
             instrument=instr,
             instrument_type=_SECTOR_TYPES[instr],
             price=price,
-            timestamp=datetime.now(UTC),
+            timestamp=datetime.now(tz=UTC),
             source="test",
         )
         for instr, price in prices.items()
     ]
-    return MarketState(snapshot_time=datetime.now(UTC), prices=records, options=[])
+    return MarketState(snapshot_time=datetime.now(tz=UTC), prices=records, options=[])
 
 
 class TestComputeSectorDispersion:
@@ -274,27 +275,27 @@ class TestComputeSectorDispersion:
     def test_non_sector_instruments_are_ignored(self) -> None:
         """CL=F and BZ=F prices do not influence the sector CV."""
         state = MarketState(
-            snapshot_time=datetime.now(UTC),
+            snapshot_time=datetime.now(tz=UTC),
             prices=[
                 RawPriceRecord(
                     instrument="CL=F",
                     instrument_type=InstrumentType.CRUDE_FUTURES,
                     price=9999.0,  # would dominate if included
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(tz=UTC),
                     source="test",
                 ),
                 RawPriceRecord(
                     instrument="XOM",
                     instrument_type=InstrumentType.EQUITY,
                     price=100.0,
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(tz=UTC),
                     source="test",
                 ),
                 RawPriceRecord(
                     instrument="CVX",
                     instrument_type=InstrumentType.EQUITY,
                     price=100.0,
-                    timestamp=datetime.now(UTC),
+                    timestamp=datetime.now(tz=UTC),
                     source="test",
                 ),
             ],
@@ -304,11 +305,130 @@ class TestComputeSectorDispersion:
         assert compute_sector_dispersion(state) == pytest.approx(0.0)
 
 
+# ---------------------------------------------------------------------------
+# Tests for compute_futures_curve_steepness
+# ---------------------------------------------------------------------------
+
+_PATCH_FETCH_SECOND = (
+    "src.agents.feature_generation.feature_generation_agent._fetch_second_month_price"
+)
+
+
+def _make_wti_state(price: float = 75.0) -> MarketState:
+    """Build a MarketState with a CL=F (WTI front-month) price record."""
+    return MarketState(
+        snapshot_time=datetime.now(tz=UTC),
+        prices=[
+            RawPriceRecord(
+                instrument="CL=F",
+                instrument_type=InstrumentType.CRUDE_FUTURES,
+                price=price,
+                timestamp=datetime.now(tz=UTC),
+                source="test",
+            ),
+        ],
+        options=[],
+    )
+
+
+class TestComputeFuturesCurveSteepness:
+    """Tests for compute_futures_curve_steepness() — WTI contango/backwardation."""
+
+    def test_contango_returns_positive(self) -> None:
+        """Second-month > front-month → positive (contango)."""
+        state = _make_wti_state(price=75.0)
+        with patch(_PATCH_FETCH_SECOND, return_value=76.5):
+            result = compute_futures_curve_steepness(state)
+        assert result is not None
+        assert result == pytest.approx((76.5 - 75.0) / 75.0)
+        assert result > 0
+
+    def test_backwardation_returns_negative(self) -> None:
+        """Second-month < front-month → negative (backwardation)."""
+        state = _make_wti_state(price=75.0)
+        with patch(_PATCH_FETCH_SECOND, return_value=73.0):
+            result = compute_futures_curve_steepness(state)
+        assert result is not None
+        assert result == pytest.approx((73.0 - 75.0) / 75.0)
+        assert result < 0
+
+    def test_formula_correctness(self) -> None:
+        """Result equals (second - front) / front exactly."""
+        front = 80.0
+        second = 82.4
+        state = _make_wti_state(price=front)
+        with patch(_PATCH_FETCH_SECOND, return_value=second):
+            result = compute_futures_curve_steepness(state)
+        assert result == pytest.approx((second - front) / front)
+
+    def test_missing_front_month_returns_none_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Returns None with WARNING when CL=F is absent from market_state."""
+        state = MarketState(
+            snapshot_time=datetime.now(tz=UTC),
+            prices=[
+                RawPriceRecord(
+                    instrument="USO",
+                    instrument_type=InstrumentType.ETF,
+                    price=50.0,
+                    timestamp=datetime.now(tz=UTC),
+                    source="test",
+                ),
+            ],
+            options=[],
+        )
+        with caplog.at_level(
+            logging.WARNING,
+            logger="src.agents.feature_generation.feature_generation_agent",
+        ):
+            result = compute_futures_curve_steepness(state)
+        assert result is None
+        assert "Front-month instrument" in caplog.text
+
+    def test_yfinance_failure_returns_none_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Returns None with WARNING when second-month yfinance fetch fails."""
+        state = _make_wti_state(price=75.0)
+        with (
+            patch(_PATCH_FETCH_SECOND, side_effect=RuntimeError("yfinance timeout")),
+            caplog.at_level(
+                logging.WARNING,
+                logger="src.agents.feature_generation.feature_generation_agent",
+            ),
+        ):
+            result = compute_futures_curve_steepness(state)
+        assert result is None
+        assert "Failed to fetch second-month price" in caplog.text
+
+    @pytest.mark.parametrize("bad_price", [float("inf")])
+    def test_nonpositive_or_nonfinite_front_price_returns_none(
+        self, bad_price: float, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Returns None with WARNING when front-month price is zero, negative, or non-finite."""
+        state = _make_wti_state(price=bad_price)
+        with caplog.at_level(
+            logging.WARNING,
+            logger="src.agents.feature_generation.feature_generation_agent",
+        ):
+            result = compute_futures_curve_steepness(state)
+        assert result is None
+        assert "non-positive or non-finite" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Patch targets for TestRunFeatureGeneration
+# ---------------------------------------------------------------------------
+
 _PATCH_COMPUTE_VOL_GAP = (
     "src.agents.feature_generation.feature_generation_agent.compute_volatility_gap"
 )
 _PATCH_COMPUTE_SECTOR = (
     "src.agents.feature_generation.feature_generation_agent.compute_sector_dispersion"
+)
+_PATCH_COMPUTE_CURVE = (
+    "src.agents.feature_generation.feature_generation_agent.compute_futures_curve_steepness"
 )
 _PATCH_COMPUTE_SUPPLY = (
     "src.agents.feature_generation.feature_generation_agent.compute_supply_shock_probability"
@@ -327,6 +447,7 @@ class TestRunFeatureGeneration:
         with (
             patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),
             patch(_PATCH_COMPUTE_SECTOR, return_value=None),
+            patch(_PATCH_COMPUTE_CURVE, return_value=None),
             patch(_PATCH_COMPUTE_SUPPLY, return_value=0.0),
         ):
             result = run_feature_generation(market_state, [])
@@ -347,12 +468,14 @@ class TestRunFeatureGeneration:
         with (
             patch(_PATCH_COMPUTE_VOL_GAP, return_value=fake_gaps),
             patch(_PATCH_COMPUTE_SECTOR, return_value=0.15),
+            patch(_PATCH_COMPUTE_CURVE, return_value=0.02),
             patch(_PATCH_COMPUTE_SUPPLY, return_value=0.6),
         ):
             result = run_feature_generation(market_state, [])
 
         assert result.volatility_gaps == fake_gaps
         assert result.sector_dispersion == pytest.approx(0.15)
+        assert result.futures_curve_steepness == pytest.approx(0.02)
         assert result.supply_shock_probability == pytest.approx(0.6)
         assert result.feature_errors == []
 
@@ -365,6 +488,7 @@ class TestRunFeatureGeneration:
         with (
             patch(_PATCH_COMPUTE_VOL_GAP, side_effect=RuntimeError("db down")),
             patch(_PATCH_COMPUTE_SECTOR, return_value=0.05),
+            patch(_PATCH_COMPUTE_CURVE, return_value=None),
             patch(_PATCH_COMPUTE_SUPPLY, return_value=0.2),
         ):
             result = run_feature_generation(market_state, [])
@@ -379,19 +503,21 @@ class TestRunFeatureGeneration:
         assert result.supply_shock_probability == pytest.approx(0.2)
 
     def test_all_signal_failures_recorded_in_feature_errors(self) -> None:
-        """All three compute functions failing still returns a valid FeatureSet."""
+        """All four compute functions failing still returns a valid FeatureSet."""
         market_state = self._base_state()
         with (
             patch(_PATCH_COMPUTE_VOL_GAP, side_effect=RuntimeError("vol fail")),
             patch(_PATCH_COMPUTE_SECTOR, side_effect=ValueError("sector fail")),
+            patch(_PATCH_COMPUTE_CURVE, side_effect=RuntimeError("curve fail")),
             patch(_PATCH_COMPUTE_SUPPLY, side_effect=NotImplementedError("supply fail")),
         ):
             result = run_feature_generation(market_state, [])
 
         assert isinstance(result, FeatureSet)
-        assert len(result.feature_errors) == 3
+        assert len(result.feature_errors) == 4
         assert result.volatility_gaps == []
         assert result.sector_dispersion is None
+        assert result.futures_curve_steepness is None
         assert result.supply_shock_probability is None
 
     def test_snapshot_time_matches_market_state(self) -> None:
@@ -401,6 +527,7 @@ class TestRunFeatureGeneration:
         with (
             patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),
             patch(_PATCH_COMPUTE_SECTOR, return_value=None),
+            patch(_PATCH_COMPUTE_CURVE, return_value=None),
             patch(_PATCH_COMPUTE_SUPPLY, return_value=0.0),
         ):
             result = run_feature_generation(market_state, [])

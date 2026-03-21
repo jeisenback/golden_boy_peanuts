@@ -41,7 +41,7 @@ from src.agents.strategy_evaluation.models import StrategyCandidate
 # Shared timestamp
 # ---------------------------------------------------------------------------
 
-_TS = datetime.now(UTC).replace(microsecond=0)
+_TS = datetime.now(tz=UTC).replace(microsecond=0)
 _TS_EXP = _TS + timedelta(days=90)
 
 

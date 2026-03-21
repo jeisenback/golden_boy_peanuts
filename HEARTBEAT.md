@@ -256,3 +256,53 @@ two independent blocks at the bottom of the file — git merges them as clean ap
 - Sprint issues have changed status but the table has not been updated
 - The last session was >24 hours ago and sprint notes have no new entries
 - Status still says "PLANNING" after sprint_start.sh was run
+
+## Sprint Notes (2026-03-15, Phase 2 Planning)
+
+Phase 1 release complete — v0.1.0 tagged and shipped (PR #99, merge commit ffff9dc).
+
+Phase 2 planning (issue #23) complete:
+- Created Sprint milestones: Sprint 6 (Event Detection Data Layer), Sprint 7 (Event Orchestration & Feature Updates), Sprint 8 (Phase 2 QA & Release)
+- Created 14 issues: #100–#113 covering all Phase 2 scope from PRD §4.2, §8, §10
+- Key decisions recorded: NewsAPI key confirmed, eia_inventory as separate DB table, LLM classification via llm_wrapper.py for classify_event, Phase 2 in new sprints (6–8)
+- Fixed CI false-positives blocking PR #99: PR review agent now exempts develop branch and develop→main release PRs; doc-gen workflow skips push for protected head branches
+- Issue #23 closed.
+
+Sprint 6 ready to start. No blockers.
+
+## Sprint Notes (2026-03-18, session 1)
+
+Issue #128 implemented on `test/128-degraded-mode-pipeline`:
+- Strengthened `tests/pipeline/test_pipeline.py` degraded-mode coverage to mock only `run_ingestion()`, `run_event_detection()`, and `run_feature_generation()` while exercising real `evaluate_strategies()`.
+- Regression now asserts `run_pipeline()` logs a WARNING containing "degraded mode" when `run_event_detection()` raises `EventDetectionError`.
+- Regression now asserts degraded mode still returns a non-empty list of `StrategyCandidate` objects and that event-driven signal labels stay at defaults (`supply_shock_probability="none"`, `futures_curve_steepness="flat"`).
+- Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
+- #128 In Review, PR #139 opened 2026-03-18
+
+## Sprint Notes (2026-03-18, session 2)
+
+Issue #129 implemented on `test/129-correlated-instruments-candidate-count`:
+- Added `test_correlated_instruments_yield_18_equal_score_candidates()` to `tests/agents/strategy_evaluation/test_strategy_evaluation_agent.py`.
+- Regression asserts exactly 18 candidates (6 in-scope instruments × 3 structures), identical edge scores across all candidates, and deterministic order under equal-score stable sorting.
+- Test docstring documents that 18 correlated candidates are expected behavior and references concentration filter issue #132 for future de-duplication.
+- Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
+- #129 In Review, PR #140 opened 2026-03-18
+
+## Sprint Notes (2026-03-18, session 3)
+
+Issue #127 implemented on `test/127-phase2-multiplier-zero-effect`:
+- Updated `test_supply_shock_increases_score()` in `tests/agents/strategy_evaluation/test_strategy_evaluation_agent.py` to use the explicit AC value `supply_shock_probability=0.8`.
+- Added `test_zero_effect_inputs_equivalent_to_none()` to assert zero-effect equivalence (`supply_shock_probability=0.0`, `futures_curve_steepness=0.0`) versus `None` inputs.
+- Existing coverage for curve steepness increase (`0.05`) and max-value clamping (`<= 1.0`) remains in place and passes.
+- Gate: `pytest -m "not integration"` and `bash scripts/local_check.sh` both passed.
+- #127 In Review, PR #141 opened 2026-03-18
+- #127 In Review, PR #141 opened 2026-03-18
+
+## Sprint Notes (2026-03-18, session 4)
+
+Issue #111 implemented on `chore/111-timescaledb-migration-plan`:
+- Created `db/migrate_timescaledb.sql`: idempotent migration script enabling `CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE` and `create_hypertable` calls (with `if_not_exists => TRUE`) for all four partition candidates: `market_prices.timestamp`, `options_chain.timestamp`, `eia_inventory.fetched_at`, `detected_events.detected_at`. Full rollback procedure documented as inline comments.
+- Created `docs/timescaledb_migration.md`: migration guide covering PRD §6.2 trigger criteria, pre-migration checklist, step-by-step apply/verify commands, rollback procedure, and Docker Compose note.
+- AC audit: `db/schema.sql` header and `docker-compose.yml` TimescaleDB image were both already satisfying their respective ACs (pre-existing); no existing files modified.
+- Gate: `pytest -m "not integration"` 248 passed; `bash scripts/local_check.sh` ALL STAGES PASSED.
+- #111 In Review, PR #142 opened 2026-03-18

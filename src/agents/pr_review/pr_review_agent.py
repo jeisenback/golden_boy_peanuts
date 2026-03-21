@@ -42,7 +42,7 @@ from src.core.llm_wrapper import LLMWrapper
 logger = logging.getLogger(__name__)
 
 # Regex patterns for static rule checks (git_workflow.md)
-_BRANCH_RE = re.compile(r"^(feature|fix|refactor|chore|test|docs)/\d+-[a-z0-9-]+$")
+_BRANCH_RE = re.compile(r"^(feature|fix|refactor|chore|test|docs|infra)/\d+-[a-z0-9-]+$")
 _COMMIT_ISSUE_RE = re.compile(r"#\d+")
 _LANGCHAIN_RE = re.compile(r"^\s*(import|from)\s+(langchain|langgraph)", re.MULTILINE)
 _TYPE_HINT_DEF_RE = re.compile(r"^def\s+[a-z_][a-zA-Z0-9_]*\s*\([^)]*\)(?!\s*->)", re.MULTILINE)
@@ -84,12 +84,20 @@ def _check_branch_name(metadata: PRMetadata) -> list[ReviewFinding]:
     """
     Verify the head branch follows <type>/<issue>-<slug> naming convention.
 
+    Branches prefixed with 'claude/' are system-assigned session branches
+    (see CLAUDE.md) and are exempt from the convention check.
+
     Args:
         metadata: Validated PR metadata.
 
     Returns:
-        List of findings; empty if the branch name is compliant.
+        List of findings; empty if the branch name is compliant or exempt.
     """
+    if metadata.head_branch.startswith("claude/"):
+        return []
+    # Protected integration branches are exempt from feature-branch naming.
+    if metadata.head_branch in {"develop", "main"}:
+        return []
     if not _BRANCH_RE.match(metadata.head_branch):
         return [
             ReviewFinding(
@@ -119,6 +127,9 @@ def _check_target_branch(metadata: PRMetadata) -> list[ReviewFinding]:
     Returns:
         List of findings; empty if the target branch is compliant.
     """
+    # develop → main is the valid release path; exempt it.
+    if metadata.base_branch == "main" and metadata.head_branch == "develop":
+        return []
     if metadata.base_branch == "main":
         return [
             ReviewFinding(

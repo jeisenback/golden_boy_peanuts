@@ -1,6 +1,6 @@
 -- =============================================================================
 -- db/schema.sql — Energy Options Opportunity Agent
--- Phase 1 schema: Ingestion Agent tables
+-- Phase 1 + Phase 2 schema
 -- =============================================================================
 --
 -- Design principles (PRD Section 6.1):
@@ -10,6 +10,8 @@
 --   - Hypertable candidates (Phase 2, PRD Section 6.2):
 --       * market_prices   → partition by timestamp
 --       * options_chain   → partition by timestamp
+--       * eia_inventory   → partition by fetched_at
+--       * detected_events → partition by detected_at
 --
 -- TimescaleDB migration triggers (PRD Section 6.2) — convert to hypertables
 -- when ANY of the following conditions is met:
@@ -17,12 +19,11 @@
 --   2. Backtesting range queries consistently exceed 5 seconds.
 --   3. Team size grows beyond a single contributor.
 --
--- Migration command (no schema changes required):
---   SELECT create_hypertable('market_prices', 'timestamp');
---   SELECT create_hypertable('options_chain', 'timestamp');
+-- Migration script: db/migrate_timescaledb.sql (see issue #111)
 --
 -- Apply:  psql $DATABASE_URL -f db/schema.sql
--- Verify: \d market_prices    \d options_chain
+-- Verify: \d market_prices    \d options_chain    \d feature_sets
+--         \d strategy_candidates    \d eia_inventory    \d detected_events
 -- =============================================================================
 
 
@@ -71,3 +72,93 @@ CREATE TABLE IF NOT EXISTS options_chain (
 
 CREATE INDEX IF NOT EXISTS idx_options_chain_instrument_expiration
     ON options_chain (instrument, expiration_date);
+
+
+-- -----------------------------------------------------------------------------
+-- strategy_candidates
+--
+-- Stores generated strategy candidates from the Strategy Evaluation Agent.
+-- Fields mirror PRD Section 9 output schema and are written by
+-- `write_strategy_candidates()` as part of the Phase 1 pipeline.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS strategy_candidates (
+    id            BIGSERIAL       PRIMARY KEY,
+    instrument    TEXT            NOT NULL,
+    structure     TEXT            NOT NULL CHECK (structure IN ('long_straddle','call_spread','put_spread','calendar_spread')),
+    expiration    INTEGER         NOT NULL,
+    edge_score    NUMERIC(5,4)    NOT NULL CHECK (edge_score BETWEEN 0 AND 1),
+    signals       JSONB           NOT NULL,
+    generated_at  TIMESTAMPTZ     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_candidates_generated_edge
+    ON strategy_candidates (generated_at DESC, edge_score DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- feature_sets
+--
+-- Stores computed FeatureSet snapshots written by the Feature Generation Agent
+-- (write_feature_set). volatility_gaps and feature_errors are JSONB arrays;
+-- sector_dispersion is a coefficient of variation in [0.0, 1.0].
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS feature_sets (
+    id                BIGSERIAL       PRIMARY KEY,
+    snapshot_time     TIMESTAMPTZ     NOT NULL,
+    volatility_gaps   JSONB,
+    sector_dispersion NUMERIC(10, 6),
+    feature_errors    JSONB,
+    computed_at       TIMESTAMPTZ     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_feature_sets_snapshot_time
+    ON feature_sets (snapshot_time DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- eia_inventory
+--
+-- Stores weekly EIA petroleum status report records fetched by the Event
+-- Detection Agent (fetch_eia_data). One row per reporting period (week).
+-- UNIQUE on period ensures re-ingestion is idempotent (ON CONFLICT DO NOTHING).
+-- Hypertable candidate: partition by fetched_at.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS eia_inventory (
+    id                          BIGSERIAL       PRIMARY KEY,
+    period                      TEXT            NOT NULL,
+    crude_stocks_mb             NUMERIC(12, 3),
+    refinery_utilization_pct    NUMERIC(6, 3),
+    source                      TEXT            NOT NULL DEFAULT 'eia',
+    fetched_at                  TIMESTAMPTZ     NOT NULL,
+    CONSTRAINT uq_eia_inventory_period UNIQUE (period)
+);
+
+CREATE INDEX IF NOT EXISTS idx_eia_inventory_period
+    ON eia_inventory (period DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- detected_events
+--
+-- Stores classified energy market events produced by the Event Detection Agent
+-- (classify_event → write_detected_events). event_id is a deterministic hash
+-- of the source URL — UNIQUE ensures re-classification is idempotent.
+-- affected_instruments is a JSONB array of ticker strings.
+-- Hypertable candidate: partition by detected_at.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS detected_events (
+    id                      BIGSERIAL       PRIMARY KEY,
+    event_id                TEXT            NOT NULL,
+    event_type              TEXT            NOT NULL,
+    description             TEXT            NOT NULL,
+    source                  TEXT            NOT NULL,
+    confidence_score        NUMERIC(5, 4)   NOT NULL,
+    intensity               TEXT            NOT NULL,
+    detected_at             TIMESTAMPTZ     NOT NULL,
+    affected_instruments    JSONB,
+    raw_headline            TEXT,
+    CONSTRAINT uq_detected_events_event_id UNIQUE (event_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_detected_events_detected_at
+    ON detected_events (detected_at DESC);

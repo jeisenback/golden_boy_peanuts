@@ -29,6 +29,20 @@ from src.agents.ingestion.models import (
     RawPriceRecord,
 )
 
+from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
+
+# A single high-confidence supply disruption event for tests that assert supply_shock_probability
+_SAMPLE_EVENT = DetectedEvent(
+    event_id="abc123",
+    event_type=EventType.SUPPLY_DISRUPTION,
+    description="Major pipeline outage detected",
+    source="newsapi",
+    confidence_score=1.0,
+    intensity=EventIntensity.HIGH,
+    detected_at=datetime(2026, 1, 1, tzinfo=UTC),
+    affected_instruments=["USO", "XLE"],
+)
+
 
 @pytest.mark.integration
 def test_compute_volatility_gap_integration():
@@ -154,6 +168,47 @@ Golden dataset (USO):
   - With sector_dispersion=0.50: edge_score ≈ 0.39 > 0.35 (validates #19 forward ref)
 """
 
+<<<<<<< HEAD
+=======
+from __future__ import annotations
+
+import os
+
+# Disable testcontainers Reaper (Ryuk) — required on Windows where the Reaper
+# container's port mapping is unavailable. Must be set before any testcontainers import.
+os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
+
+from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
+import json
+import math
+import statistics
+from unittest.mock import patch
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
+
+from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
+from src.agents.feature_generation.feature_generation_agent import (
+    compute_volatility_gap,
+    run_feature_generation,
+)
+from src.agents.ingestion.models import InstrumentType, MarketState, OptionRecord, RawPriceRecord
+
+# A single high-confidence supply disruption event for tests that assert supply_shock_probability
+_SAMPLE_EVENT = DetectedEvent(
+    event_id="abc123",
+    event_type=EventType.SUPPLY_DISRUPTION,
+    description="Major pipeline outage detected",
+    source="newsapi",
+    confidence_score=1.0,
+    intensity=EventIntensity.HIGH,
+    detected_at=datetime(2026, 1, 1, tzinfo=UTC),
+    affected_instruments=["USO", "XLE"],
+)
+
+>>>>>>> origin/develop
 # ---------------------------------------------------------------------------
 # Patch target for get_engine used inside the feature generation agent
 # ---------------------------------------------------------------------------
@@ -282,7 +337,7 @@ def _make_market_state(
     sector_prices: dict[str, float] | None = None,
 ) -> MarketState:
     """Build a minimal MarketState with one instrument and one ATM call option."""
-    now = datetime.now(UTC)
+    now = datetime.now(tz=UTC)
     prices = [
         RawPriceRecord(
             instrument=instrument,
@@ -436,27 +491,68 @@ def test_run_feature_generation_writes_feature_set(pg_engine: Engine) -> None:
 
 
 @pytest.mark.integration
-def test_run_feature_generation_partial_failure_populates_feature_errors(
-    pg_engine: Engine,
-) -> None:
+def test_run_feature_generation_happy_path_no_feature_errors(pg_engine: Engine) -> None:
     """
-    compute_supply_shock_probability always raises NotImplementedError in Phase 1.
-    Assert feature_errors is non-empty in the persisted FeatureSet row.
+    Happy path: all signal computations succeed → feature_errors is empty in
+    both the returned FeatureSet and the persisted DB row.
     """
     _seed_prices(pg_engine, "USO", _GOLDEN_PRICES)
     market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
 
     with patch(_PATCH_ENGINE, return_value=pg_engine):
-        feature_set = run_feature_generation(market_state, events=[])
+        feature_set = run_feature_generation(market_state, events=[_SAMPLE_EVENT])
 
-    # supply_shock always fails → at least 1 error
-    assert len(feature_set.feature_errors) >= 1
-    assert any("compute_supply_shock_probability" in e for e in feature_set.feature_errors)
+    assert (
+        feature_set.feature_errors == []
+    ), f"expected no feature_errors on happy path, got {feature_set.feature_errors}"
+    assert feature_set.supply_shock_probability is not None
 
     with pg_engine.connect() as conn:
         row = conn.execute(text("SELECT feature_errors FROM feature_sets LIMIT 1")).fetchone()
-
     assert row is not None
     errors_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-    assert isinstance(errors_data, list)
-    assert len(errors_data) >= 1
+    assert errors_data == []
+
+
+@pytest.mark.integration
+def test_run_feature_generation_partial_failure_populates_feature_errors(
+    pg_engine: Engine,
+) -> None:
+    """
+    Partial signal failure: compute_volatility_gap raises → feature_errors is
+    non-empty in both the FeatureSet and the persisted DB row; other signals
+    still computed and FeatureSet still written (degraded-mode guarantee).
+
+    AC covered (issue #16):
+    - partial signal failure → feature_errors non-empty in DB row
+    """
+    _seed_prices(pg_engine, "USO", _GOLDEN_PRICES)
+    market_state = _make_market_state("USO", current_price=_GOLDEN_PRICES[-1], atm_iv=0.22)
+
+    _patch_vol_gap = "src.agents.feature_generation.feature_generation_agent.compute_volatility_gap"
+    with (
+        patch(_PATCH_ENGINE, return_value=pg_engine),
+        patch(_patch_vol_gap, side_effect=RuntimeError("simulated vol gap failure")),
+    ):
+        feature_set = run_feature_generation(market_state, events=[_SAMPLE_EVENT])
+
+    # feature_errors must be non-empty and mention the failed signal
+    assert feature_set.feature_errors, "expected feature_errors to be non-empty after failure"
+    assert any(
+        "compute_volatility_gap" in e for e in feature_set.feature_errors
+    ), f"expected 'compute_volatility_gap' in feature_errors, got {feature_set.feature_errors}"
+    # Other signals still computed — degraded mode, no cascade failure
+    assert feature_set.volatility_gaps == []
+    assert feature_set.supply_shock_probability is not None
+
+    # DB row still written despite partial failure
+    with pg_engine.connect() as conn:
+        row = conn.execute(
+            text("SELECT feature_errors, volatility_gaps FROM feature_sets LIMIT 1")
+        ).fetchone()
+    assert row is not None, "expected FeatureSet written to DB even on partial failure"
+    errors_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
+    assert (
+        isinstance(errors_data, list) and len(errors_data) >= 1
+    ), f"expected non-empty feature_errors in DB, got {errors_data}"
+    assert any("compute_volatility_gap" in e for e in errors_data)

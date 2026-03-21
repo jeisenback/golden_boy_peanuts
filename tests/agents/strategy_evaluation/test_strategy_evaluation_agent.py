@@ -35,11 +35,15 @@ def _make_vg(instrument: str, gap: float) -> VolatilityGap:
 def _make_feature_set(
     gaps: list[VolatilityGap],
     sector_dispersion: float | None = None,
+    supply_shock_probability: float | None = None,
+    futures_curve_steepness: float | None = None,
 ) -> FeatureSet:
     return FeatureSet(
         snapshot_time=datetime.now(tz=UTC),
         volatility_gaps=gaps,
         sector_dispersion=sector_dispersion,
+        supply_shock_probability=supply_shock_probability,
+        futures_curve_steepness=futures_curve_steepness,
     )
 
 
@@ -93,6 +97,83 @@ class TestComputeEdgeScore:
         fs = _make_feature_set([_make_vg("USO", 1.0)], sector_dispersion=1.0)
         score = compute_edge_score("USO", fs)
         assert 0.0 <= score <= 1.0
+
+    # --- Phase 2 multiplier tests ---
+
+    def test_phase1_unchanged_when_none(self) -> None:
+        """When supply_shock and curve_steepness are None, score matches Phase 1."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        score_none = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=None,
+            futures_curve_steepness=None,
+        )
+        score_base = compute_edge_score("USO", fs)
+        assert score_none == score_base
+
+    def test_supply_shock_increases_score(self) -> None:
+        """supply_shock_probability=0.8 increases score vs None."""
+        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
+        base = compute_edge_score("USO", fs)
+        boosted = compute_edge_score("USO", fs, supply_shock_probability=0.8)
+        assert boosted > base
+
+    def test_curve_steepness_increases_score(self) -> None:
+        """Non-zero futures_curve_steepness increases edge score."""
+        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
+        base = compute_edge_score("USO", fs)
+        boosted = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
+        assert boosted > base
+
+    def test_both_multipliers_compound(self) -> None:
+        """Both multipliers together produce a higher score than either alone."""
+        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
+        shock_only = compute_edge_score("USO", fs, supply_shock_probability=0.5)
+        curve_only = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
+        both = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=0.5,
+            futures_curve_steepness=0.05,
+        )
+        assert both > shock_only
+        assert both > curve_only
+
+    def test_multipliers_cap_at_one(self) -> None:
+        """Even with large multipliers, score is capped at 1.0."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=1.0)
+        score = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=1.0,
+            futures_curve_steepness=0.5,
+        )
+        assert score == 1.0
+
+    def test_negative_curve_steepness_uses_abs(self) -> None:
+        """Negative curve steepness (backwardation) also boosts score via abs()."""
+        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
+        pos = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
+        neg = compute_edge_score("USO", fs, futures_curve_steepness=-0.05)
+        assert abs(pos - neg) < 1e-9
+
+    def test_zero_effect_inputs_equivalent_to_none(self) -> None:
+        """supply_shock=0.0 and curve_steepness=0.0 match None/None behavior."""
+        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
+        score_none = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=None,
+            futures_curve_steepness=None,
+        )
+        score_zero = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=0.0,
+            futures_curve_steepness=0.0,
+        )
+        assert score_zero == score_none
 
 
 class TestEvaluateStrategies:
@@ -176,13 +257,15 @@ class TestEvaluateStrategies:
         assert all(c.expiration == 30 for c in result)
 
     def test_signals_dict_keys(self) -> None:
-        """signals dict must contain 'volatility_gap' and 'sector_dispersion' keys."""
+        """signals dict must contain all four signal keys."""
         fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
         with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
             result = evaluate_strategies(fs)
         assert result
         assert "volatility_gap" in result[0].signals
         assert "sector_dispersion" in result[0].signals
+        assert "supply_shock_probability" in result[0].signals
+        assert "futures_curve_steepness" in result[0].signals
 
     def test_signals_positive_gap_high_dispersion(self) -> None:
         """Positive gap + high dispersion → correct signal labels."""
@@ -202,3 +285,113 @@ class TestEvaluateStrategies:
         uso = next((c for c in result if c.instrument == "USO"), None)
         assert uso is not None
         assert uso.signals["volatility_gap"] == "negative"
+
+    def test_supply_shock_label_high(self) -> None:
+        """supply_shock_probability > 0.6 → 'high' label."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            supply_shock_probability=0.8,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result[0].signals["supply_shock_probability"] == "high"
+
+    def test_supply_shock_label_none(self) -> None:
+        """supply_shock_probability None → 'none' label."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result[0].signals["supply_shock_probability"] == "none"
+
+    def test_curve_steepness_label_contango(self) -> None:
+        """Positive futures_curve_steepness → 'contango' label."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            futures_curve_steepness=0.03,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result[0].signals["futures_curve_steepness"] == "contango"
+
+    def test_curve_steepness_label_backwardation(self) -> None:
+        """Negative futures_curve_steepness → 'backwardation' label."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            futures_curve_steepness=-0.02,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result[0].signals["futures_curve_steepness"] == "backwardation"
+
+    def test_curve_steepness_label_flat(self) -> None:
+        """futures_curve_steepness None → 'flat' label."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result[0].signals["futures_curve_steepness"] == "flat"
+
+    def test_evaluate_passes_phase2_signals_to_edge_score(self) -> None:
+        """evaluate_strategies passes feature_set Phase 2 fields to compute_edge_score."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.10)],
+            sector_dispersion=0.2,
+            supply_shock_probability=0.5,
+            futures_curve_steepness=0.04,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        # With Phase 2 multipliers the score should be higher than Phase 1 base
+        fs_none = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result_none = evaluate_strategies(fs_none)
+        assert result[0].edge_score > result_none[0].edge_score
+
+    def test_correlated_instruments_yield_18_equal_score_candidates(self) -> None:
+        """All 6 in-scope instruments above threshold produce 18 deterministic candidates.
+
+        18 candidates is expected behavior when all instruments are correlated;
+        see concentration filter issue #132 for future de-duplication behavior.
+        """
+        instruments = ["USO", "XLE", "XOM", "CVX", "CL=F", "BZ=F"]
+        fs = _make_feature_set(
+            [_make_vg(instrument, 0.20) for instrument in instruments],
+            sector_dispersion=0.50,
+        )
+
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+
+        assert len(result) == 18
+        assert len({candidate.edge_score for candidate in result}) == 1
+
+        # All scores are equal, so sorted(desc) preserves insertion order (stable sort).
+        assert [candidate.edge_score for candidate in result] == sorted(
+            (candidate.edge_score for candidate in result),
+            reverse=True,
+        )
+
+        expected_order = [
+            ("USO", "long_straddle"),
+            ("USO", "call_spread"),
+            ("USO", "put_spread"),
+            ("XLE", "long_straddle"),
+            ("XLE", "call_spread"),
+            ("XLE", "put_spread"),
+            ("XOM", "long_straddle"),
+            ("XOM", "call_spread"),
+            ("XOM", "put_spread"),
+            ("CVX", "long_straddle"),
+            ("CVX", "call_spread"),
+            ("CVX", "put_spread"),
+            ("CL=F", "long_straddle"),
+            ("CL=F", "call_spread"),
+            ("CL=F", "put_spread"),
+            ("BZ=F", "long_straddle"),
+            ("BZ=F", "call_spread"),
+            ("BZ=F", "put_spread"),
+        ]
+        actual_order = [(candidate.instrument, candidate.structure) for candidate in result]
+        assert actual_order == expected_order
