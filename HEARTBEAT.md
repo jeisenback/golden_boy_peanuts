@@ -425,3 +425,16 @@ Implementation details:
 - chore: auto-fixed pre-existing black format failures on 8 unrelated db.py / integration test files.
 - All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 278 unit tests).
 - #151 In Review, PR #182 opened 2026-03-22
+
+## Sprint Notes (2026-03-22, session 3)
+
+**#151 CLOSED** — PR #182 merged to develop by human lead 2026-03-22.
+
+**#152 IN REVIEW** — fetch_stocktwits_sentiment implemented. PR #184 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_stocktwits_sentiment(instruments)` queries Stocktwits public symbol stream API (no auth key); Bullish/Bearish label counts → positive/negative/neutral; score = net bullish minus bearish.
+- `@with_retry()` applied; 429 → WARNING + []; 404/empty stream → WARNING + skip instrument.
+- `_stocktwits_stream()` private helper; 404 and 429 handled before `raise_for_status()`.
+- 12 unit tests: bullish majority, bearish majority, neutral (equal), unlabeled neutral, multi-instrument, empty stream, 404, 429 graceful skip, mid-batch 429, HTTP error propagation.
+- All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan, 288 unit tests).
+- #152 In Review, PR #184 opened 2026-03-22

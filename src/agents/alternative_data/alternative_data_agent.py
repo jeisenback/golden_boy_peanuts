@@ -4,6 +4,7 @@ Alternative Data Agent — Phase 3 fetch functions.
 Fetches alternative signals for the energy options opportunity agent:
   - fetch_edgar_insider_trades: SEC EDGAR Form 4 insider trade filings (issue #149)
   - fetch_reddit_sentiment: Reddit public JSON API narrative velocity (issue #151)
+  - fetch_stocktwits_sentiment: Stocktwits symbol stream retail sentiment (issue #152)
 
 ESOD constraints: @with_retry() on all external API calls, Pydantic boundary
 models, type hints on all public functions, WARNING logs for missing/malformed
@@ -20,6 +21,13 @@ Reddit API notes:
   - Targets subreddits: r/energy, r/oil, r/investing (combined search).
   - Uses User-Agent header per Reddit API Terms of Service.
   - 429 responses logged as WARNING and return [] (not retried).
+
+Stocktwits API notes:
+  - Public symbol stream API; no auth key required for basic stream.
+  - Endpoint: https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json
+  - Message sentiment label "Bullish" → positive, "Bearish" → negative, absent → neutral.
+  - 429 responses logged as WARNING and return [] (not retried).
+  - Symbols with no stream data (404 or empty messages) logged as WARNING, return [].
 """
 
 from __future__ import annotations
@@ -504,3 +512,154 @@ def _classify_sentiment(texts: list[str]) -> Sentiment:
     if neg_hits > pos_hits:
         return Sentiment.NEGATIVE
     return Sentiment.NEUTRAL
+
+
+# ===========================================================================
+# fetch_stocktwits_sentiment — issue #152
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_STOCKTWITS_STREAM_URL = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
+
+# Request timeout in seconds for Stocktwits API calls
+_STOCKTWITS_TIMEOUT = 30
+
+# Stocktwits sentiment label → Sentiment enum mapping
+_STOCKTWITS_SENTIMENT_MAP: dict[str, Sentiment] = {
+    "Bullish": Sentiment.POSITIVE,
+    "Bearish": Sentiment.NEGATIVE,
+}
+
+# ---------------------------------------------------------------------------
+# Public fetch function
+# ---------------------------------------------------------------------------
+
+
+@with_retry()
+def fetch_stocktwits_sentiment(instruments: list[str]) -> list[NarrativeSignal]:
+    """
+    Fetch Stocktwits retail sentiment for energy instruments.
+
+    Calls the Stocktwits public symbol stream API for each instrument and
+    aggregates message count and Bullish/Bearish label distribution into a
+    NarrativeSignal. No API key required for the public stream.
+
+    Sentiment is derived from label counts: more Bullish labels → positive,
+    more Bearish → negative, equal or no labels → neutral.
+
+    A 429 rate-limit response is logged as WARNING and returns [] immediately.
+    A missing symbol (404) or empty stream is logged as WARNING and the
+    instrument is skipped.
+
+    Args:
+        instruments: Ticker symbols to query (e.g. ["XOM", "CVX", "USO"]).
+
+    Returns:
+        List of NarrativeSignal records, one per instrument with at least one
+        message. Instruments with no messages are omitted.
+        Returns [] on rate-limit (429).
+
+    Raises:
+        requests.exceptions.RequestException: Propagated on non-429/404
+            network failure so tenacity can retry.
+    """
+    window_end = datetime.now(tz=UTC)
+    window_start = window_end - timedelta(days=1)  # Stocktwits stream is ~24h
+
+    results: list[NarrativeSignal] = []
+
+    for instrument in instruments:
+        messages = _stocktwits_stream(instrument)
+        if messages is None:
+            # Rate limited — bail early; log already emitted by helper
+            return []
+        if not messages:
+            continue
+
+        bullish = sum(
+            1
+            for m in messages
+            if m.get("entities", {}).get("sentiment", {}) is not None
+            and (m.get("entities", {}).get("sentiment") or {}).get("basic") == "Bullish"
+        )
+        bearish = sum(
+            1
+            for m in messages
+            if m.get("entities", {}).get("sentiment", {}) is not None
+            and (m.get("entities", {}).get("sentiment") or {}).get("basic") == "Bearish"
+        )
+
+        if bullish > bearish:
+            sentiment = Sentiment.POSITIVE
+        elif bearish > bullish:
+            sentiment = Sentiment.NEGATIVE
+        else:
+            sentiment = Sentiment.NEUTRAL
+
+        # score = net bullish minus bearish (can be negative)
+        score = bullish - bearish
+
+        results.append(
+            NarrativeSignal(
+                instrument=instrument,
+                platform="stocktwits",
+                score=score,
+                mention_count=len(messages),
+                sentiment=sentiment,
+                window_start=window_start,
+                window_end=window_end,
+                source="stocktwits",
+            )
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Private helper
+# ---------------------------------------------------------------------------
+
+
+def _stocktwits_stream(instrument: str) -> list[dict[str, Any]] | None:
+    """
+    Fetch the Stocktwits public symbol stream for one instrument.
+
+    Args:
+        instrument: Ticker symbol (e.g. "XOM").
+
+    Returns:
+        List of message dicts on success; None if rate-limited (429);
+        empty list [] if symbol not found (404) or stream is empty.
+
+    Raises:
+        requests.exceptions.RequestException: On non-429/404 HTTP or
+            network failure.
+    """
+    resp = requests.get(
+        _STOCKTWITS_STREAM_URL.format(symbol=instrument),
+        timeout=_STOCKTWITS_TIMEOUT,
+    )
+
+    if resp.status_code == 429:
+        logger.warning(
+            "fetch_stocktwits_sentiment: rate limited (429) for instrument=%s", instrument
+        )
+        return None
+
+    if resp.status_code == 404:
+        logger.warning(
+            "fetch_stocktwits_sentiment: symbol not found (404) for instrument=%s", instrument
+        )
+        return []
+
+    resp.raise_for_status()
+    data: dict[str, Any] = resp.json()
+    messages: list[dict[str, Any]] = data.get("messages", [])
+
+    if not messages:
+        logger.warning("fetch_stocktwits_sentiment: empty stream for instrument=%s", instrument)
+
+    return messages
