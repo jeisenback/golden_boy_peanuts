@@ -3,6 +3,7 @@ Alternative Data Agent — Phase 3 fetch functions.
 
 Fetches alternative signals for the energy options opportunity agent:
   - fetch_edgar_insider_trades: SEC EDGAR Form 4 insider trade filings (issue #149)
+  - fetch_quiver_enrichment: Quiver Quantitative optional insider enrichment (issue #150)
 
 ESOD constraints: @with_retry() on all external API calls, Pydantic boundary
 models, type hints on all public functions, WARNING logs for missing/malformed
@@ -13,12 +14,19 @@ EDGAR API notes:
   - Archives:         https://www.sec.gov/Archives/edgar/data
   - No API key required; User-Agent header mandatory (EDGAR Terms of Service).
   - WTI/BZ (crude futures) have no equity insider filings — returns empty list.
+
+Quiver Quantitative API notes:
+  - Endpoint: https://api.quiverquant.com/beta/live/insiders/{ticker}
+  - Auth: Authorization: Token {QUIVER_API_KEY}
+  - Optional enrichment — if QUIVER_API_KEY is absent, returns [] (graceful no-op).
+  - HTTP errors logged as WARNING and swallowed; enrichment is best-effort.
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 import logging
+import os
 from typing import Any
 from xml.etree import ElementTree as ET
 
@@ -51,6 +59,20 @@ _TX_CODE_MAP: dict[str, str] = {
     "S": "sell",  # Open-market sale
     "A": "grant",  # Award / grant
     "M": "exercise",  # Option exercise
+}
+
+# ---------------------------------------------------------------------------
+# Quiver Quantitative constants
+# ---------------------------------------------------------------------------
+
+_QUIVER_BASE_URL = "https://api.quiverquant.com"
+
+# Quiver transaction labels → trade_type values
+_QUIVER_TX_MAP: dict[str, str] = {
+    "Buy": "buy",
+    "Sale": "sell",
+    "Award": "grant",
+    "Option Exercise": "exercise",
 }
 
 # ---------------------------------------------------------------------------
@@ -302,3 +324,136 @@ def _parse_form4_xml(xml_text: str, instrument: str) -> list[InsiderTrade]:
         )
 
     return trades
+
+
+# ---------------------------------------------------------------------------
+# Quiver Quantitative fetch function
+# ---------------------------------------------------------------------------
+
+
+@with_retry()
+def fetch_quiver_enrichment(instruments: list[str]) -> list[InsiderTrade]:
+    """
+    Optionally enrich insider trade data via Quiver Quantitative API.
+
+    Returns an empty list and logs INFO if ``QUIVER_API_KEY`` is not set.
+    HTTP errors are logged as WARNING and swallowed — this is best-effort
+    optional enrichment; a Quiver outage must not block the pipeline.
+
+    Args:
+        instruments: Ticker symbols to enrich (e.g. ["XOM", "CVX"]).
+
+    Returns:
+        List of InsiderTrade records with ``source="quiver"``, or ``[]``
+        if the API key is absent or all requests fail.
+    """
+    api_key = os.environ.get("QUIVER_API_KEY", "").strip()
+    if not api_key:
+        logger.info("fetch_quiver_enrichment: QUIVER_API_KEY not set — skipping enrichment")
+        return []
+
+    all_trades: list[InsiderTrade] = []
+    for ticker in instruments:
+        trades = _fetch_quiver_ticker(ticker, api_key)
+        all_trades.extend(trades)
+    return all_trades
+
+
+def _fetch_quiver_ticker(ticker: str, api_key: str) -> list[InsiderTrade]:
+    """
+    Fetch insider trades for a single ticker from Quiver Quantitative.
+
+    HTTP errors are logged as WARNING and return an empty list so a
+    single failed ticker does not abort the whole enrichment pass.
+
+    Args:
+        ticker:  Ticker symbol (e.g. "XOM").
+        api_key: Quiver Quantitative API key.
+
+    Returns:
+        List of InsiderTrade records for the ticker, or ``[]`` on failure.
+    """
+    url = f"{_QUIVER_BASE_URL}/beta/live/insiders/{ticker}"
+    try:
+        resp = requests.get(
+            url,
+            headers={"Authorization": f"Token {api_key}"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        rows: list[dict[str, Any]] = resp.json()
+    except requests.exceptions.HTTPError as exc:
+        logger.warning("fetch_quiver_enrichment: HTTP error for ticker=%s: %s", ticker, exc)
+        return []
+    except requests.exceptions.RequestException as exc:
+        logger.warning("fetch_quiver_enrichment: request failed for ticker=%s: %s", ticker, exc)
+        return []
+
+    trades: list[InsiderTrade] = []
+    for row in rows:
+        trade = _parse_quiver_row(row, ticker)
+        if trade is not None:
+            trades.append(trade)
+    return trades
+
+
+def _parse_quiver_row(row: dict[str, Any], instrument: str) -> InsiderTrade | None:
+    """
+    Parse a single Quiver API response row into an InsiderTrade.
+
+    Rows with unmapped transaction types or unparseable dates are
+    logged as WARNING and return None.
+
+    Args:
+        row:        Single dict from the Quiver API response list.
+        instrument: Ticker symbol to attach to the record.
+
+    Returns:
+        InsiderTrade on success, None if the row should be skipped.
+    """
+    raw_type = str(row.get("Transaction", ""))
+    trade_type = _QUIVER_TX_MAP.get(raw_type)
+    if trade_type is None:
+        logger.warning(
+            "fetch_quiver_enrichment: unmapped transaction type %r for ticker=%s — skipping",
+            raw_type,
+            instrument,
+        )
+        return None
+
+    raw_date = str(row.get("Date", "")).strip()
+    try:
+        trade_date = datetime.strptime(raw_date, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        logger.warning(
+            "fetch_quiver_enrichment: unparseable date %r for ticker=%s — skipping",
+            raw_date,
+            instrument,
+        )
+        return None
+
+    shares: int | None = None
+    raw_shares = row.get("Shares")
+    if raw_shares is not None:
+        try:
+            shares = int(float(raw_shares))
+        except (ValueError, TypeError):
+            pass
+
+    value_usd: float | None = None
+    raw_price = row.get("Price")
+    if shares is not None and raw_price is not None:
+        try:
+            value_usd = round(shares * float(raw_price), 2)
+        except (ValueError, TypeError):
+            pass
+
+    return InsiderTrade(
+        instrument=instrument,
+        trade_date=trade_date,
+        trade_type=trade_type,
+        shares=shares,
+        value_usd=value_usd,
+        officer_name=str(row.get("Name", "")).strip() or None,
+        source="quiver",
+    )
