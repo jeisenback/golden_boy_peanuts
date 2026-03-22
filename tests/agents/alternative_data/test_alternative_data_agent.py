@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlparse
 
 import pytest
 import requests
@@ -267,7 +268,7 @@ class TestFetchEdgarInsiderTrades:
         # Only one EFTS call for XOM — not for CVX, USO, etc.
         assert mock_get.call_count == 1
         call_url = mock_get.call_args[0][0]
-        assert call_url.startswith("https://efts.sec.gov")
+        assert urlparse(call_url).netloc == "efts.sec.gov"
 
     def test_malformed_xml_logs_warning_and_continues(
         self, caplog: pytest.LogCaptureFixture
