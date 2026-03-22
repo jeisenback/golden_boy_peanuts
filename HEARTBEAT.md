@@ -400,3 +400,15 @@ Next Sprint 9 unblocked issues (after #172 + #148 merge):
 - #152 — fetch_stocktwits_sentiment (depends on narrative_signals table from #148)
 - #153 — fetch_tanker_flows (depends on shipping_events table from #148)
 - #166 — HistoricalLoader / run_backtest_pipeline (depends on #172 merged)
+
+## Sprint Notes (2026-03-22, session 1)
+
+**#149 IN REVIEW** — fetch_edgar_insider_trades implemented. PR to be opened → develop.
+
+Implementation details:
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_edgar_insider_trades(instruments)` queries EFTS full-text search, downloads Form 4 XML index, parses `nonDerivativeTransaction` elements into `InsiderTrade` records.
+- `src/agents/alternative_data/models.py`: `InsiderTrade` Pydantic model + `TradeType` StrEnum.
+- `@with_retry()` applied; missing/malformed filings logged as WARNING, never raised.
+- `_TX_CODE_MAP`: P→buy, S→sell, A→grant, M→exercise; other codes (F, J) skipped silently.
+- 16 unit tests across `TestParseForm4Xml`, `TestEftsSearch`, `TestFetchEdgarInsiderTrades`.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 266 unit tests).
