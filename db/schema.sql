@@ -1,6 +1,6 @@
 -- =============================================================================
 -- db/schema.sql — Energy Options Opportunity Agent
--- Phase 1 + Phase 2 schema
+-- Phase 1 + Phase 2 + Phase 3 schema
 -- =============================================================================
 --
 -- Design principles (PRD Section 6.1):
@@ -8,10 +8,14 @@
 --   - All time-series tables use TIMESTAMPTZ (not TIMESTAMP) so that
 --     TimescaleDB hypertable conversion requires zero SQL changes.
 --   - Hypertable candidates (Phase 2, PRD Section 6.2):
---       * market_prices   → partition by timestamp
---       * options_chain   → partition by timestamp
---       * eia_inventory   → partition by fetched_at
---       * detected_events → partition by detected_at
+--       * market_prices      → partition by timestamp
+--       * options_chain      → partition by timestamp
+--       * eia_inventory      → partition by fetched_at
+--       * detected_events    → partition by detected_at
+--   - Hypertable candidates (Phase 3, issue #148):
+--       * insider_trades     → partition by trade_date
+--       * shipping_events    → partition by timestamp
+--       * narrative_signals  → partition by window_start
 --
 -- TimescaleDB migration triggers (PRD Section 6.2) — convert to hypertables
 -- when ANY of the following conditions is met:
@@ -24,6 +28,7 @@
 -- Apply:  psql $DATABASE_URL -f db/schema.sql
 -- Verify: \d market_prices    \d options_chain    \d feature_sets
 --         \d strategy_candidates    \d eia_inventory    \d detected_events
+--         \d insider_trades   \d shipping_events   \d narrative_signals
 -- =============================================================================
 
 
@@ -162,3 +167,88 @@ CREATE TABLE IF NOT EXISTS detected_events (
 
 CREATE INDEX IF NOT EXISTS idx_detected_events_detected_at
     ON detected_events (detected_at DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- insider_trades                                                     (Phase 3)
+--
+-- Stores SEC EDGAR Form 4 insider trade records fetched by
+-- fetch_edgar_insider_trades() (issue #149), optionally enriched by
+-- fetch_quiver_enrichment() (issue #150).
+-- One row per trade filing. (instrument, officer_name, trade_date) is not
+-- UNIQUE because the same officer may file multiple transactions on the same
+-- day for the same instrument (e.g., multiple grants/sales in a single Form 4).
+-- Hypertable candidate: partition by trade_date.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS insider_trades (
+    id            BIGSERIAL       PRIMARY KEY,
+    instrument    TEXT            NOT NULL,
+    trade_date    TIMESTAMPTZ     NOT NULL,
+    trade_type    TEXT            NOT NULL CHECK (trade_type IN ('buy', 'sell', 'grant', 'exercise')),
+    shares        BIGINT,
+    value_usd     NUMERIC(18, 2),
+    officer_name  TEXT,
+    source        TEXT            NOT NULL,
+    fetched_at    TIMESTAMPTZ     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_insider_trades_instrument_trade_date
+    ON insider_trades (instrument, trade_date DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- shipping_events                                                    (Phase 3)
+--
+-- Stores tanker and vessel movement events fetched by fetch_tanker_flows()
+-- (issue #153) from MarineTraffic or VesselFinder.
+-- event_type examples: 'chokepoint_delay', 'route_deviation', 'anchored',
+--   'port_call', 'ais_gap'.
+-- Hypertable candidate: partition by timestamp.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shipping_events (
+    id            BIGSERIAL       PRIMARY KEY,
+    instrument    TEXT,                              -- affected energy instrument (nullable)
+    vessel_id     TEXT            NOT NULL,
+    event_type    TEXT            NOT NULL,
+    latitude      NUMERIC(9, 6),
+    longitude     NUMERIC(9, 6),
+    timestamp     TIMESTAMPTZ     NOT NULL,
+    source        TEXT            NOT NULL,
+    fetched_at    TIMESTAMPTZ     NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_shipping_events_instrument_timestamp
+    ON shipping_events (instrument, timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_shipping_events_vessel_timestamp
+    ON shipping_events (vessel_id, timestamp DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- narrative_signals                                                  (Phase 3)
+--
+-- Stores social/news narrative velocity scores fetched by
+-- fetch_reddit_sentiment() (issue #151) and
+-- fetch_stocktwits_sentiment() (issue #152).
+-- platform: 'reddit' | 'stocktwits' | 'combined'
+-- sentiment: 'bullish' | 'bearish' | 'neutral' | 'mixed'
+-- UNIQUE (instrument, platform, window_start) prevents duplicate ingestion
+-- for the same time window — re-fetch uses ON CONFLICT DO NOTHING.
+-- Hypertable candidate: partition by window_start.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS narrative_signals (
+    id             BIGSERIAL       PRIMARY KEY,
+    instrument     TEXT            NOT NULL,
+    platform       TEXT            NOT NULL CHECK (platform IN ('reddit', 'stocktwits', 'combined')),
+    score          NUMERIC(6, 4),                   -- normalized velocity score [0,1]
+    mention_count  INTEGER,
+    sentiment      TEXT            CHECK (sentiment IN ('bullish', 'bearish', 'neutral', 'mixed')),
+    window_start   TIMESTAMPTZ     NOT NULL,
+    window_end     TIMESTAMPTZ     NOT NULL,
+    fetched_at     TIMESTAMPTZ     NOT NULL,
+    CONSTRAINT uq_narrative_signals_instrument_platform_window
+        UNIQUE (instrument, platform, window_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_narrative_signals_instrument_window
+    ON narrative_signals (instrument, window_start DESC);
