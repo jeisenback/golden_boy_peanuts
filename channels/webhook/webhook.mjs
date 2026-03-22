@@ -26,14 +26,14 @@ const mcp = new Server(
       experimental: { 'claude/channel': {} },
     },
     instructions:
-      'Events from CI, monitoring, or market alerts arrive as ' +
-      '<channel source="webhook" path="..." method="POST" severity="...">. ' +
-      'They are one-way: read the payload, decide whether action is needed, ' +
-      'and act in the session (run tests, read files, etc.). ' +
-      'No reply is expected. ' +
-      'path="/ci" means a CI pipeline event. ' +
-      'path="/market" means a market or pipeline alert from the energy options agent. ' +
-      'path="/" is a generic event.',
+      'You receive events from a local webhook channel as <channel source="webhook" path="..." ...>.\n\n' +
+      'path="/feature": a feature request or task description. Treat it as a direct work item: ' +
+      'read the relevant files, implement the change, run tests, and commit. ' +
+      'Follow all CLAUDE.md rules (branch, commit format, local_check.sh gate). ' +
+      'If the request is ambiguous or requires a hard-stop decision, say so before acting.\n\n' +
+      'path="/ci": a CI pipeline event (test failure, check result). Investigate and fix if clear.\n\n' +
+      'path="/market": a market or pipeline alert from the energy options agent. Decide if action is needed.\n\n' +
+      'path="/": generic — use judgment.',
   },
 )
 
