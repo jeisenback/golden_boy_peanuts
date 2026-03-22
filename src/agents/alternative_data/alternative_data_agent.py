@@ -91,7 +91,7 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
             hits = _efts_search(ticker, start_dt)
         except requests.exceptions.RequestException:
             raise  # let tenacity retry
-        except Exception:
+        except (ValueError, KeyError):
             logger.warning("fetch_edgar_insider_trades: EFTS search error for ticker=%s", ticker)
             continue
 
@@ -112,7 +112,7 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
                 xml_text = _fetch_form4_xml(raw_cik, accession_no)
             except requests.exceptions.RequestException:
                 raise  # let tenacity retry
-            except Exception:
+            except (ValueError, KeyError):
                 logger.warning(
                     "fetch_edgar_insider_trades: failed to fetch XML for " "ticker=%s accession=%s",
                     ticker,
@@ -129,16 +129,10 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
                 )
                 continue
 
-            try:
-                trades = _parse_form4_xml(xml_text, ticker)
-                all_trades.extend(trades)
-            except Exception:
-                logger.warning(
-                    "fetch_edgar_insider_trades: failed to parse Form 4 XML for "
-                    "ticker=%s accession=%s",
-                    ticker,
-                    accession_no,
-                )
+            # _parse_form4_xml handles ET.ParseError internally and returns [].
+            # Unexpected exceptions propagate so the caller (tenacity) can retry.
+            trades = _parse_form4_xml(xml_text, ticker)
+            all_trades.extend(trades)
 
     return all_trades
 

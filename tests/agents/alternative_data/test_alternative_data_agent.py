@@ -267,7 +267,7 @@ class TestFetchEdgarInsiderTrades:
         # Only one EFTS call for XOM — not for CVX, USO, etc.
         assert mock_get.call_count == 1
         call_url = mock_get.call_args[0][0]
-        assert "efts.sec.gov" in call_url
+        assert call_url.startswith("https://efts.sec.gov")
 
     def test_malformed_xml_logs_warning_and_continues(
         self, caplog: pytest.LogCaptureFixture
