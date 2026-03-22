@@ -54,15 +54,13 @@ def write_backtest_candidate(candidate: BacktestCandidate, engine: Engine) -> uu
         sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
             connection failure after logging the exception.
     """
-    sql = text(
-        """
+    sql = text("""
         INSERT INTO backtest_candidates
             (instrument, structure, snapshot_time, edge_score, signals, generated_at)
         VALUES
             (:instrument, :structure, :snapshot_time, :edge_score, :signals, :generated_at)
         RETURNING id
-        """
-    )
+        """)
 
     params = {
         "instrument": candidate.instrument,
@@ -114,8 +112,7 @@ def record_outcome(outcome: BacktestOutcome, engine: Engine) -> uuid.UUID:
         sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
             connection failure after logging the exception.
     """
-    sql = text(
-        """
+    sql = text("""
         INSERT INTO backtest_outcomes
             (candidate_id, structure, expiration, underlying_close,
              entry_premium, upper_strike, lower_strike, profitable, recorded_at)
@@ -123,8 +120,7 @@ def record_outcome(outcome: BacktestOutcome, engine: Engine) -> uuid.UUID:
             (:candidate_id, :structure, :expiration, :underlying_close,
              :entry_premium, :upper_strike, :lower_strike, :profitable, :recorded_at)
         RETURNING id
-        """
-    )
+        """)
 
     params = {
         "candidate_id": str(outcome.candidate_id),

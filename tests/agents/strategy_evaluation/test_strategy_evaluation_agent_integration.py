@@ -110,15 +110,11 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
 
     # Verify DB rows
     with pg_engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT instrument, structure, expiration, edge_score, signals,
                        generated_at
                 FROM strategy_candidates
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
 
     assert len(rows) >= 1
 
@@ -184,16 +180,12 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
 
     # Also verify DB persist occurred
     with pg_engine.connect() as conn:
-        rows = conn.execute(
-            text(
-                """
+        rows = conn.execute(text("""
                 SELECT instrument, structure, edge_score
                 FROM strategy_candidates
                 WHERE instrument = 'USO'
                 ORDER BY edge_score DESC
-                """
-            )
-        ).fetchall()
+                """)).fetchall()
     assert rows, "Expected persisted USO candidate(s)"
     db_edge = float(rows[0][2])
     assert abs(db_edge - expected) < 1e-3

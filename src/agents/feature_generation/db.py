@@ -39,14 +39,12 @@ def read_price_history(
     Raises:
         sqlalchemy.exc.SQLAlchemyError: Propagates on connection or query failure.
     """
-    sql = text(
-        """
+    sql = text("""
         SELECT price FROM market_prices
         WHERE instrument = :instrument
         ORDER BY timestamp DESC
         LIMIT :limit
-        """
-    )
+        """)
     with engine.connect() as conn:
         rows = conn.execute(sql, {"instrument": instrument, "limit": limit}).fetchall()
 
@@ -83,14 +81,12 @@ def write_feature_set(feature_set: FeatureSet, engine: Engine) -> None:
     )
     errors_json = json.dumps(feature_set.feature_errors)
 
-    sql = text(
-        """
+    sql = text("""
         INSERT INTO feature_sets
             (snapshot_time, volatility_gaps, sector_dispersion, feature_errors, computed_at)
         VALUES
             (:snapshot_time, :volatility_gaps, :sector_dispersion, :feature_errors, :computed_at)
-        """
-    )
+        """)
     try:
         with engine.begin() as conn:
             conn.execute(
@@ -125,14 +121,12 @@ def read_latest_feature_set(engine: Engine) -> FeatureSet | None:
     Raises:
         NotImplementedError: Until implemented.
     """
-    sql = text(
-        """
+    sql = text("""
         SELECT snapshot_time, volatility_gaps, sector_dispersion, feature_errors, computed_at
         FROM feature_sets
         ORDER BY snapshot_time DESC
         LIMIT 1
-        """
-    )
+        """)
 
     with engine.connect() as conn:
         row = conn.execute(sql).fetchone()
