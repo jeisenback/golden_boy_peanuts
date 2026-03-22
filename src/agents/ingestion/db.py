@@ -37,10 +37,12 @@ def write_price_records(records: list[RawPriceRecord], engine: Engine) -> int:
     if not records:
         return 0
 
-    sql = text("""
+    sql = text(
+        """
         INSERT INTO market_prices (instrument, instrument_type, price, volume, source, timestamp)
         VALUES (:instrument, :instrument_type, :price, :volume, :source, :timestamp)
-        """)
+        """
+    )
     rows = [
         {
             "instrument": r.instrument,
@@ -81,14 +83,16 @@ def write_option_records(records: list[OptionRecord], engine: Engine) -> int:
     if not records:
         return 0
 
-    sql = text("""
+    sql = text(
+        """
         INSERT INTO options_chain
             (instrument, strike, expiration_date, implied_volatility,
              open_interest, volume, option_type, source, timestamp)
         VALUES
             (:instrument, :strike, :expiration_date, :implied_volatility,
              :open_interest, :volume, :option_type, :source, :timestamp)
-        """)
+        """
+    )
     rows = [
         {
             "instrument": r.instrument,

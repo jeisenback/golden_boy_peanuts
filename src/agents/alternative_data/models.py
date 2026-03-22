@@ -39,3 +39,30 @@ class InsiderTrade(BaseModel):
     value_usd: float | None = None
     officer_name: str | None = None
     source: str = "edgar"
+
+
+class Sentiment(StrEnum):
+    """Sentiment classifications for narrative signal records."""
+
+    POSITIVE = "positive"
+    NEUTRAL = "neutral"
+    NEGATIVE = "negative"
+
+
+class NarrativeSignal(BaseModel):
+    """
+    Validated narrative/sentiment signal from a social platform.
+
+    Maps to the narrative_signals table schema (db/schema.sql).
+    score is the aggregate net upvote/mention score across all matching
+    posts in the window. sentiment is derived from a keyword heuristic.
+    """
+
+    instrument: str
+    platform: str = "reddit"
+    score: int
+    mention_count: int
+    sentiment: str  # Sentiment enum value: positive / neutral / negative
+    window_start: datetime
+    window_end: datetime
+    source: str = "reddit"

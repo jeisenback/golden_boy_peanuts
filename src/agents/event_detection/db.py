@@ -42,7 +42,8 @@ def write_detected_events(events: list[DetectedEvent], engine: Engine) -> int:
     if not events:
         return 0
 
-    sql = text("""
+    sql = text(
+        """
         INSERT INTO detected_events
             (event_id, event_type, description, source, confidence_score,
              intensity, detected_at, affected_instruments, raw_headline)
@@ -50,7 +51,8 @@ def write_detected_events(events: list[DetectedEvent], engine: Engine) -> int:
             (:event_id, :event_type, :description, :source, :confidence_score,
              :intensity, :detected_at, :affected_instruments, :raw_headline)
         ON CONFLICT (event_id) DO NOTHING
-        """)
+        """
+    )
     rows = [
         {
             "event_id": e.event_id,
@@ -93,13 +95,15 @@ def read_recent_events(
         sqlalchemy.exc.SQLAlchemyError: Propagates on connection failure after
             logging the exception.
     """
-    sql = text("""
+    sql = text(
+        """
         SELECT event_id, event_type, description, source, confidence_score,
                intensity, detected_at, affected_instruments, raw_headline
         FROM detected_events
         ORDER BY detected_at DESC
         LIMIT :limit
-        """)
+        """
+    )
     try:
         with engine.connect() as conn:
             rows = conn.execute(sql, {"limit": limit}).mappings().all()
@@ -161,13 +165,15 @@ def write_eia_records(records: list[EIAInventoryRecord], engine: Engine) -> int:
     if not records:
         return 0
 
-    sql = text("""
+    sql = text(
+        """
         INSERT INTO eia_inventory
             (period, crude_stocks_mb, refinery_utilization_pct, source, fetched_at)
         VALUES
             (:period, :crude_stocks_mb, :refinery_utilization_pct, :source, :fetched_at)
         ON CONFLICT (period) DO NOTHING
-        """)
+        """
+    )
     rows = [
         {
             "period": r.period,

@@ -37,12 +37,14 @@ def write_strategy_candidates(candidates: list[StrategyCandidate], engine: Engin
     if not candidates:
         return 0
 
-    sql = text("""
+    sql = text(
+        """
         INSERT INTO strategy_candidates
             (instrument, structure, expiration, edge_score, signals, generated_at)
         VALUES
             (:instrument, :structure, :expiration, :edge_score, :signals, :generated_at)
-        """)
+        """
+    )
     rows = [
         {
             "instrument": c.instrument,
@@ -81,12 +83,14 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
     Raises:
         NotImplementedError: Until implemented.
     """
-    sql = text("""
+    sql = text(
+        """
         SELECT instrument, structure, expiration, edge_score, signals, generated_at
         FROM strategy_candidates
         ORDER BY edge_score DESC, generated_at DESC
         LIMIT :limit
-        """)
+        """
+    )
 
     with engine.connect() as conn:
         rows = conn.execute(sql, {"limit": limit}).fetchall()

@@ -281,10 +281,12 @@ def _seed_prices(
     if base_time is None:
         base_time = datetime(2026, 1, 1, tzinfo=UTC)
 
-    sql = text("""
+    sql = text(
+        """
         INSERT INTO market_prices (instrument, instrument_type, price, volume, source, timestamp)
         VALUES (:instrument, :instrument_type, :price, :volume, :source, :timestamp)
-        """)
+        """
+    )
     rows = [
         {
             "instrument": instrument,
