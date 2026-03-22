@@ -62,7 +62,7 @@ class NarrativeSignal(BaseModel):
     platform: str = "reddit"
     score: int
     mention_count: int
-    sentiment: str  # Sentiment enum value: positive / neutral / negative
+    sentiment: Sentiment
     window_start: datetime
     window_end: datetime
     source: str = "reddit"

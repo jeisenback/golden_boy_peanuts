@@ -31,7 +31,7 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-from src.agents.alternative_data.models import InsiderTrade, NarrativeSignal
+from src.agents.alternative_data.models import InsiderTrade, NarrativeSignal, Sentiment
 from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
@@ -336,6 +336,9 @@ _REDDIT_POST_LIMIT = 100
 # Request timeout in seconds for Reddit API calls
 _REDDIT_TIMEOUT = 30
 
+# Reddit time-filter value for the search API — must match _REDDIT_LOOKBACK_DAYS = 7
+_REDDIT_TIME_FILTER = "week"
+
 # Keywords used for positive/negative sentiment classification heuristic.
 # Sets allow O(1) membership tests during classification.
 _POSITIVE_KEYWORDS: frozenset[str] = frozenset(
@@ -460,7 +463,7 @@ def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
             "sort": "new",
             "restrict_sr": "1",
             "limit": str(_REDDIT_POST_LIMIT),
-            "t": "week",
+            "t": _REDDIT_TIME_FILTER,
         },
         headers={"User-Agent": _REDDIT_USER_AGENT},
         timeout=_REDDIT_TIMEOUT,
@@ -476,20 +479,20 @@ def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
     return [child.get("data", {}) for child in children]
 
 
-def _classify_sentiment(texts: list[str]) -> str:
+def _classify_sentiment(texts: list[str]) -> Sentiment:
     """
     Classify aggregate sentiment from a list of post text strings.
 
     Counts occurrences of positive and negative keywords across all
-    texts (case-insensitive word-boundary match). Returns "positive"
-    if positive keyword hits exceed negative, "negative" if the reverse,
-    and "neutral" when counts are equal or both are zero.
+    texts (case-insensitive word-boundary match). Returns Sentiment.POSITIVE
+    if positive keyword hits exceed negative, Sentiment.NEGATIVE if the reverse,
+    and Sentiment.NEUTRAL when counts are equal or both are zero.
 
     Args:
         texts: List of strings (post title + body) to classify.
 
     Returns:
-        One of "positive", "neutral", or "negative".
+        Sentiment enum value: POSITIVE, NEUTRAL, or NEGATIVE.
     """
     combined = " ".join(texts).lower()
     words = set(combined.split())
@@ -497,7 +500,7 @@ def _classify_sentiment(texts: list[str]) -> str:
     neg_hits = len(words & _NEGATIVE_KEYWORDS)
 
     if pos_hits > neg_hits:
-        return "positive"
+        return Sentiment.POSITIVE
     if neg_hits > pos_hits:
-        return "negative"
-    return "neutral"
+        return Sentiment.NEGATIVE
+    return Sentiment.NEUTRAL
