@@ -23,6 +23,21 @@ class TradeType(StrEnum):
     EXERCISE = "exercise"
 
 
+class QuiverInsiderRow(BaseModel):
+    """
+    Raw row from Quiver Quantitative ``/beta/live/insiders/{ticker}`` API.
+
+    All fields are optional — the Pydantic boundary validates the shape before
+    any field access in ``_parse_quiver_row`` (ESOD §6).
+    """
+
+    Transaction: str | None = None
+    Date: str | None = None
+    Name: str | None = None
+    Shares: float | None = None  # API may return float; cast to int downstream
+    Price: float | None = None
+
+
 class InsiderTrade(BaseModel):
     """
     Validated insider trade record from SEC EDGAR Form 4.

@@ -1,10 +1,10 @@
 """
-Unit tests for fetch_edgar_insider_trades (issue #149).
+Unit tests for alternative_data_agent (issues #149, #150).
 
-Tests use mocked HTTP responses — no real EDGAR API calls.
+Tests use mocked HTTP responses — no real API calls.
 Integration tests (real network) belong in a separate integration test file.
 
-Coverage:
+Coverage (EDGAR #149):
   - Happy path: EFTS hit → XML fetch → parse → InsiderTrade records returned
   - Malformed XML: parse error logged as WARNING, empty list returned
   - Empty EFTS result: no hits, empty list returned
@@ -12,6 +12,13 @@ Coverage:
   - Instrument filter: only specified instruments searched
   - Unmapped transaction code: skipped silently (no InsiderTrade for "F")
   - Missing officer name: officer_name=None allowed
+
+Coverage (Quiver #150):
+  - No API key: logs INFO, returns [] (graceful no-op)
+  - Happy path: API response → InsiderTrade records with source="quiver"
+  - HTTP error: logged as WARNING, returns [] (not raised)
+  - Empty response: returns []
+  - Unmapped transaction type: skipped with WARNING
 """
 
 from __future__ import annotations
@@ -27,6 +34,7 @@ from src.agents.alternative_data.alternative_data_agent import (
     _efts_search,
     _parse_form4_xml,
     fetch_edgar_insider_trades,
+    fetch_quiver_enrichment,
 )
 from src.agents.alternative_data.models import InsiderTrade
 
@@ -319,3 +327,158 @@ class TestFetchEdgarInsiderTrades:
 
         assert trades == []
         assert any("no xml" in r.message.lower() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# fetch_quiver_enrichment tests (issue #150)
+# ---------------------------------------------------------------------------
+
+
+def _quiver_row(
+    ticker: str = "XOM",
+    transaction: str = "Buy",
+    date: str = "2024-06-01",
+    shares: int = 5000,
+    price: float = 110.00,
+    name: str = "Jane Smith",
+) -> dict:
+    """Minimal Quiver API response row."""
+    return {
+        "Transaction": transaction,
+        "Date": date,
+        "Shares": shares,
+        "Price": price,
+        "Name": name,
+    }
+
+
+class TestFetchQuiverEnrichment:
+    def test_no_api_key_returns_empty_list_and_logs_info(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """If QUIVER_API_KEY is absent, return [] and log INFO — no HTTP call made."""
+        import logging
+
+        monkeypatch.delenv("QUIVER_API_KEY", raising=False)
+
+        with patch("requests.get") as mock_get:
+            with caplog.at_level(logging.INFO):
+                result = fetch_quiver_enrichment(["XOM", "CVX"])
+
+        assert result == []
+        mock_get.assert_not_called()
+        assert any("quiver_api_key not set" in r.message.lower() for r in caplog.records)
+
+    def test_happy_path_returns_insider_trade_records(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Valid API response produces InsiderTrade records with source='quiver'."""
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = [
+            _quiver_row("XOM", "Buy", "2024-06-01", 5000, 110.00, "Jane Smith"),
+            _quiver_row("XOM", "Sale", "2024-05-15", 2000, 108.50, "Bob Jones"),
+        ]
+
+        with patch("requests.get", return_value=mock_resp):
+            result = fetch_quiver_enrichment(["XOM"])
+
+        assert len(result) == 2
+        buy = result[0]
+        assert isinstance(buy, InsiderTrade)
+        assert buy.instrument == "XOM"
+        assert buy.trade_type == "buy"
+        assert buy.source == "quiver"
+        assert buy.shares == 5000
+        assert buy.value_usd == round(5000 * 110.00, 2)
+        assert buy.officer_name == "Jane Smith"
+        assert buy.trade_date == datetime(2024, 6, 1, tzinfo=UTC)
+
+        sell = result[1]
+        assert sell.trade_type == "sell"
+        assert sell.shares == 2000
+
+    def test_http_error_logged_as_warning_not_raised(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """HTTP errors are swallowed (logged WARNING, return []) — pipeline must not break."""
+        import logging
+
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.side_effect = requests.exceptions.HTTPError("403 Forbidden")
+
+        with patch("requests.get", return_value=mock_resp):
+            with caplog.at_level(logging.WARNING):
+                result = fetch_quiver_enrichment(["XOM"])
+
+        assert result == []
+        assert any("http error" in r.message.lower() for r in caplog.records)
+
+    def test_empty_response_returns_empty_list(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Empty API response list returns [] without error."""
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = []
+
+        with patch("requests.get", return_value=mock_resp):
+            result = fetch_quiver_enrichment(["CVX"])
+
+        assert result == []
+
+    def test_unmapped_transaction_type_skipped_with_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Rows with unmapped transaction types are skipped and logged as WARNING."""
+        import logging
+
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = [
+            _quiver_row("XOM", "Unknown Disposition", "2024-06-01"),
+        ]
+
+        with patch("requests.get", return_value=mock_resp):
+            with caplog.at_level(logging.WARNING):
+                result = fetch_quiver_enrichment(["XOM"])
+
+        assert result == []
+        assert any("unmapped transaction type" in r.message.lower() for r in caplog.records)
+
+    def test_network_error_propagates_for_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Transient network errors propagate so @with_retry() can retry them."""
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+
+        with patch(
+            "requests.get",
+            side_effect=requests.exceptions.ConnectionError("connection refused"),
+        ):
+            with pytest.raises(requests.exceptions.ConnectionError):
+                fetch_quiver_enrichment(["XOM"])
+
+    def test_non_list_response_returns_empty_list_with_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """If the API returns a dict instead of a list, log WARNING and return []."""
+        import logging
+
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"error": "unexpected shape"}
+
+        with patch("requests.get", return_value=mock_resp):
+            with caplog.at_level(logging.WARNING):
+                result = fetch_quiver_enrichment(["XOM"])
+
+        assert result == []
+        assert any("unexpected response shape" in r.message.lower() for r in caplog.records)
