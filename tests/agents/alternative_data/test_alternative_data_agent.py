@@ -451,3 +451,34 @@ class TestFetchQuiverEnrichment:
 
         assert result == []
         assert any("unmapped transaction type" in r.message.lower() for r in caplog.records)
+
+    def test_network_error_propagates_for_retry(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Transient network errors propagate so @with_retry() can retry them."""
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+
+        with patch(
+            "requests.get",
+            side_effect=requests.exceptions.ConnectionError("connection refused"),
+        ):
+            with pytest.raises(requests.exceptions.ConnectionError):
+                fetch_quiver_enrichment(["XOM"])
+
+    def test_non_list_response_returns_empty_list_with_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """If the API returns a dict instead of a list, log WARNING and return []."""
+        import logging
+
+        monkeypatch.setenv("QUIVER_API_KEY", "test-key-123")
+
+        mock_resp = MagicMock()
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.json.return_value = {"error": "unexpected shape"}
+
+        with patch("requests.get", return_value=mock_resp):
+            with caplog.at_level(logging.WARNING):
+                result = fetch_quiver_enrichment(["XOM"])
+
+        assert result == []
+        assert any("unexpected response shape" in r.message.lower() for r in caplog.records)
