@@ -412,3 +412,16 @@ Implementation details:
 - `_TX_CODE_MAP`: P→buy, S→sell, A→grant, M→exercise; other codes (F, J) skipped silently.
 - 16 unit tests across `TestParseForm4Xml`, `TestEftsSearch`, `TestFetchEdgarInsiderTrades`.
 - All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 266 unit tests).
+
+## Sprint Notes (2026-03-22, session 2)
+
+**#151 IN REVIEW** — fetch_reddit_sentiment implemented. PR #182 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_reddit_sentiment(instruments)` queries r/energy+oil+investing via Reddit public JSON API (no auth key); aggregates net upvote score and mention count per instrument.
+- `src/agents/alternative_data/models.py`: `NarrativeSignal` Pydantic model + `Sentiment` StrEnum added.
+- `_classify_sentiment()`: keyword heuristic using `frozenset` O(1) sets; returns positive/neutral/negative.
+- `@with_retry()` applied; 429 rate-limit logged as WARNING and returns `[]` immediately (no retry).
+- 13 unit tests: happy path, score aggregation, window boundary, no mentions, instrument omission, 429 mid-batch, sentiment classification (5 cases).
+- chore: auto-fixed pre-existing black format failures on 8 unrelated db.py / integration test files.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 278 unit tests).
+- #151 In Review, PR #182 opened 2026-03-22
