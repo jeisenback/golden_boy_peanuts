@@ -200,6 +200,56 @@ Do this at the end of **every** session, before closing your terminal:
 
 ---
 
+## Channels (Claude Code Research Preview)
+
+Claude Code channels push external events into the session so Claude can react without
+a human typing the prompt. This project has two channels configured in `.mcp.json`.
+
+**Start a channel session:**
+```bash
+# Webhook only (CI alerts, feature queuing)
+claude --dangerously-load-development-channels server:webhook
+
+# Discord only (two-way chat interface)
+claude --dangerously-load-development-channels server:discord
+
+# Alias (add to ~/.bashrc):
+alias claude-dev='claude --dangerously-load-development-channels server:webhook,server:discord'
+```
+
+**Webhook channel** — HTTP POST to `localhost:8788` (one-way, no reply):
+```bash
+# Queue a feature request
+curl -X POST localhost:8788/feature -d "implement fetch_reddit_sentiment — issue #151"
+
+# Forward a failing test run
+pytest tests/ 2>&1 | curl -X POST localhost:8788/ci --data-binary @-
+
+# Send a market/pipeline alert
+curl -X POST localhost:8788/market -H "X-Severity: high" -d "USO IV spike: 0.45"
+```
+
+| Path | Claude's behaviour |
+|------|--------------------|
+| `/feature` | Reads HEARTBEAT.md, implements the task, runs `local_check.sh`, commits |
+| `/ci` | Diagnoses root cause, fixes, verifies gate |
+| `/market` | Assesses pipeline or market alert; acts if clear |
+| `/` | General — uses judgment |
+
+**Discord channel** — two-way; Claude replies via `discord_reply` tool:
+- DM your bot or message it in a server you share
+- Works for sprint status queries, feature requests, and ad-hoc questions
+- Requires `DISCORD_BOT_TOKEN` and `DISCORD_ALLOWED_USERS` in `.env`
+
+**Security:** webhook is `127.0.0.1` only — nothing outside this machine can POST.
+Discord gates on `DISCORD_ALLOWED_USERS` (numeric user IDs, comma-separated).
+Both channels carry prompt-injection risk — only send content you trust.
+
+**Channel server files:** `channels/webhook/webhook.mjs`, `channels/discord/discord.mjs`
+**MCP config:** `.mcp.json` (project-level) and `~/.claude.json` (user-level, absolute paths)
+
+---
+
 ## Hard Stops
 
 > These are absolute. If you reach one of these situations, stop.
@@ -245,3 +295,5 @@ NEVER  start work on an issue without first running `gh issue assign <N> --self`
 | Close a sprint | `bash scripts/sprint_close.sh` |
 | Run an audit | `bash scripts/audit_sprint.sh` |
 | Post-session hygiene checklist | `bash scripts/post_session.sh` |
+| Channel server implementations | `channels/webhook/webhook.mjs`, `channels/discord/discord.mjs` |
+| MCP server registration | `.mcp.json` (project), `~/.claude.json` (user-level) |
