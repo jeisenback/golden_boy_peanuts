@@ -1,7 +1,7 @@
 # Energy Options Opportunity Agent — User Guide
 
 > **Version 1.0 • March 2026**
-> This guide walks a developer through setting up, configuring, and running the full Energy Options Opportunity Agent pipeline end-to-end.
+> This guide covers the full pipeline: setup, configuration, execution, output interpretation, and troubleshooting.
 
 ---
 
@@ -18,377 +18,360 @@
 
 ## Overview
 
-The **Energy Options Opportunity Agent** is a modular, four-agent Python pipeline that identifies options trading opportunities driven by oil market instability. It ingests market data, supply signals, news events, and alternative datasets to produce structured, ranked candidate options strategies.
+The **Energy Options Opportunity Agent** is an autonomous, modular Python pipeline that identifies options trading opportunities driven by oil market instability. It ingests market data, supply signals, news events, and alternative datasets to produce structured, ranked candidate options strategies.
 
-The pipeline is **advisory only** — it produces ranked recommendations but does not execute trades.
-
-### Pipeline Architecture
-
-Data flows unidirectionally through four loosely coupled agents that communicate via a shared **market state object** and a **derived features store**.
+The system is composed of **four loosely coupled agents** that communicate via a shared market state object and a derived features store:
 
 ```mermaid
 flowchart LR
-    subgraph Inputs
-        A1([Crude Prices\nAlpha Vantage / MetalpriceAPI])
-        A2([ETF & Equity\nyfinance / Yahoo Finance])
-        A3([Options Chains\nYahoo Finance / Polygon.io])
-        A4([EIA Supply\nEIA API])
-        A5([News & Geo\nGDELT / NewsAPI])
-        A6([Insider Activity\nEDGAR / Quiver Quant])
-        A7([Shipping\nMarineTraffic / VesselFinder])
-        A8([Sentiment\nReddit / Stocktwits])
+    subgraph Ingestion["1 · Data Ingestion Agent"]
+        A1[Fetch crude prices\nETF / equity data\noptions chains]
+        A2[Normalize → Unified\nMarket State Object]
+        A1 --> A2
     end
 
-    subgraph Pipeline
-        B[Data Ingestion Agent\nFetch & Normalize]
-        C[Event Detection Agent\nSupply & Geo Signals]
-        D[Feature Generation Agent\nDerived Signal Computation]
-        E[Strategy Evaluation Agent\nOpportunity Ranking]
+    subgraph Events["2 · Event Detection Agent"]
+        B1[Monitor news &\ngeo feeds]
+        B2[Score supply disruptions\nrefinery outages\nchokepoints]
+        B1 --> B2
     end
 
-    subgraph Output
-        F[(Market State Object\n& Features Store)]
-        G([Ranked Candidates\nJSON / Dashboard])
+    subgraph Features["3 · Feature Generation Agent"]
+        C1[Compute derived signals\nvol gap · curve steepness\nsector dispersion · etc.]
     end
 
-    A1 & A2 & A3 & A4 --> B
-    A5 --> C
-    A6 & A7 & A8 --> C
-    B --> F
-    C --> F
-    F --> D
-    D --> F
-    F --> E
-    E --> G
+    subgraph Strategy["4 · Strategy Evaluation Agent"]
+        D1[Evaluate eligible\noption structures]
+        D2[Rank by edge score\nwith signal references]
+        D1 --> D2
+    end
+
+    RawFeeds([Raw Data Feeds]) --> Ingestion
+    Ingestion -->|Market State| Events
+    Ingestion -->|Market State| Features
+    Events -->|Event Scores| Features
+    Features -->|Derived Features| Strategy
+    Strategy -->|JSON Output| Output([Ranked Candidates])
 ```
 
-### In-Scope Instruments & Strategies
+### What the pipeline produces
 
-| Category | Items |
+For each candidate opportunity the pipeline emits a JSON object containing:
+
+| Field | Description |
 |---|---|
-| **Crude futures** | Brent Crude, WTI (`CL=F`) |
-| **ETFs** | USO, XLE |
-| **Energy equities** | Exxon Mobil (XOM), Chevron (CVX) |
-| **Option structures (MVP)** | Long straddles, call/put spreads, calendar spreads |
+| `instrument` | Target instrument (e.g. `USO`, `XLE`, `CL=F`) |
+| `structure` | Options structure type |
+| `expiration` | Days to target expiration |
+| `edge_score` | Composite opportunity score `[0.0 – 1.0]` |
+| `signals` | Map of contributing signals and their states |
+| `generated_at` | UTC ISO 8601 timestamp |
 
-> **Out of scope (initially):** Exotic/multi-legged strategies, regional refined product pricing (OPIS), automated trade execution.
+> **Advisory only.** The system does **not** execute trades. All output is informational.
 
 ---
 
 ## Prerequisites
 
-### System Requirements
+### System requirements
 
 | Requirement | Minimum |
 |---|---|
-| Python | 3.10+ |
-| Memory | 2 GB RAM |
-| Disk | 5 GB free (for 6–12 months of historical data) |
-| Deployment target | Local machine, single VM, or container |
+| Python | 3.10 or later |
+| OS | Linux, macOS, or Windows (WSL2 recommended) |
+| RAM | 2 GB |
+| Disk | 10 GB free (for 6–12 months of historical data) |
+| Network | Outbound HTTPS access to all data sources |
 
-### Python Dependencies
+### External accounts and API keys
 
-Install all dependencies from the project root:
+All sources are free or free-tier. Register for each before running the pipeline.
+
+| Service | Used by | Registration URL |
+|---|---|---|
+| Alpha Vantage | Crude prices (WTI, Brent) | https://www.alphavantage.co/support/#api-key |
+| Yahoo Finance / yfinance | ETF, equity, options data | No key required (library-based) |
+| Polygon.io | Options chains (optional upgrade) | https://polygon.io/dashboard/signup |
+| EIA API | Supply/inventory data | https://www.eia.gov/opendata/register.php |
+| GDELT | News & geopolitical events | No key required |
+| NewsAPI | News events | https://newsapi.org/register |
+| SEC EDGAR | Insider activity | No key required |
+| Quiver Quant | Insider activity (enhanced) | https://www.quiverquant.com/signup |
+| MarineTraffic | Tanker/shipping data | https://www.marinetraffic.com/en/p/register |
+| Reddit API | Narrative/sentiment | https://www.reddit.com/prefs/apps |
+
+> **Phase 1 minimum.** For an initial MVP (Phase 1), you only need **Alpha Vantage** and **yfinance**. Additional keys become required as you enable later phases.
+
+### Python dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Key packages the pipeline depends on:
+A representative `requirements.txt` includes:
 
-| Package | Purpose |
-|---|---|
-| `yfinance` | ETF, equity, and options chain data |
-| `requests` | REST calls to EIA, Alpha Vantage, GDELT, etc. |
-| `pandas` / `numpy` | Data normalization and feature computation |
-| `pydantic` | Market state object and output schema validation |
-| `schedule` / `apscheduler` | Cadenced polling for each feed layer |
-| `sqlitedict` / `tinydb` | Lightweight local historical data store |
-
-### External API Keys
-
-You must obtain free-tier credentials for the following services before running the pipeline:
-
-| Service | Where to register | Required for |
-|---|---|---|
-| Alpha Vantage | [alphavantage.co](https://www.alphavantage.co/support/#api-key) | WTI / Brent spot prices |
-| EIA Open Data | [eia.gov/opendata](https://www.eia.gov/opendata/register.php) | Inventory & refinery utilization |
-| NewsAPI | [newsapi.org](https://newsapi.org/register) | Energy news headlines |
-| Polygon.io *(optional)* | [polygon.io](https://polygon.io) | Higher-fidelity options chains |
-| Quiver Quant *(optional)* | [quiverquant.com](https://www.quiverquant.com) | Insider conviction scores |
-
-> **Note:** Yahoo Finance (via `yfinance`), GDELT, SEC EDGAR, MarineTraffic free tier, Reddit, and Stocktwits do not require API keys at the free tier.
+```text
+yfinance>=0.2
+requests>=2.31
+pandas>=2.0
+numpy>=1.26
+pydantic>=2.0
+python-dotenv>=1.0
+schedule>=1.2
+```
 
 ---
 
 ## Setup & Configuration
 
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```bash
 git clone https://github.com/your-org/energy-options-agent.git
 cd energy-options-agent
 ```
 
-### 2. Create and Activate a Virtual Environment
+### 2. Create a virtual environment
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate        # macOS / Linux
-.venv\Scripts\activate           # Windows
+source .venv/bin/activate        # Linux / macOS
+# .venv\Scripts\activate.bat     # Windows CMD
+# .venv\Scripts\Activate.ps1     # Windows PowerShell
 ```
 
-### 3. Install Dependencies
+### 3. Install dependencies
 
 ```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
+### 4. Configure environment variables
 
-Copy the provided template and populate your credentials:
+Copy the provided template and populate your keys:
 
 ```bash
 cp .env.example .env
 ```
 
-Open `.env` in your editor and fill in each value. The full set of supported environment variables is described in the table below.
+Then edit `.env`. The table below documents every supported variable.
 
-#### Environment Variable Reference
+#### Environment variable reference
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `ALPHA_VANTAGE_API_KEY` | **Yes** | — | API key for crude spot/futures prices (Alpha Vantage) |
-| `EIA_API_KEY` | **Yes** | — | API key for EIA supply and inventory data |
-| `NEWSAPI_KEY` | **Yes** | — | API key for energy-related news headlines |
-| `POLYGON_API_KEY` | No | `""` | Polygon.io key for options chain data (falls back to `yfinance`) |
-| `QUIVER_QUANT_API_KEY` | No | `""` | Quiver Quant key for insider activity (Phase 3) |
-| `DATA_STORE_PATH` | No | `./data` | Local directory for raw and derived historical data |
-| `HISTORY_RETENTION_DAYS` | No | `365` | Days of historical data to retain (minimum 180 for backtesting) |
-| `MARKET_DATA_POLL_INTERVAL_SECONDS` | No | `60` | Cadence for minute-level market data refresh |
-| `EIA_POLL_INTERVAL_HOURS` | No | `24` | Cadence for EIA weekly feed check |
-| `GDELT_POLL_INTERVAL_HOURS` | No | `1` | Cadence for GDELT geopolitical event check |
-| `LOG_LEVEL` | No | `INFO` | Logging verbosity (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
-| `OUTPUT_PATH` | No | `./output` | Directory where ranked candidate JSON files are written |
-| `INSTRUMENTS` | No | `USO,XLE,XOM,CVX,CL=F` | Comma-separated list of instruments to track |
-| `MIN_EDGE_SCORE` | No | `0.25` | Minimum edge score threshold for a candidate to appear in output |
-| `MAX_CANDIDATES` | No | `20` | Maximum number of ranked candidates to emit per pipeline run |
+| `ALPHA_VANTAGE_API_KEY` | Yes (Phase 1+) | — | API key for crude price feeds (WTI, Brent) |
+| `EIA_API_KEY` | Yes (Phase 2+) | — | API key for EIA inventory and refinery utilization data |
+| `NEWS_API_KEY` | Yes (Phase 2+) | — | API key for NewsAPI news/geo event feed |
+| `POLYGON_API_KEY` | No | — | Polygon.io key for enhanced options chain data |
+| `QUIVER_QUANT_API_KEY` | No | — | Quiver Quant key for insider conviction signals |
+| `MARINE_TRAFFIC_API_KEY` | No | — | MarineTraffic key for tanker flow data |
+| `REDDIT_CLIENT_ID` | No | — | Reddit OAuth client ID for sentiment feed |
+| `REDDIT_CLIENT_SECRET` | No | — | Reddit OAuth client secret |
+| `REDDIT_USER_AGENT` | No | `energy-agent/1.0` | Reddit API user-agent string |
+| `OUTPUT_DIR` | No | `./output` | Directory where JSON output files are written |
+| `HISTORICAL_DATA_DIR` | No | `./data/historical` | Directory for persisted raw and derived data |
+| `RETENTION_DAYS` | No | `365` | Days of historical data to retain (180–365 recommended) |
+| `PIPELINE_PHASE` | No | `1` | Active feature phase: `1`, `2`, or `3` |
+| `REFRESH_INTERVAL_MINUTES` | No | `5` | Cadence for market data refresh (minutes-level feeds) |
+| `LOG_LEVEL` | No | `INFO` | Logging verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `EDGE_SCORE_THRESHOLD` | No | `0.30` | Minimum edge score for a candidate to appear in output |
 
-> **Tip:** Set `LOG_LEVEL=DEBUG` during your first run to see verbose per-agent output.
+#### Example `.env` file
 
-### 5. Verify Configuration
+```dotenv
+# --- Required (Phase 1) ---
+ALPHA_VANTAGE_API_KEY=YOUR_AV_KEY_HERE
 
-Run the built-in configuration check before executing the full pipeline:
+# --- Required (Phase 2) ---
+EIA_API_KEY=YOUR_EIA_KEY_HERE
+NEWS_API_KEY=YOUR_NEWSAPI_KEY_HERE
+
+# --- Optional enhancements ---
+POLYGON_API_KEY=
+QUIVER_QUANT_API_KEY=
+MARINE_TRAFFIC_API_KEY=
+REDDIT_CLIENT_ID=
+REDDIT_CLIENT_SECRET=
+REDDIT_USER_AGENT=energy-agent/1.0
+
+# --- Pipeline behaviour ---
+PIPELINE_PHASE=1
+REFRESH_INTERVAL_MINUTES=5
+OUTPUT_DIR=./output
+HISTORICAL_DATA_DIR=./data/historical
+RETENTION_DAYS=365
+EDGE_SCORE_THRESHOLD=0.30
+LOG_LEVEL=INFO
+```
+
+### 5. Initialise the data directories
 
 ```bash
-python -m agent.cli check-config
+python scripts/init_storage.py
 ```
 
-Expected output on success:
-
-```
-[OK] ALPHA_VANTAGE_API_KEY     reachable
-[OK] EIA_API_KEY               reachable
-[OK] NEWSAPI_KEY               reachable
-[--] POLYGON_API_KEY           not set — falling back to yfinance (options data)
-[--] QUIVER_QUANT_API_KEY      not set — insider signals disabled (Phase 3)
-[OK] DATA_STORE_PATH           ./data (writable)
-[OK] OUTPUT_PATH               ./output (writable)
-Configuration check complete. Pipeline is ready to run.
-```
+This creates the `OUTPUT_DIR` and `HISTORICAL_DATA_DIR` directories and validates that required API keys for the configured `PIPELINE_PHASE` are present.
 
 ---
 
 ## Running the Pipeline
 
-### Agent Execution Order
+### Pipeline execution modes
 
-Each agent must complete before the next begins. The diagram below shows the sequence for a single pipeline run.
+| Mode | Command | Use case |
+|---|---|---|
+| Single run | `python run_pipeline.py --once` | Ad-hoc evaluation; CI/testing |
+| Scheduled loop | `python run_pipeline.py` | Continuous operation at `REFRESH_INTERVAL_MINUTES` cadence |
+| Individual agent | `python run_agent.py <agent_name>` | Debug or develop a single agent in isolation |
 
-```mermaid
-sequenceDiagram
-    participant CLI as CLI / Scheduler
-    participant DIA as Data Ingestion Agent
-    participant EDA as Event Detection Agent
-    participant FGA as Feature Generation Agent
-    participant SEA as Strategy Evaluation Agent
-    participant Store as Market State & Features Store
-    participant Out as Output (JSON)
-
-    CLI->>DIA: run()
-    DIA->>Store: write normalized market state
-    DIA-->>CLI: done
-
-    CLI->>EDA: run()
-    EDA->>Store: read market state
-    EDA->>Store: write event scores
-    EDA-->>CLI: done
-
-    CLI->>FGA: run()
-    FGA->>Store: read market state + event scores
-    FGA->>Store: write derived features
-    FGA-->>CLI: done
-
-    CLI->>SEA: run()
-    SEA->>Store: read all signals
-    SEA->>Out: write ranked candidates JSON
-    SEA-->>CLI: done
-```
-
-### Running the Full Pipeline Once
-
-Execute a single end-to-end pipeline run from the project root:
+### Single run
 
 ```bash
-python -m agent.cli run --all
+python run_pipeline.py --once
 ```
 
-This invokes all four agents in sequence and writes output to `$OUTPUT_PATH`.
+The pipeline will:
 
-### Running Individual Agents
+1. Invoke the **Data Ingestion Agent** to fetch and normalize all configured feeds.
+2. Invoke the **Event Detection Agent** to score supply and geopolitical signals.
+3. Invoke the **Feature Generation Agent** to compute derived signals.
+4. Invoke the **Strategy Evaluation Agent** to rank and emit candidate opportunities.
+5. Write results to `OUTPUT_DIR/candidates_<ISO8601_timestamp>.json`.
 
-You can run each agent independently for development or debugging:
+### Continuous scheduled run
 
 ```bash
-# Data Ingestion Agent only
-python -m agent.cli run --agent ingestion
-
-# Event Detection Agent only
-python -m agent.cli run --agent events
-
-# Feature Generation Agent only
-python -m agent.cli run --agent features
-
-# Strategy Evaluation Agent only
-python -m agent.cli run --agent strategy
+python run_pipeline.py
 ```
 
-> **Note:** Running agents out of order is supported for debugging, but the pipeline will use whatever data is currently in the store. Stale data will produce stale recommendations.
+The scheduler wakes every `REFRESH_INTERVAL_MINUTES` minutes for market data. Slower feeds (EIA, EDGAR) are refreshed on their own daily/weekly schedules automatically.
 
-### Running the Pipeline on a Schedule
-
-To run the full pipeline continuously at the cadence defined by `MARKET_DATA_POLL_INTERVAL_SECONDS`:
-
-```bash
-python -m agent.cli run --all --loop
+```
+[2026-03-15 09:00:00 UTC] INFO  Pipeline started. Phase=1, Interval=5min
+[2026-03-15 09:00:02 UTC] INFO  [DataIngestion] Fetched WTI: 82.14, Brent: 85.30
+[2026-03-15 09:00:04 UTC] INFO  [DataIngestion] Fetched USO, XLE, XOM, CVX options chains
+[2026-03-15 09:00:05 UTC] INFO  [EventDetection] 0 supply disruption events detected
+[2026-03-15 09:00:06 UTC] INFO  [FeatureGen] vol_gap=+0.04, curve_steepness=contango
+[2026-03-15 09:00:07 UTC] INFO  [StrategyEval] 3 candidates above threshold (0.30)
+[2026-03-15 09:00:07 UTC] INFO  Output written → ./output/candidates_2026-03-15T090007Z.json
 ```
 
-The scheduler respects each feed's appropriate cadence:
+### Running an individual agent
 
-| Feed layer | Cadence |
-|---|---|
-| Crude prices, ETF/equity prices | Minutes (configurable via `MARKET_DATA_POLL_INTERVAL_SECONDS`) |
-| Options chains, insider activity | Daily |
-| EIA inventory / refinery data | Daily/weekly |
-| News, GDELT, shipping, sentiment | Continuous / hourly |
-
-### Running in a Container
-
-A `Dockerfile` is included for containerized deployment:
+Use this for development, debugging, or incremental integration:
 
 ```bash
-docker build -t energy-options-agent .
+python run_agent.py data_ingestion
+python run_agent.py event_detection
+python run_agent.py feature_generation
+python run_agent.py strategy_evaluation
+```
 
-docker run --env-file .env \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/output:/app/output \
-  energy-options-agent python -m agent.cli run --all --loop
+Each agent reads its expected inputs from the shared state store on disk and writes its outputs back to the same store.
+
+### Activating pipeline phases
+
+Set `PIPELINE_PHASE` in `.env` to enable progressively richer signals:
+
+| Phase | Agents active | New data sources enabled |
+|---|---|---|
+| `1` | All four (core only) | Alpha Vantage, yfinance |
+| `2` | All four + event scoring | EIA API, GDELT, NewsAPI |
+| `3` | All four + alt signals | EDGAR, Quiver Quant, MarineTraffic, Reddit/Stocktwits |
+
+```bash
+# Switch to Phase 2
+echo "PIPELINE_PHASE=2" >> .env
+python run_pipeline.py --once
 ```
 
 ---
 
 ## Interpreting the Output
 
-### Output Location
-
-Each pipeline run writes a timestamped JSON file to `$OUTPUT_PATH`:
+### Output file location
 
 ```
 output/
-└── candidates_2026-03-15T14:30:00Z.json
+└── candidates_2026-03-15T090007Z.json
 ```
 
-The file contains a JSON array of ranked strategy candidates, ordered from highest to lowest `edge_score`.
+Each run produces a timestamped file. The scheduler does not overwrite prior runs, supporting audit trails and backtesting.
 
-### Output Schema
-
-Each candidate object conforms to the following schema:
-
-| Field | Type | Description |
-|---|---|---|
-| `instrument` | `string` | Target instrument, e.g. `"USO"`, `"XLE"`, `"CL=F"` |
-| `structure` | `enum` | Option structure: `long_straddle` \| `call_spread` \| `put_spread` \| `calendar_spread` |
-| `expiration` | `integer` | Target expiration in calendar days from the evaluation date |
-| `edge_score` | `float [0.0–1.0]` | Composite opportunity score — higher values indicate stronger signal confluence |
-| `signals` | `object` | Map of contributing signals and their qualitative values |
-| `generated_at` | `ISO 8601 datetime` | UTC timestamp of candidate generation |
-
-### Example Candidate
+### Output schema
 
 ```json
-{
-  "instrument": "USO",
-  "structure": "long_straddle",
-  "expiration": 30,
-  "edge_score": 0.47,
-  "signals": {
-    "tanker_disruption_index": "high",
-    "volatility_gap": "positive",
-    "narrative_velocity": "rising"
-  },
-  "generated_at": "2026-03-15T14:30:00Z"
-}
+[
+  {
+    "instrument":   "USO",
+    "structure":    "long_straddle",
+    "expiration":   30,
+    "edge_score":   0.47,
+    "signals": {
+      "tanker_disruption_index": "high",
+      "volatility_gap":          "positive",
+      "narrative_velocity":      "rising"
+    },
+    "generated_at": "2026-03-15T09:00:07Z"
+  }
+]
 ```
 
-### Reading the `edge_score`
+### Field-by-field reference
 
-The `edge_score` is a composite \[0.0–1.0\] float derived from the confluence of all active signals. Use the table below as a rough interpretive guide:
-
-| Score range | Interpretation |
-|---|---|
-| `0.75 – 1.0` | Strong signal confluence — high-priority candidate |
-| `0.50 – 0.74` | Moderate confluence — worth reviewing |
-| `0.25 – 0.49` | Weak signal overlap — marginal candidate (default minimum threshold) |
-| `< 0.25` | Below threshold — filtered out by default |
-
-> Adjust `MIN_EDGE_SCORE` in `.env` to raise or lower the filter threshold.
-
-### Reading the `signals` Map
-
-Each key in the `signals` object maps to one of the derived features computed by the Feature Generation Agent:
-
-| Signal key | Source agent | What it represents |
+| Field | Type | Notes |
 |---|---|---|
-| `volatility_gap` | Feature Generation | Realized vs. implied volatility divergence |
-| `futures_curve_steepness` | Feature Generation | Contango / backwardation signal from futures curve |
-| `sector_dispersion` | Feature Generation | Cross-sector correlation breakdown |
-| `insider_conviction_score` | Feature Generation | Aggregated insider trade signal (EDGAR/Quiver) |
-| `narrative_velocity` | Feature Generation | Headline acceleration from news and social feeds |
-| `supply_shock_probability` | Feature Generation | Probability estimate of near-term supply disruption |
-| `tanker_disruption_index` | Event Detection | Shipping flow anomalies at key chokepoints |
-| `refinery_outage_index` | Event Detection | Detected refinery disruption events |
-| `geopolitical_event_score` | Event Detection | Confidence-weighted geopolitical event intensity |
+| `instrument` | string | One of: `USO`, `XLE`, `XOM`, `CVX`, `CL=F` (WTI), `BZ=F` (Brent) |
+| `structure` | enum | `long_straddle`, `call_spread`, `put_spread`, `calendar_spread` |
+| `expiration` | integer | Calendar days from the evaluation date to the target expiration |
+| `edge_score` | float `[0.0–1.0]` | Higher = stronger signal confluence; candidates below `EDGE_SCORE_THRESHOLD` are suppressed |
+| `signals` | object | Key–value map of the signals that contributed to this candidate's score |
+| `generated_at` | ISO 8601 UTC | Timestamp of candidate generation |
 
-### Consuming Output in thinkorswim or a Dashboard
+### Signal values
 
-The JSON output is compatible with any JSON-capable dashboard or thinkorswim's script import. Point your tool at the latest file in `$OUTPUT_PATH`, or configure the pipeline to write to a fixed path:
+| Signal key | Possible values | What it means |
+|---|---|---|
+| `volatility_gap` | `positive`, `negative`, `neutral` | Realized vol minus implied vol; `positive` = IV may be underpriced |
+| `curve_steepness` | `contango`, `backwardation`, `flat` | Shape of the WTI/Brent futures curve |
+| `supply_shock_probability` | `low`, `medium`, `high` | Probability score from supply disruption model |
+| `tanker_disruption_index` | `low`, `medium`, `high` | Derived from shipping/logistics feed (Phase 3) |
+| `narrative_velocity` | `falling`, `stable`, `rising` | Rate of change of energy-related headline volume |
+| `insider_conviction` | `low`, `medium`, `high` | Aggregated insider trade signal (Phase 3) |
+| `sector_dispersion` | `low`, `medium`, `high` | Cross-sector correlation divergence indicator |
 
-```bash
-# Write to a fixed filename for easy dashboard polling
-python -m agent.cli run --all --output-file output/latest_candidates.json
+### Ranking and acting on candidates
+
+- Candidates are ordered **descending by `edge_score`**.
+- A score above **0.50** indicates strong multi-signal confluence; treat with higher priority.
+- Always cross-reference the `signals` map to understand *why* a candidate scored highly before considering any position.
+- The output is designed to be consumed directly in **thinkorswim** or any JSON-capable dashboard.
+
+### Loading output in Python
+
+```python
+import json
+from pathlib import Path
+
+latest = sorted(Path("output").glob("candidates_*.json"))[-1]
+candidates = json.loads(latest.read_text())
+
+for c in sorted(candidates, key=lambda x: x["edge_score"], reverse=True):
+    print(f"{c['edge_score']:.2f}  {c['instrument']:6s}  {c['structure']}")
 ```
 
 ---
 
 ## Troubleshooting
 
-### Common Issues
+### Common issues
 
 | Symptom | Likely cause | Resolution |
 |---|---|---|
-| `check-config` reports an API key as unreachable | Invalid or missing key in `.env` | Re-check the key value; verify the service is not rate-limiting your IP |
-| Pipeline run exits with no candidates in output | All candidates below `MIN_EDGE_SCORE` | Lower `MIN_EDGE_SCORE` temporarily, or run in `DEBUG` mode to inspect signal values |
-| `yfinance` returns empty options chain | Market is closed or data is delayed | Options data updates daily; run during market hours or accept previous day's chain |
-| Event Detection Agent produces no events | GDELT/NewsAPI returning no matching articles | Verify `NEWSAPI_KEY` is valid; check GDELT connectivity; inspect logs for HTTP errors |
-| Feature Generation Agent raises `KeyError` on market state | Data Ingestion Agent did not complete successfully | Re-run ingestion step first: `python -m agent.cli run --agent ingestion` |
-| Historical store grows beyond available disk | Retention policy not enforced | Verify `HISTORY_RETENTION_DAYS` is set; run `python -m agent.cli pr
+| `KeyError: ALPHA_VANTAGE_API_KEY` | Missing key in `.env` | Add the key and re-run `init_storage.py` to validate |
+| `No candidates above threshold` | `EDGE_SCORE_THRESHOLD` too high, or low-signal market conditions | Lower `EDGE_SCORE_THRESHOLD` temporarily, or inspect feature output with `LOG_LEVEL=DEBUG` |
+| `Rate limit exceeded` (Alpha Vantage) | Free tier allows 5 req/min, 500 req/day | Increase `REFRESH_INTERVAL_MINUTES` to `≥ 15` |
+| `yfinance returned empty options chain` | Options data not yet available for the trading session | Run after market open; options chains update once daily |
+| Agent exits with `ConnectionError` | Transient network issue | The pipeline is designed to tolerate missing data; re-run
