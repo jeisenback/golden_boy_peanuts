@@ -373,7 +373,7 @@ Human lead approved 2026-03-21.
 
 ## Sprint Notes (2026-03-21, session 2)
 
-**#172 IN REVIEW** — DB migration and backtest DB layer implemented. PR opened.
+**#172 IN REVIEW** — DB migration and backtest DB layer complete. PR #177 open → develop.
 
 Two-table isolation design complete:
 - `db/migrations/add_backtest_tables.sql` — backtest_candidates (UUID PK, snapshot_time, edge_score,
@@ -387,4 +387,16 @@ Two-table isolation design complete:
 - All 5 local_check.sh stages pass (ruff, black, mypy, import scan, 250 unit tests).
 
 **HUMAN SIGN-OFF REQUIRED before running migration on any live DB (ESOD Hard Stop).**
-Next unblocked: #166 (HistoricalLoader) — depends on #172 merged.
+
+
+**#148 IN REVIEW** — Phase 3 alternative data DB schema complete. PR #178 open → develop.
+- db/schema.sql: insider_trades, shipping_events, narrative_signals tables added.
+- src/agents/alternative_data/db.py: 6 typed stub functions (NotImplementedError) for issues #149-#153.
+- All 5 local_check.sh stages pass.
+
+Next Sprint 9 unblocked issues (after #172 + #148 merge):
+- #149 — fetch_edgar_insider_trades (depends on insider_trades table from #148)
+- #151 — fetch_reddit_sentiment (depends on narrative_signals table from #148)
+- #152 — fetch_stocktwits_sentiment (depends on narrative_signals table from #148)
+- #153 — fetch_tanker_flows (depends on shipping_events table from #148)
+- #166 — HistoricalLoader / run_backtest_pipeline (depends on #172 merged)
