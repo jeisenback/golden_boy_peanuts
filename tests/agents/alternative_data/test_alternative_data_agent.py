@@ -597,3 +597,172 @@ class TestFetchStocktwitsHttpError:
         with patch("requests.get", side_effect=requests.ConnectionError("timeout")):
             with pytest.raises(requests.ConnectionError):
                 fetch_stocktwits_sentiment(["XOM"])
+
+
+# ===========================================================================
+# fetch_tanker_flows tests — issue #153
+# ===========================================================================
+
+from src.agents.alternative_data.alternative_data_agent import (  # noqa: E402
+    _vessel_to_shipping_event,
+    fetch_tanker_flows,
+)
+from src.agents.alternative_data.models import EventType, ShippingEvent  # noqa: E402
+
+_MARINETRAFFIC_URL_PREFIX = "https://services.marinetraffic.com/api/getVesselsInArea"
+
+
+def _make_vessel(
+    mmsi: str = "123456789",
+    lat: float = 26.5,
+    lon: float = 56.5,
+    speed: float = 5.0,
+    timestamp: int | None = None,
+) -> dict:
+    v: dict = {"MMSI": mmsi, "LAT": str(lat), "LON": str(lon), "SPEED": str(speed)}
+    if timestamp is not None:
+        v["TIMESTAMP"] = str(timestamp)
+    return v
+
+
+def _mt_resp(vessels: list[dict]) -> MagicMock:
+    """Mock MarineTraffic response returning vessel list directly."""
+    mock = MagicMock()
+    mock.status_code = 200
+    mock.raise_for_status.return_value = None
+    mock.json.return_value = vessels
+    return mock
+
+
+class TestFetchTankerFlowsNoKey:
+    def test_missing_api_key_returns_empty_and_warns(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        monkeypatch.delenv("MARINETRAFFIC_API_KEY", raising=False)
+        with caplog.at_level(logging.WARNING):
+            events = fetch_tanker_flows()
+
+        assert events == []
+        assert any("marinetraffic_api_key" in r.message.lower() for r in caplog.records)
+
+
+class TestFetchTankerFlowsHappyPath:
+    def test_transit_vessel_returned(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        vessel = _make_vessel(mmsi="111111111", lat=26.5, lon=56.5, speed=8.0)
+        # 3 chokepoints → 3 API calls; return vessel only on first, empty on others
+        resps = [_mt_resp([vessel]), _mt_resp([]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps):
+            events = fetch_tanker_flows()
+
+        assert len(events) == 1
+        e = events[0]
+        assert isinstance(e, ShippingEvent)
+        assert e.vessel_id == "111111111"
+        assert e.event_type == EventType.TRANSIT
+        assert e.latitude == pytest.approx(26.5)
+        assert e.longitude == pytest.approx(56.5)
+        assert e.source == "marinetraffic"
+
+    def test_anchored_vessel_below_speed_threshold(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        vessel = _make_vessel(speed=0.2)
+        resps = [_mt_resp([vessel]), _mt_resp([]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps):
+            events = fetch_tanker_flows()
+
+        assert events[0].event_type == EventType.ANCHORED
+
+    def test_speed_at_threshold_is_anchored(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        vessel = _make_vessel(speed=0.5)  # exactly at threshold
+        resps = [_mt_resp([vessel]), _mt_resp([]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps):
+            events = fetch_tanker_flows()
+
+        assert events[0].event_type == EventType.ANCHORED
+
+    def test_all_three_chokepoints_queried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        resps = [_mt_resp([_make_vessel()]), _mt_resp([_make_vessel("222")]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps) as mock_get:
+            events = fetch_tanker_flows()
+
+        assert mock_get.call_count == 3
+        assert len(events) == 2
+
+    def test_dict_envelope_response_handled(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """MarineTraffic v8 may return {'DATA': [...]} instead of a bare list."""
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        envelope = {"DATA": [_make_vessel()]}
+        resps = [_mock_resp(envelope), _mt_resp([]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps):
+            events = fetch_tanker_flows()
+
+        assert len(events) == 1
+
+
+class TestFetchTankerFlowsEmptyResponse:
+    def test_empty_vessel_list_returns_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        resps = [_mt_resp([]), _mt_resp([]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps):
+            events = fetch_tanker_flows()
+
+        assert events == []
+
+
+class TestFetchTankerFlowsMalformedVessel:
+    def test_missing_mmsi_skips_with_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        import logging
+
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        bad_vessel = {"LAT": "26.5", "LON": "56.5", "SPEED": "5.0"}  # no MMSI
+        resps = [_mt_resp([bad_vessel]), _mt_resp([]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps):
+            with caplog.at_level(logging.WARNING):
+                events = fetch_tanker_flows()
+
+        assert events == []
+        assert any("malformed" in r.message.lower() for r in caplog.records)
+
+
+class TestFetchTankerFlowsHttpError:
+    def test_http_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+
+        with patch("requests.get", side_effect=requests.ConnectionError("timeout")):
+            with pytest.raises(requests.ConnectionError):
+                fetch_tanker_flows()
+
+
+class TestVesselToShippingEvent:
+    def test_timestamp_field_parsed(self) -> None:
+        from datetime import UTC, datetime
+
+        vessel = _make_vessel(timestamp=1700000000)
+        fetched_at = datetime.now(tz=UTC)
+        event = _vessel_to_shipping_event(vessel, fetched_at)
+
+        assert event.timestamp == datetime.fromtimestamp(1700000000, tz=UTC)
+
+    def test_missing_timestamp_falls_back_to_fetched_at(self) -> None:
+        from datetime import UTC, datetime
+
+        vessel = _make_vessel()  # no timestamp
+        fetched_at = datetime(2024, 1, 15, 12, 0, tzinfo=UTC)
+        event = _vessel_to_shipping_event(vessel, fetched_at)
+
+        assert event.timestamp == fetched_at

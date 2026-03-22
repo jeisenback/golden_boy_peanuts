@@ -66,3 +66,29 @@ class NarrativeSignal(BaseModel):
     window_start: datetime
     window_end: datetime
     source: str = "reddit"
+
+
+class EventType(StrEnum):
+    """Vessel event types for shipping_events table (matches DB event_type values)."""
+
+    TRANSIT = "transit"
+    ANCHORED = "anchored"
+    DELAYED = "delayed"
+
+
+class ShippingEvent(BaseModel):
+    """
+    Validated vessel movement event near an energy supply chokepoint.
+
+    Maps to the shipping_events table schema (db/schema.sql).
+    instrument is nullable — a vessel in a chokepoint zone may affect
+    multiple instruments or none specifically.
+    """
+
+    vessel_id: str
+    event_type: EventType
+    latitude: float
+    longitude: float
+    timestamp: datetime
+    source: str = "marinetraffic"
+    instrument: str | None = None
