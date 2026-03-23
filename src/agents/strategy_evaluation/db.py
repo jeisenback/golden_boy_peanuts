@@ -5,13 +5,15 @@ PostgreSQL via SQLAlchemy. Schema TimescaleDB-compatible (ESOD Section 4.3).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import json
 import logging
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from src.agents.strategy_evaluation.models import StrategyCandidate
+from src.agents.strategy_evaluation.models import StrategyCandidate, StrategyOutcome
 from src.core.db import get_engine  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -137,3 +139,97 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
         result.append(candidate)
 
     return result
+
+
+def write_strategy_outcome(outcome: StrategyOutcome, engine: Engine) -> None:
+    """
+    Insert or upsert a single strategy outcome record.
+
+    Uses ON CONFLICT (candidate_id) DO UPDATE so the expiration-price job can
+    fill in price_at_expiration and pct_move on a subsequent call without
+    creating a duplicate row.
+
+    Args:
+        outcome: Validated StrategyOutcome to persist.
+        engine: SQLAlchemy Engine.
+
+    Raises:
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
+            connection failure after logging the exception.
+    """
+    sql = text("""
+        INSERT INTO strategy_outcomes
+            (candidate_id, instrument, structure, generated_at, expiration_date,
+             price_at_generation, price_at_expiration, pct_move, recorded_at)
+        VALUES
+            (:candidate_id, :instrument, :structure, :generated_at, :expiration_date,
+             :price_at_generation, :price_at_expiration, :pct_move, :recorded_at)
+        ON CONFLICT (candidate_id) DO UPDATE SET
+            price_at_expiration = EXCLUDED.price_at_expiration,
+            pct_move            = EXCLUDED.pct_move,
+            recorded_at         = EXCLUDED.recorded_at
+        """)
+    row: dict[str, Any] = {
+        "candidate_id": outcome.candidate_id,
+        "instrument": outcome.instrument,
+        "structure": outcome.structure.value,
+        "generated_at": outcome.generated_at,
+        "expiration_date": outcome.expiration_date,
+        "price_at_generation": outcome.price_at_generation,
+        "price_at_expiration": outcome.price_at_expiration,
+        "pct_move": outcome.pct_move,
+        "recorded_at": outcome.recorded_at,
+    }
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, row)
+    except Exception:
+        logger.exception("write_strategy_outcome failed for candidate_id=%s", outcome.candidate_id)
+        raise
+
+    logger.info(
+        "Wrote outcome for candidate_id=%s instrument=%s",
+        outcome.candidate_id,
+        outcome.instrument,
+    )
+
+
+def fetch_pending_outcomes(
+    engine: Engine,
+    as_of: datetime | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Return strategy candidates past their expiration date with no recorded outcome.
+
+    Queries strategy_candidates LEFT JOIN strategy_outcomes and returns rows
+    where the outcome has not yet been recorded and the computed expiration date
+    (generated_at + expiration days) is before as_of.
+
+    Args:
+        engine: SQLAlchemy Engine.
+        as_of: Treat this datetime as "now" for expiration comparisons.
+            Defaults to datetime.now(UTC). Pass an explicit value in tests.
+
+    Returns:
+        List of dicts with keys: candidate_id, instrument, structure,
+        generated_at, expiration_date — ready to be passed to a price-fetch job
+        that will call write_strategy_outcome() with the resolved prices.
+    """
+    sql = text("""
+        SELECT
+            sc.id           AS candidate_id,
+            sc.instrument,
+            sc.structure,
+            sc.generated_at,
+            (sc.generated_at + sc.expiration * INTERVAL '1 day')::TIMESTAMPTZ
+                            AS expiration_date
+        FROM  strategy_candidates sc
+        LEFT JOIN strategy_outcomes so ON so.candidate_id = sc.id
+        WHERE so.candidate_id IS NULL
+          AND (sc.generated_at + sc.expiration * INTERVAL '1 day') < :as_of
+        ORDER BY expiration_date ASC
+        """)
+    cutoff = as_of if as_of is not None else datetime.now(tz=UTC)
+    with engine.connect() as conn:
+        rows = conn.execute(sql, {"as_of": cutoff}).mappings().all()
+    return [dict(row) for row in rows]
