@@ -1,0 +1,7 @@
+instrument,price,instrument_type,implied_vol,atm_strike,expiration_date
+USO,4.20,etf,0.85,4.00,2020-04-17
+XLE,27.40,etf,0.78,27.00,2020-04-17
+XOM,38.50,equity,0.72,38.00,2020-04-17
+CVX,65.00,equity,0.68,65.00,2020-04-17
+CL=F,31.13,crude_futures,0.90,31.00,2020-04-21
+BZ=F,34.36,crude_futures,0.88,34.00,2020-04-21

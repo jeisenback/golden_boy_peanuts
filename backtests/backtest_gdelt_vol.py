@@ -252,6 +252,91 @@ def evaluate(
         raise
 
 
+def replay_events_from_gdelt(
+    gdelt_path: pathlib.Path,
+    prices_path: pathlib.Path,
+    threshold: float = DEFAULT_ZSCORE_THRESHOLD,
+    window: int = DEFAULT_ROLLING_WINDOW,
+) -> dict[str, list[Any]]:
+    """
+    Detect GDELT article-burst events and run replay_pipeline for each event date.
+
+    Refactored to delegate strategy candidate generation to
+    scripts/backtest_harness.replay_pipeline() rather than inline pipeline logic,
+    keeping the GDELT prototype as a thin event-detection layer only.
+
+    Args:
+        gdelt_path:  Path to GDELT CSV with an `articles` column.
+        prices_path: Path to prices CSV with a `close` column.
+        threshold:   Z-score threshold to flag a GDELT volume event.
+        window:      Rolling window (days) for baseline statistics.
+
+    Returns:
+        Dict mapping ISO date strings ("YYYY-MM-DD") to list[StrategyCandidate]
+        produced by replay_pipeline for that date.  Returns {} if no events are
+        detected or if replay_pipeline cannot be imported.
+    """
+    try:
+        import sys
+
+        sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+        from scripts.backtest_harness import (  # type: ignore[import]
+            load_market_state_from_fixture,
+            replay_pipeline,
+        )
+        from src.agents.ingestion.models import (  # type: ignore[import]
+            InstrumentType,
+            MarketState,
+            RawPriceRecord,
+        )
+    except ImportError as exc:
+        logger.warning(
+            "replay_events_from_gdelt: cannot import backtest_harness — %s; "
+            "skipping replay and returning {}",
+            exc,
+        )
+        return {}
+
+    gd = load_gdelt(gdelt_path)
+    pr = load_prices(prices_path)
+    events = detect_events(gd, window=window, threshold=threshold)
+    event_dates = [str(d.date()) for d, flag in events.items() if flag]
+
+    results: dict[str, list[Any]] = {}
+    for date_str in event_dates:
+        try:
+            snap = pd.Timestamp(date_str, tz="UTC").to_pydatetime()
+            price_row = pr.reindex([pd.Timestamp(date_str)]).ffill()
+            close_val = float(price_row["close"].iloc[0]) if len(price_row) else 50.0
+            market_state = MarketState(
+                snapshot_time=snap,
+                prices=[
+                    RawPriceRecord(
+                        instrument="CL=F",
+                        instrument_type=InstrumentType.CRUDE_FUTURES,
+                        price=close_val,
+                        timestamp=snap,
+                        source="gdelt_backtest",
+                    )
+                ],
+            )
+            candidates = replay_pipeline(date_str, market_state)
+            results[date_str] = candidates  # type: ignore[assignment]
+            logger.info(
+                "replay_events_from_gdelt: %s → %d candidate(s)",
+                date_str,
+                len(candidates),
+            )
+        except Exception:
+            logger.warning(
+                "replay_events_from_gdelt: replay failed for %s; skipping",
+                date_str,
+                exc_info=True,
+            )
+
+    return results
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
     p = argparse.ArgumentParser(

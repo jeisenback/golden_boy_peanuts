@@ -1,0 +1,7 @@
+instrument,price,instrument_type,implied_vol,atm_strike,expiration_date
+USO,78.70,etf,0.55,78.00,2022-03-18
+XLE,72.50,etf,0.52,72.00,2022-03-18
+XOM,82.00,equity,0.48,82.00,2022-03-18
+CVX,158.00,equity,0.45,158.00,2022-03-18
+CL=F,100.28,crude_futures,0.60,100.00,2022-03-22
+BZ=F,104.97,crude_futures,0.58,105.00,2022-03-22
