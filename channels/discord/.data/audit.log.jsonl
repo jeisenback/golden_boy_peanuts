@@ -1,0 +1,29 @@
+{"ts":"2026-03-24T23:40:40.278Z","eventType":"session.created","threadId":"1486147773748482248","ownerUserId":"691260214699360316"}
+{"ts":"2026-03-24T23:40:52.000Z","eventType":"session.created","threadId":"1486147824562343966","ownerUserId":"691260214699360316"}
+{"ts":"2026-03-24T23:41:08.642Z","eventType":"forward.failed","project":"acme","port":8791,"threadId":null,"authorUserId":"691260214699360316","error":"TypeError: fetch failed"}
+{"ts":"2026-03-24T23:41:08.642Z","eventType":"forward.failed","project":"acme","port":8791,"threadId":null,"authorUserId":"691260214699360316","error":"TypeError: fetch failed"}
+{"ts":"2026-03-24T23:41:08.654Z","eventType":"forward.failed","project":"acme","port":8791,"threadId":null,"authorUserId":"691260214699360316","error":"TypeError: fetch failed"}
+{"ts":"2026-03-24T23:42:34.819Z","eventType":"forward.failed","project":"acme","port":8791,"threadId":null,"authorUserId":"691260214699360316","error":"TypeError: fetch failed"}
+{"ts":"2026-03-24T23:42:34.825Z","eventType":"forward.failed","project":"acme","port":8791,"threadId":null,"authorUserId":"691260214699360316","error":"TypeError: fetch failed"}
+{"ts":"2026-03-25T00:08:46.286Z","eventType":"forward.failed","project":"acme","port":8791,"threadId":null,"authorUserId":"691260214699360316","error":"TypeError: fetch failed"}
+{"ts":"2026-03-25T00:08:46.290Z","eventType":"forward.failed","project":"acme","port":8791,"threadId":null,"authorUserId":"691260214699360316","error":"TypeError: fetch failed"}
+{"ts":"2026-03-25T00:08:47.085Z","eventType":"session.created","threadId":"1486154850205962271","ownerUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:11:02.155Z","eventType":"forward.success","project":"default","port":8788,"threadId":null,"authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:11:02.156Z","eventType":"forward.success","project":"default","port":8788,"threadId":"1486154850205962271","authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:13:59.687Z","eventType":"forward.success","project":"default","port":8788,"threadId":null,"authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:13:59.691Z","eventType":"forward.success","project":"default","port":8788,"threadId":"1486154850205962271","authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:22:41.587Z","eventType":"forward.success","project":"default","port":8788,"threadId":null,"authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:22:41.596Z","eventType":"forward.success","project":"default","port":8788,"threadId":"1486154850205962271","authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:23:11.017Z","eventType":"forward.success","project":"default","port":8788,"threadId":null,"authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T00:23:11.024Z","eventType":"forward.success","project":"default","port":8788,"threadId":"1486154850205962271","authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T01:48:17.088Z","eventType":"forward.success","project":"default","port":8788,"threadId":null,"authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T01:48:17.411Z","eventType":"response.received","requestId":"req_1774403297025_adl7a7b72","channelId":"1486154850205962271","threadId":"1486154850205962271","response":"Echo: Hello"}
+{"ts":"2026-03-25T01:48:17.422Z","eventType":"forward.success","project":"default","port":8788,"requestId":"req_1774403297025_adl7a7b72","threadId":"1486154850205962271","authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T02:03:59.463Z","eventType":"forward.success","project":"default","port":8788,"threadId":null,"authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T02:03:59.638Z","eventType":"response.received","requestId":"req_1774404239399_2qacf9e6d","channelId":"1486154850205962271","threadId":"1486154850205962271","response":"Error contacting responder: Error: COPILOT_UPSTREAM_URL is not configured"}
+{"ts":"2026-03-25T02:03:59.648Z","eventType":"forward.success","project":"default","port":8788,"requestId":"req_1774404239399_2qacf9e6d","threadId":"1486154850205962271","authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T02:08:53.927Z","eventType":"forward.success","project":"default","port":8788,"threadId":null,"authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T02:09:14.789Z","eventType":"response.received","requestId":"req_1774404533867_lmg57sabn","channelId":"1486154850205962271","threadId":"1486154850205962271","response":"Error contacting responder: Error: upstream status 400"}
+{"ts":"2026-03-25T02:09:14.800Z","eventType":"forward.success","project":"default","port":8788,"requestId":"req_1774404533867_lmg57sabn","threadId":"1486154850205962271","authorUserId":"691260214699360316"}
+{"ts":"2026-03-25T16:11:15.977Z","eventType":"response.received","requestId":"req_1774455070119_e93dlwoll","channelId":"1486154850205962271","threadId":"1486154850205962271","response":"Hello! How can I help you today?"}
+{"ts":"2026-03-25T16:11:15.993Z","eventType":"forward.success","project":"default","port":8788,"requestId":"req_1774455070119_e93dlwoll","threadId":"1486154850205962271","authorUserId":"691260214699360316"}

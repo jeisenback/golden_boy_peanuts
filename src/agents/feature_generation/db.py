@@ -83,9 +83,13 @@ def write_feature_set(feature_set: FeatureSet, engine: Engine) -> None:
 
     sql = text("""
         INSERT INTO feature_sets
-            (snapshot_time, volatility_gaps, sector_dispersion, feature_errors, computed_at)
+            (snapshot_time, volatility_gaps, sector_dispersion, futures_curve_steepness,
+             supply_shock_probability, insider_conviction_score, narrative_velocity,
+             tanker_disruption_index, feature_errors, computed_at)
         VALUES
-            (:snapshot_time, :volatility_gaps, :sector_dispersion, :feature_errors, :computed_at)
+            (:snapshot_time, :volatility_gaps, :sector_dispersion, :futures_curve_steepness,
+             :supply_shock_probability, :insider_conviction_score, :narrative_velocity,
+             :tanker_disruption_index, :feature_errors, :computed_at)
         """)
     try:
         with engine.begin() as conn:
@@ -95,6 +99,11 @@ def write_feature_set(feature_set: FeatureSet, engine: Engine) -> None:
                     "snapshot_time": feature_set.snapshot_time,
                     "volatility_gaps": gaps_json,
                     "sector_dispersion": feature_set.sector_dispersion,
+                    "futures_curve_steepness": feature_set.futures_curve_steepness,
+                    "supply_shock_probability": feature_set.supply_shock_probability,
+                    "insider_conviction_score": feature_set.insider_conviction_score,
+                    "narrative_velocity": feature_set.narrative_velocity,
+                    "tanker_disruption_index": feature_set.tanker_disruption_index,
                     "feature_errors": errors_json,
                     "computed_at": datetime.now(tz=UTC),  # all timestamps stored in UTC
                 },
@@ -122,7 +131,9 @@ def read_latest_feature_set(engine: Engine) -> FeatureSet | None:
         NotImplementedError: Until implemented.
     """
     sql = text("""
-        SELECT snapshot_time, volatility_gaps, sector_dispersion, feature_errors, computed_at
+        SELECT snapshot_time, volatility_gaps, sector_dispersion, futures_curve_steepness,
+               supply_shock_probability, insider_conviction_score, narrative_velocity,
+               tanker_disruption_index, feature_errors, computed_at
         FROM feature_sets
         ORDER BY snapshot_time DESC
         LIMIT 1
@@ -137,7 +148,12 @@ def read_latest_feature_set(engine: Engine) -> FeatureSet | None:
     snapshot_time = row[0]
     gaps_raw = row[1]
     sector_dispersion = row[2]
-    errors_raw = row[3]
+    futures_curve_steepness = row[3]
+    supply_shock_probability = row[4]
+    insider_conviction_score = row[5]
+    narrative_velocity = row[6]
+    tanker_disruption_index = row[7]
+    errors_raw = row[8]
 
     # Parse JSONB fields (some DB drivers return Python types directly)
     gaps_list = gaps_raw if isinstance(gaps_raw, list) else json.loads(gaps_raw or "[]")
@@ -176,7 +192,11 @@ def read_latest_feature_set(engine: Engine) -> FeatureSet | None:
         snapshot_time=snapshot_time,
         volatility_gaps=gaps,
         sector_dispersion=sector_dispersion,
-        supply_shock_probability=None,
+        futures_curve_steepness=futures_curve_steepness,
+        supply_shock_probability=supply_shock_probability,
+        insider_conviction_score=insider_conviction_score,
+        narrative_velocity=narrative_velocity,
+        tanker_disruption_index=tanker_disruption_index,
         feature_errors=errors_list,
     )
 
