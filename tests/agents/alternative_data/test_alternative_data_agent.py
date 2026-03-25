@@ -94,9 +94,10 @@ _FORM4_XML_SELL = _FORM4_XML_BUY.replace(
 )
 
 
-def _mock_resp(payload: dict | str, status: int = 200) -> MagicMock:
+def _mock_resp(payload: dict | str, status: int = 200, status_code: int | None = None) -> MagicMock:
     """Return a mock requests.Response with raise_for_status as no-op."""
     mock = MagicMock()
+    mock.status_code = status_code if status_code is not None else status
     mock.raise_for_status.return_value = None
     if isinstance(payload, dict):
         mock.json.return_value = payload
@@ -319,3 +320,280 @@ class TestFetchEdgarInsiderTrades:
 
         assert trades == []
         assert any("no xml" in r.message.lower() for r in caplog.records)
+
+
+# ===========================================================================
+# fetch_reddit_sentiment tests — issue #151
+# ===========================================================================
+
+from src.agents.alternative_data.alternative_data_agent import (  # noqa: E402
+    _classify_sentiment,
+    fetch_reddit_sentiment,
+)
+from src.agents.alternative_data.models import NarrativeSignal  # noqa: E402
+
+_REDDIT_SEARCH_URL = "https://www.reddit.com/r/energy+oil+investing/search.json"
+
+
+def _make_reddit_response(posts: list[dict]) -> dict:
+    """Minimal Reddit search JSON envelope."""
+    return {
+        "data": {
+            "children": [{"data": p} for p in posts],
+        }
+    }
+
+
+def _make_post(title: str = "XOM rally", selftext: str = "", score: int = 10) -> dict:
+    return {"title": title, "selftext": selftext, "score": score}
+
+
+class TestFetchRedditSentimentHappyPath:
+    def test_returns_narrative_signal_for_matching_instrument(self) -> None:
+        posts = [_make_post("XOM surges on strong earnings", score=50)]
+        resp = _mock_resp(_make_reddit_response(posts))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["XOM"])
+
+        assert len(signals) == 1
+        sig = signals[0]
+        assert isinstance(sig, NarrativeSignal)
+        assert sig.instrument == "XOM"
+        assert sig.platform == "reddit"
+        assert sig.source == "reddit"
+        assert sig.score == 50
+        assert sig.mention_count == 1
+
+    def test_score_is_sum_of_post_scores(self) -> None:
+        posts = [_make_post(score=20), _make_post(score=30), _make_post(score=5)]
+        resp = _mock_resp(_make_reddit_response(posts))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["CVX"])
+
+        assert signals[0].score == 55
+        assert signals[0].mention_count == 3
+
+    def test_window_start_and_end_are_set(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        posts = [_make_post()]
+        resp = _mock_resp(_make_reddit_response(posts))
+
+        before = datetime.now(tz=UTC)
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["XOM"])
+        after = datetime.now(tz=UTC)
+
+        sig = signals[0]
+        assert before - timedelta(seconds=1) <= sig.window_end <= after
+        expected_start = sig.window_end - timedelta(days=7)
+        # Allow 1-second tolerance
+        assert abs((sig.window_start - expected_start).total_seconds()) < 2
+
+
+class TestFetchRedditSentimentNoMentions:
+    def test_no_posts_returns_empty_list(self) -> None:
+        resp = _mock_resp(_make_reddit_response([]))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["WTI"])
+
+        assert signals == []
+
+    def test_instrument_omitted_when_no_posts(self) -> None:
+        empty = _mock_resp(_make_reddit_response([]))
+        with_posts = _mock_resp(_make_reddit_response([_make_post("CVX buy")]))
+
+        with patch("requests.get", side_effect=[empty, with_posts]):
+            signals = fetch_reddit_sentiment(["XOM", "CVX"])
+
+        assert len(signals) == 1
+        assert signals[0].instrument == "CVX"
+
+
+class TestFetchRedditSentiment429:
+    def test_rate_limit_returns_empty_list(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", return_value=rate_limited):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_reddit_sentiment(["XOM"])
+
+        assert signals == []
+        assert any("429" in r.message or "rate limit" in r.message.lower() for r in caplog.records)
+
+    def test_rate_limit_mid_batch_returns_empty(self) -> None:
+        """If second instrument gets 429, whole function returns []."""
+        first_ok = _mock_resp(_make_reddit_response([_make_post()]))
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", side_effect=[first_ok, rate_limited]):
+            signals = fetch_reddit_sentiment(["XOM", "CVX"])
+
+        assert signals == []
+
+
+class TestClassifySentiment:
+    def test_positive_keywords_yield_positive(self) -> None:
+        assert _classify_sentiment(["XOM bullish rally surge"]) == "positive"
+
+    def test_negative_keywords_yield_negative(self) -> None:
+        assert _classify_sentiment(["oil crash bearish drop"]) == "negative"
+
+    def test_neutral_when_balanced(self) -> None:
+        assert _classify_sentiment(["bullish crash"]) == "neutral"
+
+    def test_neutral_when_no_keywords(self) -> None:
+        assert _classify_sentiment(["XOM quarterly earnings report"]) == "neutral"
+
+    def test_case_insensitive(self) -> None:
+        assert _classify_sentiment(["BULLISH RALLY SURGE"]) == "positive"
+
+
+# ===========================================================================
+# fetch_stocktwits_sentiment tests — issue #152
+# ===========================================================================
+
+from src.agents.alternative_data.alternative_data_agent import (  # noqa: E402
+    fetch_stocktwits_sentiment,
+)
+
+_STOCKTWITS_URL_TEMPLATE = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
+
+
+def _make_stocktwits_response(messages: list[dict]) -> dict:
+    """Minimal Stocktwits symbol stream JSON envelope."""
+    return {"messages": messages}
+
+
+def _make_message(sentiment_label: str | None = None, body: str = "XOM looks good") -> dict:
+    """Build a minimal Stocktwits message dict."""
+    entities: dict = {}
+    if sentiment_label is not None:
+        entities["sentiment"] = {"basic": sentiment_label}
+    else:
+        entities["sentiment"] = None
+    return {"body": body, "entities": entities}
+
+
+class TestFetchStocktwitsHappyPath:
+    def test_bullish_messages_return_positive_signal(self) -> None:
+        messages = [_make_message("Bullish"), _make_message("Bullish"), _make_message("Bearish")]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["XOM"])
+
+        assert len(signals) == 1
+        sig = signals[0]
+        assert isinstance(sig, NarrativeSignal)
+        assert sig.instrument == "XOM"
+        assert sig.platform == "stocktwits"
+        assert sig.source == "stocktwits"
+        assert sig.sentiment == "positive"
+        assert sig.score == 1  # 2 bullish - 1 bearish
+        assert sig.mention_count == 3
+
+    def test_bearish_majority_returns_negative_signal(self) -> None:
+        messages = [_make_message("Bearish"), _make_message("Bearish"), _make_message("Bullish")]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["CVX"])
+
+        assert signals[0].sentiment == "negative"
+        assert signals[0].score == -1
+
+    def test_equal_bullish_bearish_returns_neutral(self) -> None:
+        messages = [_make_message("Bullish"), _make_message("Bearish")]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["USO"])
+
+        assert signals[0].sentiment == "neutral"
+        assert signals[0].score == 0
+
+    def test_unlabeled_messages_return_neutral(self) -> None:
+        messages = [_make_message(None), _make_message(None)]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["XLE"])
+
+        assert signals[0].sentiment == "neutral"
+        assert signals[0].mention_count == 2
+
+    def test_multi_instrument_aggregated_independently(self) -> None:
+        bullish_resp = _mock_resp(_make_stocktwits_response([_make_message("Bullish")]))
+        bearish_resp = _mock_resp(_make_stocktwits_response([_make_message("Bearish")]))
+
+        with patch("requests.get", side_effect=[bullish_resp, bearish_resp]):
+            signals = fetch_stocktwits_sentiment(["XOM", "CVX"])
+
+        assert len(signals) == 2
+        assert signals[0].instrument == "XOM"
+        assert signals[0].sentiment == "positive"
+        assert signals[1].instrument == "CVX"
+        assert signals[1].sentiment == "negative"
+
+
+class TestFetchStocktwitsEmptyStream:
+    def test_empty_messages_skips_instrument(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        resp = _mock_resp(_make_stocktwits_response([]))
+
+        with patch("requests.get", return_value=resp):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_stocktwits_sentiment(["WTI"])
+
+        assert signals == []
+        assert any("empty stream" in r.message.lower() for r in caplog.records)
+
+    def test_404_skips_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        not_found = _mock_resp({}, status=404)
+
+        with patch("requests.get", return_value=not_found):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_stocktwits_sentiment(["WTI"])
+
+        assert signals == []
+        assert any("404" in r.message or "not found" in r.message.lower() for r in caplog.records)
+
+
+class TestFetchStocktwits429:
+    def test_rate_limit_returns_empty_list(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", return_value=rate_limited):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_stocktwits_sentiment(["XOM"])
+
+        assert signals == []
+        assert any("429" in r.message or "rate limit" in r.message.lower() for r in caplog.records)
+
+    def test_rate_limit_mid_batch_returns_empty(self) -> None:
+        first_ok = _mock_resp(_make_stocktwits_response([_make_message("Bullish")]))
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", side_effect=[first_ok, rate_limited]):
+            signals = fetch_stocktwits_sentiment(["XOM", "CVX"])
+
+        assert signals == []
+
+
+class TestFetchStocktwitsHttpError:
+    def test_non_429_http_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+        with patch("requests.get", side_effect=requests.ConnectionError("timeout")):
+            with pytest.raises(requests.ConnectionError):
+                fetch_stocktwits_sentiment(["XOM"])

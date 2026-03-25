@@ -3,6 +3,8 @@ Alternative Data Agent — Phase 3 fetch functions.
 
 Fetches alternative signals for the energy options opportunity agent:
   - fetch_edgar_insider_trades: SEC EDGAR Form 4 insider trade filings (issue #149)
+  - fetch_reddit_sentiment: Reddit public JSON API narrative velocity (issue #151)
+  - fetch_stocktwits_sentiment: Stocktwits symbol stream retail sentiment (issue #152)
 
 ESOD constraints: @with_retry() on all external API calls, Pydantic boundary
 models, type hints on all public functions, WARNING logs for missing/malformed
@@ -13,6 +15,19 @@ EDGAR API notes:
   - Archives:         https://www.sec.gov/Archives/edgar/data
   - No API key required; User-Agent header mandatory (EDGAR Terms of Service).
   - WTI/BZ (crude futures) have no equity insider filings — returns empty list.
+
+Reddit API notes:
+  - Public JSON API; no auth key required for read-only access.
+  - Targets subreddits: r/energy, r/oil, r/investing (combined search).
+  - Uses User-Agent header per Reddit API Terms of Service.
+  - 429 responses logged as WARNING and return [] (not retried).
+
+Stocktwits API notes:
+  - Public symbol stream API; no auth key required for basic stream.
+  - Endpoint: https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json
+  - Message sentiment label "Bullish" → positive, "Bearish" → negative, absent → neutral.
+  - 429 responses logged as WARNING and return [] (not retried).
+  - Symbols with no stream data (404 or empty messages) logged as WARNING, return [].
 """
 
 from __future__ import annotations
@@ -24,7 +39,7 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-from src.agents.alternative_data.models import InsiderTrade
+from src.agents.alternative_data.models import InsiderTrade, NarrativeSignal, Sentiment
 from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
@@ -302,3 +317,349 @@ def _parse_form4_xml(xml_text: str, instrument: str) -> list[InsiderTrade]:
         )
 
     return trades
+
+
+# ===========================================================================
+# fetch_reddit_sentiment — issue #151
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_REDDIT_SUBREDDITS = "energy+oil+investing"
+_REDDIT_SEARCH_URL = "https://www.reddit.com/r/{subreddits}/search.json"
+
+# Reddit API Terms of Service require a descriptive User-Agent
+_REDDIT_USER_AGENT = (
+    "EnergyOptionsOpportunityAgent/1.0 (research; contact: research@energy-options-agent.example)"
+)
+
+# How many days back the sliding window covers (matches Reddit "t=week")
+_REDDIT_LOOKBACK_DAYS = 7
+
+# Maximum posts requested per instrument per subreddit group
+_REDDIT_POST_LIMIT = 100
+
+# Request timeout in seconds for Reddit API calls
+_REDDIT_TIMEOUT = 30
+
+# Reddit time-filter value for the search API — must match _REDDIT_LOOKBACK_DAYS = 7
+_REDDIT_TIME_FILTER = "week"
+
+# Keywords used for positive/negative sentiment classification heuristic.
+# Sets allow O(1) membership tests during classification.
+_POSITIVE_KEYWORDS: frozenset[str] = frozenset(
+    [
+        "bullish",
+        "rally",
+        "surge",
+        "buy",
+        "long",
+        "strong",
+        "gain",
+        "profit",
+        "upside",
+        "recovery",
+        "boom",
+        "high",
+    ]
+)
+_NEGATIVE_KEYWORDS: frozenset[str] = frozenset(
+    [
+        "bearish",
+        "crash",
+        "fall",
+        "drop",
+        "sell",
+        "short",
+        "weak",
+        "loss",
+        "decline",
+        "risk",
+        "bust",
+        "low",
+    ]
+)
+
+# ---------------------------------------------------------------------------
+# Public fetch function
+# ---------------------------------------------------------------------------
+
+
+@with_retry()
+def fetch_reddit_sentiment(instruments: list[str]) -> list[NarrativeSignal]:
+    """
+    Fetch Reddit narrative velocity for energy instruments.
+
+    Searches r/energy, r/oil, and r/investing for posts mentioning each
+    instrument. Aggregates net upvote score and mention count, then
+    classifies sentiment via a keyword heuristic on post titles and body
+    text. Uses the Reddit public JSON API (no auth key required).
+
+    A 429 rate-limit response is logged as WARNING and causes the function
+    to return [] immediately without retrying (rate limits affect all
+    subsequent calls in the same window).
+
+    Args:
+        instruments: Ticker symbols to search (e.g. ["XOM", "CVX", "USO"]).
+
+    Returns:
+        List of NarrativeSignal records, one per instrument that has at
+        least one matching post. Instruments with zero posts are omitted.
+        Returns [] on rate-limit (429).
+
+    Raises:
+        requests.exceptions.RequestException: Propagated on network failure
+            so tenacity can retry the full call.
+    """
+    window_end = datetime.now(tz=UTC)
+    window_start = window_end - timedelta(days=_REDDIT_LOOKBACK_DAYS)
+
+    results: list[NarrativeSignal] = []
+
+    for instrument in instruments:
+        posts = _reddit_search(instrument)
+        if posts is None:
+            # Rate limited — log already emitted by _reddit_search; bail early
+            return []
+        if not posts:
+            continue
+
+        texts = [p.get("title", "") + " " + p.get("selftext", "") for p in posts]
+        score = sum(p.get("score", 0) for p in posts)
+        sentiment = _classify_sentiment(texts)
+
+        results.append(
+            NarrativeSignal(
+                instrument=instrument,
+                platform="reddit",
+                score=score,
+                mention_count=len(posts),
+                sentiment=sentiment,
+                window_start=window_start,
+                window_end=window_end,
+                source="reddit",
+            )
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
+    """
+    Search Reddit for posts mentioning the instrument across target subreddits.
+
+    Args:
+        instrument: Ticker symbol to search for (e.g. "XOM").
+
+    Returns:
+        List of post data dicts on success; None if rate-limited (429).
+
+    Raises:
+        requests.exceptions.RequestException: On non-429 HTTP or network failure.
+    """
+    resp = requests.get(
+        _REDDIT_SEARCH_URL.format(subreddits=_REDDIT_SUBREDDITS),
+        params={
+            "q": instrument,
+            "sort": "new",
+            "restrict_sr": "1",
+            "limit": str(_REDDIT_POST_LIMIT),
+            "t": _REDDIT_TIME_FILTER,
+        },
+        headers={"User-Agent": _REDDIT_USER_AGENT},
+        timeout=_REDDIT_TIMEOUT,
+    )
+
+    if resp.status_code == 429:
+        logger.warning("fetch_reddit_sentiment: rate limited (429) for instrument=%s", instrument)
+        return None
+
+    resp.raise_for_status()
+    data: dict[str, Any] = resp.json()
+    children: list[dict[str, Any]] = data.get("data", {}).get("children", [])
+    return [child.get("data", {}) for child in children]
+
+
+def _classify_sentiment(texts: list[str]) -> Sentiment:
+    """
+    Classify aggregate sentiment from a list of post text strings.
+
+    Counts occurrences of positive and negative keywords across all
+    texts (case-insensitive word-boundary match). Returns Sentiment.POSITIVE
+    if positive keyword hits exceed negative, Sentiment.NEGATIVE if the reverse,
+    and Sentiment.NEUTRAL when counts are equal or both are zero.
+
+    Args:
+        texts: List of strings (post title + body) to classify.
+
+    Returns:
+        Sentiment enum value: POSITIVE, NEUTRAL, or NEGATIVE.
+    """
+    combined = " ".join(texts).lower()
+    words = set(combined.split())
+    pos_hits = len(words & _POSITIVE_KEYWORDS)
+    neg_hits = len(words & _NEGATIVE_KEYWORDS)
+
+    if pos_hits > neg_hits:
+        return Sentiment.POSITIVE
+    if neg_hits > pos_hits:
+        return Sentiment.NEGATIVE
+    return Sentiment.NEUTRAL
+
+
+# ===========================================================================
+# fetch_stocktwits_sentiment — issue #152
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_STOCKTWITS_STREAM_URL = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
+
+# Request timeout in seconds for Stocktwits API calls
+_STOCKTWITS_TIMEOUT = 30
+
+# Stocktwits sentiment label → Sentiment enum mapping
+_STOCKTWITS_SENTIMENT_MAP: dict[str, Sentiment] = {
+    "Bullish": Sentiment.POSITIVE,
+    "Bearish": Sentiment.NEGATIVE,
+}
+
+# ---------------------------------------------------------------------------
+# Public fetch function
+# ---------------------------------------------------------------------------
+
+
+@with_retry()
+def fetch_stocktwits_sentiment(instruments: list[str]) -> list[NarrativeSignal]:
+    """
+    Fetch Stocktwits retail sentiment for energy instruments.
+
+    Calls the Stocktwits public symbol stream API for each instrument and
+    aggregates message count and Bullish/Bearish label distribution into a
+    NarrativeSignal. No API key required for the public stream.
+
+    Sentiment is derived from label counts: more Bullish labels → positive,
+    more Bearish → negative, equal or no labels → neutral.
+
+    A 429 rate-limit response is logged as WARNING and returns [] immediately.
+    A missing symbol (404) or empty stream is logged as WARNING and the
+    instrument is skipped.
+
+    Args:
+        instruments: Ticker symbols to query (e.g. ["XOM", "CVX", "USO"]).
+
+    Returns:
+        List of NarrativeSignal records, one per instrument with at least one
+        message. Instruments with no messages are omitted.
+        Returns [] on rate-limit (429).
+
+    Raises:
+        requests.exceptions.RequestException: Propagated on non-429/404
+            network failure so tenacity can retry.
+    """
+    window_end = datetime.now(tz=UTC)
+    window_start = window_end - timedelta(days=1)  # Stocktwits stream is ~24h
+
+    results: list[NarrativeSignal] = []
+
+    for instrument in instruments:
+        messages = _stocktwits_stream(instrument)
+        if messages is None:
+            # Rate limited — bail early; log already emitted by helper
+            return []
+        if not messages:
+            continue
+
+        bullish = sum(
+            1
+            for m in messages
+            if m.get("entities", {}).get("sentiment", {}) is not None
+            and (m.get("entities", {}).get("sentiment") or {}).get("basic") == "Bullish"
+        )
+        bearish = sum(
+            1
+            for m in messages
+            if m.get("entities", {}).get("sentiment", {}) is not None
+            and (m.get("entities", {}).get("sentiment") or {}).get("basic") == "Bearish"
+        )
+
+        if bullish > bearish:
+            sentiment = Sentiment.POSITIVE
+        elif bearish > bullish:
+            sentiment = Sentiment.NEGATIVE
+        else:
+            sentiment = Sentiment.NEUTRAL
+
+        # score = net bullish minus bearish (can be negative)
+        score = bullish - bearish
+
+        results.append(
+            NarrativeSignal(
+                instrument=instrument,
+                platform="stocktwits",
+                score=score,
+                mention_count=len(messages),
+                sentiment=sentiment,
+                window_start=window_start,
+                window_end=window_end,
+                source="stocktwits",
+            )
+        )
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Private helper
+# ---------------------------------------------------------------------------
+
+
+def _stocktwits_stream(instrument: str) -> list[dict[str, Any]] | None:
+    """
+    Fetch the Stocktwits public symbol stream for one instrument.
+
+    Args:
+        instrument: Ticker symbol (e.g. "XOM").
+
+    Returns:
+        List of message dicts on success; None if rate-limited (429);
+        empty list [] if symbol not found (404) or stream is empty.
+
+    Raises:
+        requests.exceptions.RequestException: On non-429/404 HTTP or
+            network failure.
+    """
+    resp = requests.get(
+        _STOCKTWITS_STREAM_URL.format(symbol=instrument),
+        timeout=_STOCKTWITS_TIMEOUT,
+    )
+
+    if resp.status_code == 429:
+        logger.warning(
+            "fetch_stocktwits_sentiment: rate limited (429) for instrument=%s", instrument
+        )
+        return None
+
+    if resp.status_code == 404:
+        logger.warning(
+            "fetch_stocktwits_sentiment: symbol not found (404) for instrument=%s", instrument
+        )
+        return []
+
+    resp.raise_for_status()
+    data: dict[str, Any] = resp.json()
+    messages: list[dict[str, Any]] = data.get("messages", [])
+
+    if not messages:
+        logger.warning("fetch_stocktwits_sentiment: empty stream for instrument=%s", instrument)
+
+    return messages

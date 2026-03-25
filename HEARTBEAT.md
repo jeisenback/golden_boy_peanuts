@@ -413,6 +413,32 @@ Implementation details:
 - 16 unit tests across `TestParseForm4Xml`, `TestEftsSearch`, `TestFetchEdgarInsiderTrades`.
 - All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 266 unit tests).
 
+## Sprint Notes (2026-03-22, session 2)
+
+**#151 IN REVIEW** — fetch_reddit_sentiment implemented. PR #182 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_reddit_sentiment(instruments)` queries r/energy+oil+investing via Reddit public JSON API (no auth key); aggregates net upvote score and mention count per instrument.
+- `src/agents/alternative_data/models.py`: `NarrativeSignal` Pydantic model + `Sentiment` StrEnum added.
+- `_classify_sentiment()`: keyword heuristic using `frozenset` O(1) sets; returns positive/neutral/negative.
+- `@with_retry()` applied; 429 rate-limit logged as WARNING and returns `[]` immediately (no retry).
+- 13 unit tests: happy path, score aggregation, window boundary, no mentions, instrument omission, 429 mid-batch, sentiment classification (5 cases).
+- chore: auto-fixed pre-existing black format failures on 8 unrelated db.py / integration test files.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 278 unit tests).
+- #151 In Review, PR #182 opened 2026-03-22
+
+## Sprint Notes (2026-03-22, session 3)
+
+**#151 CLOSED** — PR #182 merged to develop by human lead 2026-03-22.
+
+**#152 IN REVIEW** — fetch_stocktwits_sentiment implemented. PR #184 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_stocktwits_sentiment(instruments)` queries Stocktwits public symbol stream API (no auth key); Bullish/Bearish label counts → positive/negative/neutral; score = net bullish minus bearish.
+- `@with_retry()` applied; 429 → WARNING + []; 404/empty stream → WARNING + skip instrument.
+- `_stocktwits_stream()` private helper; 404 and 429 handled before `raise_for_status()`.
+- 12 unit tests: bullish majority, bearish majority, neutral (equal), unlabeled neutral, multi-instrument, empty stream, 404, 429 graceful skip, mid-batch 429, HTTP error propagation.
+- All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan, 288 unit tests).
+- #152 In Review, PR #184 opened 2026-03-22
+
 ## Sprint Notes (2026-03-23, session 1)
 
 **#130 IN REVIEW** — strategy_outcomes table + write/fetch DB functions. PR #186 open → develop.
