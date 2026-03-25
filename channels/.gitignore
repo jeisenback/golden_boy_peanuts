@@ -1,0 +1,11 @@
+# discord-template is a standalone repo — do not track as a submodule
+discord-template/
+
+# Node.js dependencies
+**/node_modules/
+
+# Runtime session state
+**/.data/
+
+# Runtime channel maps (generated at startup)
+discord/channels/
