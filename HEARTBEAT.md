@@ -438,3 +438,17 @@ Implementation details:
 - 12 unit tests: bullish majority, bearish majority, neutral (equal), unlabeled neutral, multi-instrument, empty stream, 404, 429 graceful skip, mid-batch 429, HTTP error propagation.
 - All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan, 288 unit tests).
 - #152 In Review, PR #184 opened 2026-03-22
+
+## Sprint Notes (2026-03-23, session 1)
+
+**#130 IN REVIEW** — strategy_outcomes table + write/fetch DB functions. PR #186 open → develop.
+**#166 IN REVIEW** — Backtest harness (fixture-driven replay). PR #187 open → develop.
+**#137 IN REVIEW** — Edge score validation harness. PR #188 open → develop.
+
+- `src/core/backtest.py`: `run_backtest(lookback_days=90)` queries strategy_candidates JOIN strategy_outcomes; groups by edge_score quartile (Q1-Q4); computes mean abs pct_move and hit rates per structure; returns BacktestReport.
+- `BacktestReport` Pydantic model persisted to backtest_reports table (degraded-mode: logs WARNING, never raises on DB failure).
+- `db/migrations/add_backtest_reports.sql` + `db/schema.sql` updated with backtest_reports table.
+- CLI: `python -m src.core.backtest --lookback-days 90` prints JSON to stdout.
+- 25 unit tests: quartile label boundary conditions, Q4>Q1 assertion, hit rate per structure (all/none/partial), empty result set, DB degraded-mode, full run_backtest mock.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 291 unit tests).
+- #137 In Review, PR #188 opened 2026-03-23

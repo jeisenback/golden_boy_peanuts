@@ -1,0 +1,74 @@
+{
+  "default": {
+    "port": 8788
+  },
+  "projects": {
+    "agent_sdlc": {
+      "port": 8901,
+      "channelIds": [],
+      "channelNames": [
+        "agent_sdlc",
+        "agent-sdlc"
+      ]
+    },
+    "dmforge": {
+      "port": 8902,
+      "channelIds": [],
+      "channelNames": [
+        "dmforge"
+      ]
+    },
+    "framework": {
+      "port": 8903,
+      "channelIds": [],
+      "channelNames": [
+        "framework"
+      ]
+    },
+    "icy_peak": {
+      "port": 8904,
+      "channelIds": [],
+      "channelNames": [
+        "icy_peak",
+        "icy-peak"
+      ]
+    },
+    "nanoclaw": {
+      "port": 8905,
+      "channelIds": [],
+      "channelNames": [
+        "nanoclaw"
+      ]
+    },
+    "nonprofit_tool": {
+      "port": 8906,
+      "channelIds": [],
+      "channelNames": [
+        "nonprofit_tool",
+        "nonprofit-tool"
+      ]
+    },
+    "profile": {
+      "port": 8907,
+      "channelIds": [],
+      "channelNames": [
+        "profile"
+      ]
+    },
+    "serena": {
+      "port": 8908,
+      "channelIds": [],
+      "channelNames": [
+        "serena"
+      ]
+    },
+    "silver_garbanzo": {
+      "port": 8909,
+      "channelIds": [],
+      "channelNames": [
+        "silver_garbanzo",
+        "silver-garbanzo"
+      ]
+    }
+  }
+}
