@@ -2,11 +2,11 @@
   "mcpServers": {
     "webhook": {
       "command": "node",
-      "args": ["C:/tools/golden_boy_peanuts/channels/webhook/webhook.mjs"]
+      "args": ["channels/webhook/webhook.mjs"]
     },
     "discord": {
       "command": "node",
-      "args": ["--env-file=C:/tools/golden_boy_peanuts/.env", "C:/tools/golden_boy_peanuts/channels/discord/discord.mjs"]
+      "args": ["channels/discord/discord.mjs"]
     }
   }
 }

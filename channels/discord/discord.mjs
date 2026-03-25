@@ -103,7 +103,10 @@ mcp.setRequestHandler(CallToolRequestSchema, async req => {
   process.stderr.write(`discord-channel: discord_reply called channel_id=${channel_id} len=${text.length}\n`)
 
   // For DM channels, channels.fetch may return null if not cached — fall back to user DM
-  let ch = await discord.channels.fetch(channel_id).catch(() => null)
+  let ch = await discord.channels.fetch(channel_id).catch(err => {
+    process.stderr.write(`discord-channel: failed to fetch channel ${channel_id}: ${err.message}\n`)
+    return null
+  })
   if (!ch) {
     // Try finding the channel via the cached DM channels
     ch = discord.channels.cache.get(channel_id) ?? null
@@ -179,4 +182,5 @@ process.stderr.write(`discord-channel: token set=${!!BOT_TOKEN}, allowed_users=$
 
 discord.login(BOT_TOKEN).catch(err => {
   process.stderr.write(`discord-channel: login FAILED: ${err.message}\n`)
+  process.exit(1)
 })
