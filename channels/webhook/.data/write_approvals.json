@@ -1,0 +1,12 @@
+{
+  "e033f657": {
+    "action": "branch_create",
+    "args": {
+      "branch": "feature/discord-write-test"
+    },
+    "authorId": "userA",
+    "channelId": "chanA",
+    "createdAt": 1774466402,
+    "expiresAt": 1774467002
+  }
+}

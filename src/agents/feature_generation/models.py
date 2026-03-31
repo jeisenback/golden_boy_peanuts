@@ -39,6 +39,9 @@ class FeatureSet(BaseModel):
         default=None, ge=0.0, description="Headline acceleration score"
     )
     supply_shock_probability: float | None = Field(default=None, ge=0.0, le=1.0)
+    tanker_disruption_index: float | None = Field(
+        default=None, ge=0.0, le=1.0, description="Maritime shipping disruption risk"
+    )
     feature_errors: list[str] = Field(
         default_factory=list,
         description="Non-fatal errors during feature computation",

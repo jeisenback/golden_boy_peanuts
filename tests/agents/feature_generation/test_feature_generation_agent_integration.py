@@ -204,6 +204,11 @@ CREATE TABLE IF NOT EXISTS feature_sets (
     snapshot_time     TIMESTAMPTZ   NOT NULL,
     volatility_gaps   JSONB,
     sector_dispersion NUMERIC(10, 6),
+    futures_curve_steepness NUMERIC(8,6),
+    supply_shock_probability NUMERIC(6,4),
+    insider_conviction_score NUMERIC(6,4),
+    narrative_velocity NUMERIC(6,4),
+    tanker_disruption_index NUMERIC(6,4),
     feature_errors    JSONB,
     computed_at       TIMESTAMPTZ   NOT NULL
 );
@@ -526,3 +531,82 @@ def test_run_feature_generation_partial_failure_populates_feature_errors(
         isinstance(errors_data, list) and len(errors_data) >= 1
     ), f"expected non-empty feature_errors in DB, got {errors_data}"
     assert any("compute_volatility_gap" in e for e in errors_data)
+
+
+@pytest.mark.integration
+def test_feature_set_write_read_round_trip_with_all_fields(pg_engine: Engine) -> None:
+    """
+    Test write_feature_set() and read_latest_feature_set() round-trip validation
+    for all 5 new fields (Issue #173).
+
+    Verifies that all fields including futures_curve_steepness, supply_shock_probability,
+    insider_conviction_score, narrative_velocity, and tanker_disruption_index are
+    correctly persisted to and retrieved from the database.
+    """
+    from src.agents.feature_generation.db import read_latest_feature_set, write_feature_set
+    from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+
+    snapshot_time = datetime(2026, 3, 17, 12, 0, 0, tzinfo=UTC)
+    test_feature_set = FeatureSet(
+        snapshot_time=snapshot_time,
+        volatility_gaps=[
+            VolatilityGap(
+                instrument="USO",
+                realized_vol=0.15,
+                implied_vol=0.22,
+                gap=0.07,
+                computed_at=snapshot_time,
+            )
+        ],
+        futures_curve_steepness=0.025432,  # contango signal
+        supply_shock_probability=0.6234,   # 62.34% supply risk
+        insider_conviction_score=0.8765,   # 87.65% conviction
+        narrative_velocity=0.4321,         # narrative momentum
+        tanker_disruption_index=0.5432,    # 54.32% shipping disruption
+        sector_dispersion=0.35,
+        feature_errors=[],
+    )
+
+    # Write the feature set
+    write_feature_set(test_feature_set, pg_engine)
+
+    # Read it back
+    read_feature_set = read_latest_feature_set(pg_engine)
+
+    # Verify all fields round-trip correctly
+    assert read_feature_set is not None, "expected FeatureSet to be read from DB"
+    assert read_feature_set.snapshot_time == snapshot_time
+    assert len(read_feature_set.volatility_gaps) == 1
+    assert read_feature_set.volatility_gaps[0].instrument == "USO"
+    assert abs(read_feature_set.volatility_gaps[0].gap - 0.07) < 1e-6
+
+    # Verify all 5 new fields
+    assert (
+        read_feature_set.futures_curve_steepness is not None
+    ), "futures_curve_steepness should not be None"
+    assert abs(read_feature_set.futures_curve_steepness - 0.025432) < 1e-6
+
+    assert (
+        read_feature_set.supply_shock_probability is not None
+    ), "supply_shock_probability should not be None"
+    assert abs(read_feature_set.supply_shock_probability - 0.6234) < 1e-6
+
+    assert (
+        read_feature_set.insider_conviction_score is not None
+    ), "insider_conviction_score should not be None"
+    assert abs(read_feature_set.insider_conviction_score - 0.8765) < 1e-6
+
+    assert (
+        read_feature_set.narrative_velocity is not None
+    ), "narrative_velocity should not be None"
+    assert abs(read_feature_set.narrative_velocity - 0.4321) < 1e-6
+
+    assert (
+        read_feature_set.tanker_disruption_index is not None
+    ), "tanker_disruption_index should not be None"
+    assert abs(read_feature_set.tanker_disruption_index - 0.5432) < 1e-6
+
+    # Verify other fields
+    assert read_feature_set.sector_dispersion is not None
+    assert abs(read_feature_set.sector_dispersion - 0.35) < 1e-6
+    assert read_feature_set.feature_errors == []
