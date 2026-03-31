@@ -27,8 +27,9 @@
 --
 -- Apply:  psql $DATABASE_URL -f db/schema.sql
 -- Verify: \d market_prices    \d options_chain    \d feature_sets
---         \d strategy_candidates    \d eia_inventory    \d detected_events
---         \d insider_trades   \d shipping_events   \d narrative_signals
+--         \d strategy_candidates    \d strategy_outcomes    \d eia_inventory
+--         \d detected_events    \d insider_trades   \d shipping_events
+--         \d narrative_signals
 -- =============================================================================
 
 
@@ -98,6 +99,45 @@ CREATE TABLE IF NOT EXISTS strategy_candidates (
 
 CREATE INDEX IF NOT EXISTS idx_strategy_candidates_generated_edge
     ON strategy_candidates (generated_at DESC, edge_score DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- strategy_outcomes                                                 (Phase 3)
+--
+-- Stores actual price movement outcomes for strategy candidates (issue #130).
+-- Closes the edge score feedback loop — without this table the edge score
+-- heuristic has never been validated against real trade outcomes.
+--
+-- price_at_expiration and pct_move are nullable — populated by a separate job
+-- that runs after expiration_date. The table is append-only; rows are never
+-- deleted or edited (only the nullable columns are ever updated via upsert).
+--
+-- UNIQUE (candidate_id) ensures at most one outcome row per candidate.
+-- ON CONFLICT DO UPDATE allows the expiration job to fill nullable columns
+-- without inserting a duplicate.
+--
+-- Hypertable candidate: partition by generated_at.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS strategy_outcomes (
+    id                  BIGSERIAL       PRIMARY KEY,
+    candidate_id        BIGINT          NOT NULL REFERENCES strategy_candidates(id),
+    instrument          TEXT            NOT NULL,
+    structure           TEXT            NOT NULL
+                            CHECK (structure IN ('long_straddle','call_spread','put_spread','calendar_spread')),
+    generated_at        TIMESTAMPTZ     NOT NULL,
+    expiration_date     TIMESTAMPTZ     NOT NULL,
+    price_at_generation FLOAT           NOT NULL,
+    price_at_expiration FLOAT,                       -- NULL until expiration job runs
+    pct_move            FLOAT,                       -- NULL until expiration job runs
+    recorded_at         TIMESTAMPTZ     NOT NULL,
+    CONSTRAINT uq_strategy_outcomes_candidate UNIQUE (candidate_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_outcomes_candidate_id
+    ON strategy_outcomes (candidate_id);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_outcomes_expiration_date
+    ON strategy_outcomes (expiration_date DESC);
 
 
 -- -----------------------------------------------------------------------------

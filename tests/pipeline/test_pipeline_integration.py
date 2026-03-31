@@ -162,7 +162,7 @@ def _clean_tables(pg_engine: Engine) -> Generator[None, None, None]:
         conn.execute(
             text(
                 "TRUNCATE market_prices, options_chain, feature_sets,"
-                " strategy_candidates RESTART IDENTITY"
+                " strategy_candidates RESTART IDENTITY CASCADE"
             )
         )
     yield
