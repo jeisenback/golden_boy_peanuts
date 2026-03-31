@@ -259,6 +259,15 @@ following fields:
                                      tanker_disruption_index: high,
                                      volatility_gap: positive }
 
+  **data_quality**   object          Signal availability map. Keys match
+                                     signal names; values are one of:
+                                     "available" (real non-zero data),
+                                     "defaulted_zero" (data present but 0.0),
+                                     "unavailable" (no data — treated as 0 in
+                                     edge score). E.g. {
+                                     volatility_gap: "available",
+                                     supply_shock_probability: "unavailable" }
+
   **generated_at**   ISO 8601        UTC timestamp of candidate generation
                      datetime        
   --------------------------------------------------------------------------
@@ -271,8 +280,12 @@ Example candidate:
 > \"edge_score\": 0.47, \"signals\": { \"tanker_disruption_index\":
 > \"high\",
 >
-> \"volatility_gap\": \"positive\", \"narrative_velocity\": \"rising\" }
-> }
+> \"volatility_gap\": \"positive\", \"narrative_velocity\": \"rising\" },
+>
+> \"data_quality\": { \"volatility_gap\": \"available\",
+> \"sector_dispersion\": \"available\",
+> \"supply_shock_probability\": \"unavailable\",
+> \"futures_curve_steepness\": \"defaulted_zero\" } }
 
 **10. MVP Phasing**
 

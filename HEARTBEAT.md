@@ -312,3 +312,15 @@ Issue #111 implemented on `chore/111-timescaledb-migration-plan`:
 Issue #113 — Phase 2 release PR opened:
 - All AC items verified: local_check.sh clean on develop, Sprint 6+7 closed, #110/#111/#112/#23 all closed.
 - #113 In Review, PR #147 opened 2026-03-21
+
+## Sprint Notes (2026-03-31, session 1)
+
+Issue #131 implemented on `copilot/work-next-open-issue`:
+- Added `data_quality: dict[str, str]` field to `StrategyCandidate` (models.py) with three-state values: `"available"` | `"defaulted_zero"` | `"unavailable"`.
+- Added `_compute_data_quality(instrument, feature_set)` private helper in `strategy_evaluation_agent.py`; called in `evaluate_strategies()` per instrument before building each `StrategyCandidate`.
+- Updated `write_strategy_candidates()` INSERT and `read_top_candidates()` SELECT in `db.py` to include `data_quality` (serialized as JSONB).
+- Added `data_quality JSONB NOT NULL DEFAULT '{}'` column to `strategy_candidates` table in `db/schema.sql`.
+- Updated PRD Section 9 output schema and example to document the new field.
+- Added `TestDataQuality` class (5 tests) covering: all-available, no-vol-gap-no-candidate, Phase 2 signals unavailable, zero values defaulted_zero, zero gap defaulted_zero.
+- Gate: all 5 stages pass (255 unit tests, 0 CodeQL alerts).
+- #131 In Review, PR opened 2026-03-31
