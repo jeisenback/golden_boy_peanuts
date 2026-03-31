@@ -395,3 +395,191 @@ class TestEvaluateStrategies:
         ]
         actual_order = [(candidate.instrument, candidate.structure) for candidate in result]
         assert actual_order == expected_order
+
+
+class TestEvaluateStrategiesWithMarketState:
+    """Tests for evaluate_strategies() BSM Greeks enrichment and liquidity filtering.
+
+    Exercises the new market_state parameter path. DB calls are mocked.
+    """
+
+    def _make_market_state(
+        self,
+        spot: float = 40.0,
+        volume: int | None = 50,
+        open_interest: int | None = 100,
+        implied_volatility: float | None = 0.35,
+    ):
+        """Build a minimal MarketState with call and put OptionRecords for USO."""
+        from datetime import UTC, datetime, timedelta
+
+        from src.agents.ingestion.models import (
+            InstrumentType,
+            MarketState,
+            OptionRecord,
+            RawPriceRecord,
+        )
+
+        price_record = RawPriceRecord(
+            instrument="USO",
+            instrument_type=InstrumentType.ETF,
+            price=spot,
+            timestamp=datetime.now(tz=UTC),
+            source="test",
+        )
+        expiry = datetime.now(tz=UTC) + timedelta(days=30)
+        call_record = OptionRecord(
+            instrument="USO",
+            strike=spot,
+            expiration_date=expiry,
+            implied_volatility=implied_volatility,
+            volume=volume,
+            open_interest=open_interest,
+            option_type="call",
+            timestamp=datetime.now(tz=UTC),
+            source="test",
+        )
+        put_record = OptionRecord(
+            instrument="USO",
+            strike=spot,
+            expiration_date=expiry,
+            implied_volatility=implied_volatility,
+            volume=volume,
+            open_interest=open_interest,
+            option_type="put",
+            timestamp=datetime.now(tz=UTC),
+            source="test",
+        )
+        return MarketState(
+            snapshot_time=datetime.now(tz=UTC),
+            prices=[price_record],
+            options=[call_record, put_record],
+        )
+
+    def test_greeks_attached_when_market_state_provided(self) -> None:
+        """Candidates get BSM Greeks when market_state is provided."""
+        from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+
+        fs = FeatureSet(
+            snapshot_time=datetime.now(tz=UTC),
+            volatility_gaps=[
+                VolatilityGap(
+                    instrument="USO",
+                    realized_vol=0.25,
+                    implied_vol=0.35,
+                    gap=0.10,
+                    computed_at=datetime.now(tz=UTC),
+                )
+            ],
+            sector_dispersion=0.5,
+        )
+        ms = self._make_market_state()
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs, market_state=ms)
+        uso_candidates = [c for c in result if c.instrument == "USO"]
+        assert uso_candidates, "Expected USO candidates"
+        for candidate in uso_candidates:
+            assert candidate.greeks is not None
+            assert set(candidate.greeks.keys()) == {"delta", "gamma", "vega", "theta", "rho"}
+
+    def test_liquidity_ok_true_when_thresholds_met(self) -> None:
+        """liquidity_ok=True when volume >= 10 and open_interest >= 50."""
+        from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+
+        fs = FeatureSet(
+            snapshot_time=datetime.now(tz=UTC),
+            volatility_gaps=[
+                VolatilityGap(
+                    instrument="USO",
+                    realized_vol=0.25,
+                    implied_vol=0.35,
+                    gap=0.10,
+                    computed_at=datetime.now(tz=UTC),
+                )
+            ],
+            sector_dispersion=0.5,
+        )
+        ms = self._make_market_state(volume=50, open_interest=100)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs, market_state=ms)
+        uso_candidates = [c for c in result if c.instrument == "USO"]
+        assert uso_candidates
+        for candidate in uso_candidates:
+            assert candidate.liquidity_ok is True
+
+    def test_liquidity_ok_false_when_volume_below_threshold(self) -> None:
+        """liquidity_ok=False when volume < MIN_OPTION_VOLUME."""
+        from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+
+        fs = FeatureSet(
+            snapshot_time=datetime.now(tz=UTC),
+            volatility_gaps=[
+                VolatilityGap(
+                    instrument="USO",
+                    realized_vol=0.25,
+                    implied_vol=0.35,
+                    gap=0.10,
+                    computed_at=datetime.now(tz=UTC),
+                )
+            ],
+            sector_dispersion=0.5,
+        )
+        ms = self._make_market_state(volume=5, open_interest=100)  # volume < 10
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs, market_state=ms)
+        uso_call_spread = next(
+            (c for c in result if c.instrument == "USO" and c.structure == "call_spread"),
+            None,
+        )
+        assert uso_call_spread is not None
+        assert uso_call_spread.liquidity_ok is False
+
+    def test_no_market_state_greeks_and_liquidity_are_none(self) -> None:
+        """Without market_state, greeks and liquidity_ok are None (backward compat)."""
+        from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+
+        fs = FeatureSet(
+            snapshot_time=datetime.now(tz=UTC),
+            volatility_gaps=[
+                VolatilityGap(
+                    instrument="USO",
+                    realized_vol=0.25,
+                    implied_vol=0.35,
+                    gap=0.10,
+                    computed_at=datetime.now(tz=UTC),
+                )
+            ],
+            sector_dispersion=0.5,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)  # no market_state
+        uso_candidates = [c for c in result if c.instrument == "USO"]
+        assert uso_candidates
+        for candidate in uso_candidates:
+            assert candidate.greeks is None
+            assert candidate.liquidity_ok is None
+
+    def test_atm_strike_set_when_market_state_provided(self) -> None:
+        """atm_strike is populated with the closest-to-spot strike."""
+        from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+
+        fs = FeatureSet(
+            snapshot_time=datetime.now(tz=UTC),
+            volatility_gaps=[
+                VolatilityGap(
+                    instrument="USO",
+                    realized_vol=0.25,
+                    implied_vol=0.35,
+                    gap=0.10,
+                    computed_at=datetime.now(tz=UTC),
+                )
+            ],
+            sector_dispersion=0.5,
+        )
+        ms = self._make_market_state(spot=40.0)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs, market_state=ms)
+        uso_candidates = [c for c in result if c.instrument == "USO"]
+        assert uso_candidates
+        for candidate in uso_candidates:
+            assert candidate.atm_strike == 40.0
