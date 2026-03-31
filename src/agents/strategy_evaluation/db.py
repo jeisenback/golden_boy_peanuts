@@ -39,9 +39,10 @@ def write_strategy_candidates(candidates: list[StrategyCandidate], engine: Engin
 
     sql = text("""
         INSERT INTO strategy_candidates
-            (instrument, structure, expiration, edge_score, signals, generated_at)
+            (instrument, structure, expiration, edge_score, signals, data_quality, generated_at)
         VALUES
-            (:instrument, :structure, :expiration, :edge_score, :signals, :generated_at)
+            (:instrument, :structure, :expiration, :edge_score,
+             :signals, :data_quality, :generated_at)
         """)
     rows = [
         {
@@ -50,6 +51,7 @@ def write_strategy_candidates(candidates: list[StrategyCandidate], engine: Engin
             "expiration": c.expiration,
             "edge_score": c.edge_score,
             "signals": json.dumps(c.signals),
+            "data_quality": json.dumps(c.data_quality),
             "generated_at": c.generated_at,
         }
         for c in candidates
@@ -82,7 +84,7 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
         NotImplementedError: Until implemented.
     """
     sql = text("""
-        SELECT instrument, structure, expiration, edge_score, signals, generated_at
+        SELECT instrument, structure, expiration, edge_score, signals, data_quality, generated_at
         FROM strategy_candidates
         ORDER BY edge_score DESC, generated_at DESC
         LIMIT :limit
@@ -100,9 +102,15 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
         expiration = int(row[2])
         edge_score = float(row[3])
         signals_raw = row[4]
-        generated_at = row[5]
+        data_quality_raw = row[5]
+        generated_at = row[6]
 
         signals = signals_raw if isinstance(signals_raw, dict) else json.loads(signals_raw or "{}")
+        data_quality = (
+            data_quality_raw
+            if isinstance(data_quality_raw, dict)
+            else json.loads(data_quality_raw or "{}")
+        )
 
         try:
             structure = OptionStructure(structure_raw)
@@ -122,6 +130,7 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
                 expiration=expiration,
                 edge_score=edge_score,
                 signals=signals,
+                data_quality=data_quality,
                 generated_at=generated_at,
             )
         except Exception:

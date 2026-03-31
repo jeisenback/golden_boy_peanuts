@@ -222,6 +222,7 @@ class TestEvaluateStrategies:
         assert hasattr(candidate, "expiration")
         assert hasattr(candidate, "edge_score")
         assert hasattr(candidate, "signals")
+        assert hasattr(candidate, "data_quality")
         assert hasattr(candidate, "generated_at")
 
     def test_three_structures_per_instrument(self) -> None:
@@ -395,3 +396,81 @@ class TestEvaluateStrategies:
         ]
         actual_order = [(candidate.instrument, candidate.structure) for candidate in result]
         assert actual_order == expected_order
+
+
+class TestDataQuality:
+    """Tests for data_quality field on StrategyCandidate (issue #131)."""
+
+    def test_all_signals_present_returns_all_available(self) -> None:
+        """Candidate generated with all signals having real non-zero data → all keys 'available'."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            supply_shock_probability=0.7,
+            futures_curve_steepness=0.05,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result, "Expected at least one candidate"
+        uso = next(c for c in result if c.instrument == "USO")
+        assert uso.data_quality["volatility_gap"] == "available"
+        assert uso.data_quality["sector_dispersion"] == "available"
+        assert uso.data_quality["supply_shock_probability"] == "available"
+        assert uso.data_quality["futures_curve_steepness"] == "available"
+
+    def test_missing_volatility_gap_record_yields_no_candidate(self) -> None:
+        """Instrument with no VolatilityGap record in feature_set generates no candidates.
+        (compute_edge_score returns 0.0 → below _MIN_EDGE_SCORE threshold — data_quality
+        'unavailable' for volatility_gap is therefore unreachable for a generated candidate.)"""
+        fs = _make_feature_set([], sector_dispersion=0.5)
+        result = evaluate_strategies(fs)  # no candidates → DB not called
+        assert result == [], "Expected no candidates when volatility_gaps is empty"
+
+    def test_none_phase2_signals_return_unavailable(self) -> None:
+        """Candidate generated with supply_shock_probability=None and
+        futures_curve_steepness=None → those keys are 'unavailable' in data_quality."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            supply_shock_probability=None,
+            futures_curve_steepness=None,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result, "Expected at least one candidate"
+        uso = next(c for c in result if c.instrument == "USO")
+        assert uso.data_quality["supply_shock_probability"] == "unavailable"
+        assert uso.data_quality["futures_curve_steepness"] == "unavailable"
+        assert uso.data_quality["volatility_gap"] == "available"
+        assert uso.data_quality["sector_dispersion"] == "available"
+
+    def test_zero_value_signals_return_defaulted_zero(self) -> None:
+        """Candidate generated with sector_dispersion=0.0 and futures_curve_steepness=0.0
+        → those keys are 'defaulted_zero' in data_quality."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.0,
+            supply_shock_probability=0.0,
+            futures_curve_steepness=0.0,
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result, "Expected at least one candidate"
+        uso = next(c for c in result if c.instrument == "USO")
+        assert uso.data_quality["sector_dispersion"] == "defaulted_zero"
+        assert uso.data_quality["supply_shock_probability"] == "defaulted_zero"
+        assert uso.data_quality["futures_curve_steepness"] == "defaulted_zero"
+        assert uso.data_quality["volatility_gap"] == "available"
+
+    def test_zero_gap_returns_defaulted_zero(self) -> None:
+        """VolatilityGap record with gap=0.0 → volatility_gap: 'defaulted_zero'.
+        (Candidate generated when sector_dispersion provides enough base score.)"""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.0)],
+            sector_dispersion=1.0,  # provides 0.30 base score > 0.10 threshold
+        )
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        assert result, "Expected at least one candidate (dispersion alone clears threshold)"
+        uso = next(c for c in result if c.instrument == "USO")
+        assert uso.data_quality["volatility_gap"] == "defaulted_zero"

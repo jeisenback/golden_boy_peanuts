@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS strategy_candidates (
     expiration    INTEGER         NOT NULL,
     edge_score    NUMERIC(5,4)    NOT NULL CHECK (edge_score BETWEEN 0 AND 1),
     signals       JSONB           NOT NULL,
+    data_quality  JSONB           NOT NULL DEFAULT '{}',
     generated_at  TIMESTAMPTZ     NOT NULL
 );
 

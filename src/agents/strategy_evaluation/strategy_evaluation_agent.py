@@ -211,6 +211,44 @@ def _curve_steepness_label(feature_set: FeatureSet) -> str:
     return "contango" if steep > 0 else "backwardation"
 
 
+def _compute_data_quality(instrument: str, feature_set: FeatureSet) -> dict[str, str]:
+    """Compute the data_quality map for a candidate instrument.
+
+    Maps each signal name to one of three availability states:
+      - 'available':      signal was computed with real, non-zero data
+      - 'defaulted_zero': signal data is present but the value is exactly 0.0
+      - 'unavailable':    signal could not be computed (None); treated as 0 in edge score
+
+    Args:
+        instrument: Ticker symbol to look up in feature_set.volatility_gaps.
+        feature_set: Current FeatureSet from Feature Generation Agent.
+
+    Returns:
+        dict with keys 'volatility_gap', 'sector_dispersion',
+        'supply_shock_probability', 'futures_curve_steepness'.
+    """
+
+    def _quality(value: float | None) -> str:
+        if value is None:
+            return "unavailable"
+        return "defaulted_zero" if value == 0.0 else "available"
+
+    vg_record = next(
+        (vg for vg in feature_set.volatility_gaps if vg.instrument == instrument), None
+    )
+    if vg_record is None:
+        vg_quality = "unavailable"
+    else:
+        vg_quality = "defaulted_zero" if vg_record.gap == 0.0 else "available"
+
+    return {
+        "volatility_gap": vg_quality,
+        "sector_dispersion": _quality(feature_set.sector_dispersion),
+        "supply_shock_probability": _quality(feature_set.supply_shock_probability),
+        "futures_curve_steepness": _quality(feature_set.futures_curve_steepness),
+    }
+
+
 def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     """
     Evaluate all eligible option structures across all in-scope instruments.
@@ -248,6 +286,8 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
             "futures_curve_steepness": _curve_steepness_label(feature_set),
         }
 
+        data_quality = _compute_data_quality(instrument, feature_set)
+
         for structure in _PHASE_1_STRUCTURES:
             candidates.append(
                 StrategyCandidate(
@@ -256,6 +296,7 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
                     expiration=_DEFAULT_EXPIRATION_DAYS,
                     edge_score=edge_score,
                     signals=signals,
+                    data_quality=data_quality,
                     generated_at=generated_at,
                 )
             )

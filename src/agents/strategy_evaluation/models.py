@@ -30,4 +30,13 @@ class StrategyCandidate(BaseModel):
             "Example: {'volatility_gap': 'positive', 'tanker_disruption_index': 'high'}"
         ),
     )
+    data_quality: dict[str, str] = Field(
+        ...,
+        description=(
+            "Signal availability map. Keys match signal names; values are one of "
+            "'available' (signal computed with real data), "
+            "'defaulted_zero' (signal present but exactly 0.0), or "
+            "'unavailable' (signal could not be computed — treated as 0 in edge score)."
+        ),
+    )
     generated_at: datetime = Field(..., description="UTC timestamp when candidate was generated")
