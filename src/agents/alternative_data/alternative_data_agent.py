@@ -39,7 +39,16 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-from src.agents.alternative_data.models import InsiderTrade, NarrativeSignal, Sentiment
+from src.agents.alternative_data.models import (
+    EftsHit,
+    EftsSearchResponse,
+    FilingIndexResponse,
+    InsiderTrade,
+    NarrativeSignal,
+    RedditPost,
+    RedditSearchResponse,
+    Sentiment,
+)
 from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
@@ -111,10 +120,8 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
             continue
 
         for hit in hits:
-            accession_no: str = hit.get("_id", "")
-            src: dict[str, Any] = hit.get("_source", {})
-            # entity_id is zero-padded CIK (e.g. "0000034088"); strip leading zeros
-            raw_cik = str(src.get("entity_id", "")).lstrip("0")
+            accession_no = hit.id
+            raw_cik = hit.source.entity_id.lstrip("0")
             if not accession_no or not raw_cik:
                 logger.warning(
                     "fetch_edgar_insider_trades: missing accession_no or CIK in "
@@ -157,7 +164,7 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
 # ---------------------------------------------------------------------------
 
 
-def _efts_search(ticker: str, start_dt: str) -> list[dict[str, Any]]:
+def _efts_search(ticker: str, start_dt: str) -> list[EftsHit]:
     """
     Search EDGAR full-text search for Form 4 filings matching ticker.
 
@@ -166,10 +173,11 @@ def _efts_search(ticker: str, start_dt: str) -> list[dict[str, Any]]:
         start_dt: ISO date string (YYYY-MM-DD) for the lookback window start.
 
     Returns:
-        Raw EFTS hit list (up to _MAX_HITS_PER_INSTRUMENT entries).
+        Validated EFTS hit list (up to _MAX_HITS_PER_INSTRUMENT entries).
 
     Raises:
         requests.exceptions.RequestException: On HTTP or network failure.
+        pydantic.ValidationError: If the EFTS response has an unexpected shape.
     """
     resp = requests.get(
         _EFTS_SEARCH_URL,
@@ -183,9 +191,8 @@ def _efts_search(ticker: str, start_dt: str) -> list[dict[str, Any]]:
         timeout=30,
     )
     resp.raise_for_status()
-    data: dict[str, Any] = resp.json()
-    hits: list[dict[str, Any]] = data.get("hits", {}).get("hits", [])
-    return hits[:_MAX_HITS_PER_INSTRUMENT]
+    parsed = EftsSearchResponse.model_validate(resp.json())
+    return parsed.hits.hits[:_MAX_HITS_PER_INSTRUMENT]
 
 
 def _fetch_form4_xml(cik: str, accession_no: str) -> str | None:
@@ -211,11 +218,10 @@ def _fetch_form4_xml(cik: str, accession_no: str) -> str | None:
 
     index_resp = requests.get(index_url, headers={"User-Agent": _USER_AGENT}, timeout=30)
     index_resp.raise_for_status()
-    index_data: dict[str, Any] = index_resp.json()
+    filing_index = FilingIndexResponse.model_validate(index_resp.json())
 
-    items: list[dict[str, Any]] = index_data.get("directory", {}).get("item", [])
     xml_name: str | None = next(
-        (item["name"] for item in items if item.get("name", "").endswith(".xml")),
+        (item.name for item in filing_index.directory.item if item.name.endswith(".xml")),
         None,
     )
     if xml_name is None:
@@ -426,8 +432,8 @@ def fetch_reddit_sentiment(instruments: list[str]) -> list[NarrativeSignal]:
         if not posts:
             continue
 
-        texts = [p.get("title", "") + " " + p.get("selftext", "") for p in posts]
-        score = sum(p.get("score", 0) for p in posts)
+        texts = [p.title + " " + p.selftext for p in posts]
+        score = sum(p.score for p in posts)
         sentiment = _classify_sentiment(texts)
 
         results.append(
@@ -451,7 +457,7 @@ def fetch_reddit_sentiment(instruments: list[str]) -> list[NarrativeSignal]:
 # ---------------------------------------------------------------------------
 
 
-def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
+def _reddit_search(instrument: str) -> list[RedditPost] | None:
     """
     Search Reddit for posts mentioning the instrument across target subreddits.
 
@@ -459,10 +465,11 @@ def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
         instrument: Ticker symbol to search for (e.g. "XOM").
 
     Returns:
-        List of post data dicts on success; None if rate-limited (429).
+        List of validated RedditPost objects on success; None if rate-limited (429).
 
     Raises:
         requests.exceptions.RequestException: On non-429 HTTP or network failure.
+        pydantic.ValidationError: If the Reddit response has an unexpected shape.
     """
     resp = requests.get(
         _REDDIT_SEARCH_URL.format(subreddits=_REDDIT_SUBREDDITS),
@@ -482,9 +489,8 @@ def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
         return None
 
     resp.raise_for_status()
-    data: dict[str, Any] = resp.json()
-    children: list[dict[str, Any]] = data.get("data", {}).get("children", [])
-    return [child.get("data", {}) for child in children]
+    parsed = RedditSearchResponse.model_validate(resp.json())
+    return [child.data for child in parsed.data.children]
 
 
 def _classify_sentiment(texts: list[str]) -> Sentiment:

@@ -201,7 +201,7 @@ class TestEftsSearch:
             hits = _efts_search("XOM", "2024-01-01")
 
         assert len(hits) == 1
-        assert hits[0]["_id"] == "0001610717-24-000004"
+        assert hits[0].id == "0001610717-24-000004"
         # Verify User-Agent header was sent
         _, kwargs = mock_get.call_args
         assert "User-Agent" in kwargs.get("headers", {})
@@ -597,3 +597,128 @@ class TestFetchStocktwitsHttpError:
         with patch("requests.get", side_effect=requests.ConnectionError("timeout")):
             with pytest.raises(requests.ConnectionError):
                 fetch_stocktwits_sentiment(["XOM"])
+
+
+# ---------------------------------------------------------------------------
+# Tests: Pydantic boundary models (issue #183)
+# ---------------------------------------------------------------------------
+
+
+class TestEftsSearchResponseModel:
+    """Validate EftsSearchResponse Pydantic model (ESOD §6 boundary validation)."""
+
+    def test_valid_response_round_trips(self) -> None:
+        """Well-formed EFTS response parses into EftsHit objects with correct fields."""
+        from src.agents.alternative_data.models import EftsSearchResponse
+
+        raw = {
+            "hits": {
+                "hits": [
+                    {
+                        "_id": "0001610717-24-000004",
+                        "_source": {"entity_id": "0000034088"},
+                    }
+                ]
+            }
+        }
+        parsed = EftsSearchResponse.model_validate(raw)
+        assert len(parsed.hits.hits) == 1
+        hit = parsed.hits.hits[0]
+        assert hit.id == "0001610717-24-000004"
+        assert hit.source.entity_id == "0000034088"
+
+    def test_malformed_response_raises_validation_error(self) -> None:
+        """Missing top-level 'hits' key raises pydantic.ValidationError."""
+        from pydantic import ValidationError
+
+        from src.agents.alternative_data.models import EftsSearchResponse
+
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate({"results": {"hits": []}})
+
+    def test_missing_inner_hits_raises_validation_error(self) -> None:
+        """Missing 'hits.hits' list raises pydantic.ValidationError."""
+        from pydantic import ValidationError
+
+        from src.agents.alternative_data.models import EftsSearchResponse
+
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate({"hits": {"total": 0}})
+
+
+class TestFilingIndexResponseModel:
+    """Validate FilingIndexResponse Pydantic model."""
+
+    def test_valid_index_round_trips(self) -> None:
+        """Filing index JSON parses into FilingIndexItem objects."""
+        from src.agents.alternative_data.models import FilingIndexResponse
+
+        raw = {
+            "directory": {
+                "item": [
+                    {"name": "wf-form4_20240117.xml", "type": "4"},
+                    {"name": "wf-form4_20240117.htm", "type": "4"},
+                ]
+            }
+        }
+        parsed = FilingIndexResponse.model_validate(raw)
+        assert len(parsed.directory.item) == 2
+        assert parsed.directory.item[0].name == "wf-form4_20240117.xml"
+
+    def test_malformed_index_raises_validation_error(self) -> None:
+        """Missing 'directory' key raises pydantic.ValidationError."""
+        from pydantic import ValidationError
+
+        from src.agents.alternative_data.models import FilingIndexResponse
+
+        with pytest.raises(ValidationError):
+            FilingIndexResponse.model_validate({"items": []})
+
+
+class TestRedditSearchResponseModel:
+    """Validate RedditSearchResponse Pydantic model (ESOD §6 boundary validation)."""
+
+    def test_valid_response_round_trips(self) -> None:
+        """Well-formed Reddit search response parses into RedditPost objects."""
+        from src.agents.alternative_data.models import RedditSearchResponse
+
+        raw = {
+            "data": {
+                "children": [
+                    {
+                        "data": {
+                            "title": "Oil spikes on OPEC cut",
+                            "selftext": "big move",
+                            "score": 42,
+                        }
+                    },
+                    {"data": {"title": "XOM beats estimates", "score": 10}},
+                ]
+            }
+        }
+        parsed = RedditSearchResponse.model_validate(raw)
+        posts = [child.data for child in parsed.data.children]
+        assert len(posts) == 2
+        assert posts[0].title == "Oil spikes on OPEC cut"
+        assert posts[0].selftext == "big move"
+        assert posts[0].score == 42
+        assert posts[1].selftext == ""  # default
+        assert posts[1].score == 10
+
+    def test_malformed_response_raises_validation_error(self) -> None:
+        """Wrong envelope key raises pydantic.ValidationError."""
+        from pydantic import ValidationError
+
+        from src.agents.alternative_data.models import RedditSearchResponse
+
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate({"data": {"posts": []}})
+
+    def test_missing_data_key_raises_validation_error(self) -> None:
+        """Missing top-level 'data' key raises pydantic.ValidationError."""
+        from pydantic import ValidationError
+
+        from src.agents.alternative_data.models import RedditSearchResponse
+
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate({"kind": "Listing"})
