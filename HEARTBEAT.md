@@ -1,16 +1,10 @@
 # HEARTBEAT.md — Energy Options Opportunity Agent
 # -----------------------------------------------------------------------
-# COMMITTED. Append-only sprint notes. If this file is stale, it is wrong.
+# COMMITTED. Always current. If this file is stale, it is wrong.
 #
-# Claude Code: READ THE REMOTE VERSION — never your local copy without fetching first:
-#   git fetch origin develop --quiet
-#   git show origin/develop:HEARTBEAT.md
-# Your local branch may be hours behind. Always read from origin/develop.
-#
-# The Sprint Issues table shows sprint scope and final merged/closed state only.
-# Live status (In Progress / In Review) is tracked on the GitHub issue via
-# assignee + labels — NOT in this table. To check live status:
-#   gh issue view <N>
+# Claude Code: READ THIS FILE BEFORE DOING ANYTHING ELSE EACH SESSION.
+# It tells you what sprint is active, what you are working on, and
+# what branch to use. If you skip this step, you will work on the wrong thing.
 #
 # Update protocol: see bottom of this file.
 # -----------------------------------------------------------------------
@@ -19,44 +13,46 @@
 
 | Field | Value |
 |-------|-------|
-| Sprint Number | 4 |
-| Sprint Name | Sprint 4 — Signal Quality |
-| Goal | QA for ingestion and feature generation; implement compute_edge_score and evaluate_strategies; QA for strategy evaluation |
-| Start Date | 2026-03-13 |
-| Target Close | 2026-03-20 |
+| Sprint Number | 9 |
+| Sprint Name | Sprint 9 — Sprint 9 — Phase 3 Alternative Data Ingestion: Backtesting core and pre-sprint gates: select historical data vendor, get ESOD Hard Stop approval for src/backtest/ module; no feature code until both gates cleared |
+| Goal | Backtesting core and pre-sprint gates: select historical data vendor, get ESOD Hard Stop approval for src/backtest/ module; no feature code until both gates cleared |
+| Start Date | 2026-03-21 |
+| Target Close | 2026-03-28 |
 | Status | ACTIVE |
 
 ## Sprint Issues
 
 | # | Title | Status | Branch | Notes |
 |---|-------|--------|--------|-------|
-| 12 | QA: Ingestion Agent — integration test and coverage sign-off | Not Started | — | — |
-| 16 | QA: Feature Generation Agent — integration test and coverage sign-off | Not Started | — | — |
-| 17 | Implement compute_edge_score — Phase 1 static heuristic scoring | Not Started | — | — |
-| 18 | Implement evaluate_strategies — long straddle, call spread, put spread candidates | Not Started | — | — |
-| 19 | QA: Strategy Evaluation Agent — integration test and coverage sign-off | Not Started | — | Depends on #17, #18 |
+| 172 | feat(backtest): backtest_candidates and backtest_outcomes DB migration | Not Started | — | — |
+| 171 | chore(esod): approve src/backtest/ as new top-level module — ESOD Hard Stop | Not Started | — | — |
+| 170 | chore(backtest): select and confirm historical options data vendor — Sprint 9 blocker | Not Started | — | — |
+| 166 | Backtesting harness — historical replay against 3 known volatility events | Not Started | — | — |
+| 164 | Outcome tracking — record candidate hit/miss and feed into weight calibration | Not Started | — | — |
+| 153 | Implement fetch_tanker_flows — MarineTraffic/VesselFinder tanker movement data | Not Started | — | — |
+| 152 | Implement fetch_stocktwits_sentiment — Stocktwits energy ticker sentiment | Not Started | — | — |
+| 151 | Implement fetch_reddit_sentiment — Reddit API energy subreddit mention velocity | Not Started | — | — |
+| 150 | Implement fetch_quiver_enrichment — Quiver Quantitative optional insider enrichment | Not Started | — | — |
+| 149 | Implement fetch_edgar_insider_trades — SEC EDGAR Form 4 energy insider trades | Not Started | — | — |
+| 148 | DB schema: add insider_trades, shipping_events, narrative_signals tables | Not Started | — | — |
+| 137 | feat(backtesting): harness to compare edge_score predictions against strategy_outcomes | Not Started | — | — |
+| 136 | chore(structure): relocate dev-tooling agents — issue_refinement, pr_review, doc_generation out of src/ | Not Started | — | — |
+| 130 | feat(schema): strategy_outcomes table — track candidate vs. actual price move for edge score validation | Not Started | — | — |
 
-## Issue Status: GitHub Is Authoritative
+## Current Active Branch
 
-The Sprint Issues table above shows sprint scope and the final merged/closed state of each
-issue. It is **not** updated by agents during a sprint.
+`develop` — no active feature branch yet; create branches per issue via `bash scripts/new_branch.sh`
 
-To see live status for any issue:
-```
-gh issue view <N>                                             # assignee = who has claimed it
-gh issue list --milestone "Sprint 2 — Core Infrastructure" --state open  # full sprint view
-```
+## Blockers
 
-An issue is **claimed** when it has an assignee (`gh issue assign <N> --self`).
-The `in-progress` label means actively being worked. The `needs-review` label means PR is open.
-These transitions happen on the GitHub issue — not in this file.
+- None
 
-The Sprint Issues table is updated only by:
-- `bash scripts/sprint_start.sh` — writes the initial table at sprint start
-- `bash scripts/sprint_close.sh` — updates final Merged/Closed rows at sprint end
-- Human lead (manual corrections only)
+## Last Merged PR
+
+- None yet this sprint
 
 ---
+
 
 ## Current Active Branch
 
@@ -312,3 +308,133 @@ Issue #111 implemented on `chore/111-timescaledb-migration-plan`:
 Issue #113 — Phase 2 release PR opened:
 - All AC items verified: local_check.sh clean on develop, Sprint 6+7 closed, #110/#111/#112/#23 all closed.
 - #113 In Review, PR #147 opened 2026-03-21
+
+## Sprint Notes (2026-03-21, Phase 3 Planning)
+
+Phase 3 planning (issue #24) complete:
+- Created Sprint milestones: Sprint 9 (Alternative Data Ingestion), Sprint 10 (Signal Computation), Sprint 11 (Phase 3 QA & Release)
+- Created 16 issues: #148–#163 covering all Phase 3 scope from PRD §4.3, §8, §10
+- Key decisions: EDGAR/Quiver for insider trades, Reddit+Stocktwits for narrative velocity, MarineTraffic for tanker flows, ML weight scaffold is opt-in via env var, cross-sector correlation implemented as boost multiplier in compute_edge_score
+- Issue #24 closed.
+
+Sprint 9 ready to start when human lead initiates.
+
+## Sprint Notes (2026-03-21, CEO review)
+
+/plan-ceo-review run against Phase 1–3 in SCOPE EXPANSION mode. All 6 expansions accepted:
+- #164 Outcome tracking — feedback loop for weight calibration; makes #159 trainable
+- #165 Alerting — email/Slack/Pushover when edge_score > threshold
+- #166 Backtesting harness — historical replay against COVID crash, Ukraine invasion, Houthi disruptions
+- #167 Instrument expansion — add OXY, HAL, MRO, DVN, SLB (6→11 instruments)
+- #168 REST API — FastAPI /candidates, /signals/latest, /health (dep approval needed)
+- #169 thinkorswim ticket generation — .tst output, advisory only
+Plan saved to ~/.gstack/projects/jeisenback-golden-boy-peanuts/2026-03-21-phase3-expansion.md
+
+---
+
+## Sprint 4 Summary — Closed 2026-03-21
+
+| Field | Value |
+|-------|-------|
+| Goal | QA for ingestion and feature generation; implement compute_edge_score and evaluate_strategies; QA for strategy evaluation |
+| Start | 2026-03-13 |
+| Closed | 2026-03-21 |
+| Issues Closed | 0 |
+| Carry-overs | None |
+
+### Sprint 4 Retro Notes
+
+| | |
+|---|---|
+| What went well | All Phase 3 plan complete: design doc approved, eng review done, 19+ issues created (#148–#172), all assigned to sprint milestones; Phase 2 shipped as v0.2.0 |
+| What was slow | Sprint 4 remained ACTIVE past target close (2026-03-20) while Phase 2 release and Phase 3 planning ran; interactive scripts require piped input in agent context |
+| What to change | Close sprints promptly when all issues are done; separate planning sprints from feature sprints |
+
+
+## Sprint Notes (2026-03-21, Sprint 9 gates)
+
+Both Sprint 9 pre-sprint gates cleared — implementation may now begin.
+
+**#170 CLOSED** — Vendor selected: Polygon/Massive (existing `POLYGON_API_KEY`, no new spend).
+Coverage confirmed via controlled scan: CL/USO/XOM/XLE/CVX from Feb 2021 (48+ months),
+BZ from Jan 2022 (27 months — all 2021 empty confirmed with retries).
+Backtest window: Option B split — max history per instrument (not aligned to BZ start).
+Critical integration note: CL/BZ futures options require Polygon futures endpoint, NOT the
+standard `underlying_ticker` Massive contract index. See docs/vendor_evaluation/ for details.
+Human lead approved cost/terms 2026-03-21.
+
+**#171 CLOSED** — ESOD Hard Stop cleared. `src/backtest/` approved as new top-level module.
+Human lead approved 2026-03-21.
+
+**Next implementation issues (unblocked):**
+- #172 — DB migration: backtest_candidates + backtest_outcomes tables
+- #166 — Backtesting harness (HistoricalLoader, run_backtest_pipeline, BacktestReport)
+- #164 — Outcome tracking
+
+## Sprint Notes (2026-03-21, session 2)
+
+**#172 IN REVIEW** — DB migration and backtest DB layer complete. PR #177 open → develop.
+
+Two-table isolation design complete:
+- `db/migrations/add_backtest_tables.sql` — backtest_candidates (UUID PK, snapshot_time, edge_score,
+  signals JSONB) + backtest_outcomes (UUID PK, FK→backtest_candidates, profitable BOOL nullable).
+  Migration idempotent (IF NOT EXISTS); pgcrypto extension included.
+- `src/backtest/backtest.py` — write_backtest_candidate() returns DB-assigned UUID;
+  record_outcome() supports profitable=None audit row (yfinance data gap).
+- `src/backtest/models.py` — BacktestCandidate and BacktestOutcome Pydantic boundary models.
+- `tests/integration/test_backtest_integration.py` — 5 testcontainers tests covering both tables,
+  FK constraint, idempotent migration, and profitable=None audit row.
+- All 5 local_check.sh stages pass (ruff, black, mypy, import scan, 250 unit tests).
+
+**HUMAN SIGN-OFF REQUIRED before running migration on any live DB (ESOD Hard Stop).**
+
+
+**#148 IN REVIEW** — Phase 3 alternative data DB schema complete. PR #178 open → develop.
+- db/schema.sql: insider_trades, shipping_events, narrative_signals tables added.
+- src/agents/alternative_data/db.py: 6 typed stub functions (NotImplementedError) for issues #149-#153.
+- All 5 local_check.sh stages pass.
+
+Next Sprint 9 unblocked issues (after #172 + #148 merge):
+- #149 — fetch_edgar_insider_trades (depends on insider_trades table from #148)
+- #151 — fetch_reddit_sentiment (depends on narrative_signals table from #148)
+- #152 — fetch_stocktwits_sentiment (depends on narrative_signals table from #148)
+- #153 — fetch_tanker_flows (depends on shipping_events table from #148)
+- #166 — HistoricalLoader / run_backtest_pipeline (depends on #172 merged)
+
+## Sprint Notes (2026-03-22, session 1)
+
+**#149 IN REVIEW** — fetch_edgar_insider_trades implemented. PR to be opened → develop.
+
+Implementation details:
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_edgar_insider_trades(instruments)` queries EFTS full-text search, downloads Form 4 XML index, parses `nonDerivativeTransaction` elements into `InsiderTrade` records.
+- `src/agents/alternative_data/models.py`: `InsiderTrade` Pydantic model + `TradeType` StrEnum.
+- `@with_retry()` applied; missing/malformed filings logged as WARNING, never raised.
+- `_TX_CODE_MAP`: P→buy, S→sell, A→grant, M→exercise; other codes (F, J) skipped silently.
+- 16 unit tests across `TestParseForm4Xml`, `TestEftsSearch`, `TestFetchEdgarInsiderTrades`.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 266 unit tests).
+
+## Sprint Notes (2026-03-22, session 2)
+
+**#151 IN REVIEW** — fetch_reddit_sentiment implemented. PR #182 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_reddit_sentiment(instruments)` queries r/energy+oil+investing via Reddit public JSON API (no auth key); aggregates net upvote score and mention count per instrument.
+- `src/agents/alternative_data/models.py`: `NarrativeSignal` Pydantic model + `Sentiment` StrEnum added.
+- `_classify_sentiment()`: keyword heuristic using `frozenset` O(1) sets; returns positive/neutral/negative.
+- `@with_retry()` applied; 429 rate-limit logged as WARNING and returns `[]` immediately (no retry).
+- 13 unit tests: happy path, score aggregation, window boundary, no mentions, instrument omission, 429 mid-batch, sentiment classification (5 cases).
+- chore: auto-fixed pre-existing black format failures on 8 unrelated db.py / integration test files.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 278 unit tests).
+- #151 In Review, PR #182 opened 2026-03-22
+
+## Sprint Notes (2026-03-22, session 3)
+
+**#151 CLOSED** — PR #182 merged to develop by human lead 2026-03-22.
+
+**#152 IN REVIEW** — fetch_stocktwits_sentiment implemented. PR #184 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_stocktwits_sentiment(instruments)` queries Stocktwits public symbol stream API (no auth key); Bullish/Bearish label counts → positive/negative/neutral; score = net bullish minus bearish.
+- `@with_retry()` applied; 429 → WARNING + []; 404/empty stream → WARNING + skip instrument.
+- `_stocktwits_stream()` private helper; 404 and 429 handled before `raise_for_status()`.
+- 12 unit tests: bullish majority, bearish majority, neutral (equal), unlabeled neutral, multi-instrument, empty stream, 404, 429 graceful skip, mid-batch 429, HTTP error propagation.
+- All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan, 288 unit tests).
+- #152 In Review, PR #184 opened 2026-03-22

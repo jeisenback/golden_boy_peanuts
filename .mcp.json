@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "webhook": {
+      "command": "node",
+      "args": ["channels/webhook/webhook.mjs"]
+    },
+    "discord": {
+      "command": "node",
+      "args": ["channels/discord/discord.mjs"]
+    }
+  }
+}
