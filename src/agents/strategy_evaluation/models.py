@@ -31,3 +31,23 @@ class StrategyCandidate(BaseModel):
         ),
     )
     generated_at: datetime = Field(..., description="UTC timestamp when candidate was generated")
+    greeks: dict[str, float] | None = Field(
+        default=None,
+        description=(
+            "BSM Greeks for the ATM leg(s) of this structure. "
+            "Keys: 'delta', 'gamma', 'vega', 'theta', 'rho'. "
+            "None when market_state is not available or option data is insufficient."
+        ),
+    )
+    atm_strike: float | None = Field(
+        default=None,
+        description="ATM strike used for BSM computation (closest to spot at evaluation time).",
+    )
+    liquidity_ok: bool | None = Field(
+        default=None,
+        description=(
+            "True if the ATM option meets minimum liquidity thresholds "
+            "(volume ≥ MIN_OPTION_VOLUME and open_interest ≥ MIN_OPTION_OPEN_INTEREST). "
+            "None when market_state is not available."
+        ),
+    )

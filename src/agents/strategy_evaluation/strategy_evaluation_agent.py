@@ -21,9 +21,10 @@ from datetime import UTC, datetime
 import logging
 
 from src.agents.feature_generation.models import FeatureSet
-from src.agents.ingestion.models import OptionStructure
+from src.agents.ingestion.models import MarketState, OptionRecord, OptionStructure
 from src.agents.strategy_evaluation.db import write_strategy_candidates
 from src.agents.strategy_evaluation.models import StrategyCandidate
+from src.core.bsm import greeks_for_strategy
 from src.core.db import get_engine
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,19 @@ _SUPPLY_SHOCK_MEDIUM_THRESHOLD: float = 0.30  # probability > 30% = medium
 # Phase 2 multiplier weights for supply shock and futures curve steepness
 _SUPPLY_SHOCK_WEIGHT: float = 0.30
 _CURVE_STEEPNESS_WEIGHT: float = 0.15
+
+# ---------------------------------------------------------------------------
+# Liquidity filter thresholds (inspired by EconomiaUNMSM/OptionStrat-AI).
+# Options below these thresholds are "zombie" options — wide bid/ask spreads
+# and insufficient open interest make them difficult or expensive to trade.
+# Callers can override via the module constants if market conditions differ.
+# ---------------------------------------------------------------------------
+
+# Minimum option contract volume (number of contracts traded today)
+MIN_OPTION_VOLUME: int = 10
+
+# Minimum open interest (total outstanding contracts)
+MIN_OPTION_OPEN_INTEREST: int = 50
 
 
 def compute_edge_score(
@@ -211,7 +225,102 @@ def _curve_steepness_label(feature_set: FeatureSet) -> str:
     return "contango" if steep > 0 else "backwardation"
 
 
-def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
+def _select_atm_option(
+    instrument: str,
+    spot: float,
+    options: list[OptionRecord],
+    option_type: str = "call",
+) -> OptionRecord | None:
+    """Find the ATM option closest to spot price for the nearest expiry.
+
+    Args:
+        instrument: Ticker to filter options by.
+        spot: Current spot price of the underlying.
+        options: Full list of OptionRecord objects from MarketState.
+        option_type: "call" or "put".
+
+    Returns:
+        The OptionRecord with the closest strike to spot for the nearest expiry,
+        or None if no matching options exist.
+    """
+    relevant = [
+        o
+        for o in options
+        if o.instrument == instrument and o.option_type == option_type
+    ]
+    if not relevant:
+        return None
+    nearest_expiry = min(o.expiration_date for o in relevant)
+    expiry_opts = [o for o in relevant if o.expiration_date == nearest_expiry]
+    return min(expiry_opts, key=lambda o: abs(o.strike - spot))
+
+
+def _check_liquidity(opt: OptionRecord | None) -> bool:
+    """Return True if an option meets minimum liquidity thresholds.
+
+    Applies the same filter used in EconomiaUNMSM/OptionStrat-AI to exclude
+    "zombie" options with wide spreads and negligible open interest.
+
+    Args:
+        opt: OptionRecord to evaluate, or None.
+
+    Returns:
+        True if volume ≥ MIN_OPTION_VOLUME and open_interest ≥ MIN_OPTION_OPEN_INTEREST.
+        False if opt is None or either threshold is not met.
+    """
+    if opt is None:
+        return False
+    vol_ok = opt.volume is not None and opt.volume >= MIN_OPTION_VOLUME
+    oi_ok = opt.open_interest is not None and opt.open_interest >= MIN_OPTION_OPEN_INTEREST
+    return vol_ok and oi_ok
+
+
+def _compute_candidate_greeks(
+    instrument: str,
+    structure: OptionStructure,
+    spot: float,
+    feature_set: FeatureSet,
+    options: list[OptionRecord],
+) -> tuple[dict[str, float] | None, float | None]:
+    """Compute BSM Greeks and ATM strike for a strategy candidate.
+
+    Args:
+        instrument: Target instrument ticker.
+        structure: Option structure (long_straddle, call_spread, put_spread).
+        spot: Current spot price.
+        feature_set: FeatureSet supplying the ATM implied volatility.
+        options: Option chain records from MarketState.
+
+    Returns:
+        Tuple of (greeks dict or None, atm_strike or None).
+        Returns (None, None) if implied volatility or option data is unavailable.
+    """
+    vg = next((v for v in feature_set.volatility_gaps if v.instrument == instrument), None)
+    if vg is None or vg.implied_vol is None or vg.implied_vol <= 0.0:
+        return None, None
+
+    # Determine relevant option type for ATM strike lookup
+    lookup_type = "put" if structure == OptionStructure.PUT_SPREAD else "call"
+    atm_opt = _select_atm_option(instrument, spot, options, lookup_type)
+    if atm_opt is None:
+        return None, None
+
+    atm_strike = atm_opt.strike
+    time_years = _DEFAULT_EXPIRATION_DAYS / 365.0
+    greeks = greeks_for_strategy(
+        structure=structure.value,
+        spot=spot,
+        strike=atm_strike,
+        time_to_expiry_years=time_years,
+        volatility=vg.implied_vol,
+    )
+    return greeks, atm_strike
+
+
+def evaluate_strategies(
+    feature_set: FeatureSet,
+    market_state: MarketState | None = None,
+) -> list[StrategyCandidate]:
     """
     Evaluate all eligible option structures across all in-scope instruments.
 
@@ -221,8 +330,18 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     by edge_score descending and persisted to the DB (DB failures are logged and
     do not propagate — candidates are still returned to the caller).
 
+    When market_state is provided, each candidate is enriched with:
+    - BSM Greeks (delta, gamma, vega, theta, rho) for the ATM leg(s).
+    - liquidity_ok flag indicating whether the ATM option passes minimum
+      volume (≥ MIN_OPTION_VOLUME) and open-interest (≥ MIN_OPTION_OPEN_INTEREST)
+      thresholds. Candidates that fail the liquidity check are still returned
+      but flagged so downstream consumers can filter them.
+
     Args:
         feature_set: Complete FeatureSet from Feature Generation Agent.
+        market_state: Optional market snapshot. When provided, enables BSM
+            Greeks computation and liquidity filtering. Defaults to None
+            (Phase 1 behavior — no Greeks or liquidity enrichment).
 
     Returns:
         List of StrategyCandidate sorted by edge_score descending.
@@ -230,6 +349,11 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     """
     generated_at = datetime.now(tz=UTC)
     candidates: list[StrategyCandidate] = []
+
+    # Build spot-price lookup from market_state (instrument → price)
+    spot_prices: dict[str, float] = {}
+    if market_state is not None:
+        spot_prices = {r.instrument: r.price for r in market_state.prices}
 
     for instrument in INSTRUMENTS_IN_SCOPE:
         edge_score = compute_edge_score(
@@ -248,7 +372,24 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
             "futures_curve_steepness": _curve_steepness_label(feature_set),
         }
 
+        spot = spot_prices.get(instrument)
+
         for structure in _PHASE_1_STRUCTURES:
+            greeks: dict[str, float] | None = None
+            atm_strike: float | None = None
+            liquidity_ok: bool | None = None
+
+            if market_state is not None and spot is not None:
+                greeks, atm_strike = _compute_candidate_greeks(
+                    instrument, structure, spot, feature_set, market_state.options
+                )
+                # Determine relevant option type for liquidity check
+                lookup_type = "put" if structure == OptionStructure.PUT_SPREAD else "call"
+                atm_opt = _select_atm_option(
+                    instrument, spot, market_state.options, lookup_type
+                )
+                liquidity_ok = _check_liquidity(atm_opt)
+
             candidates.append(
                 StrategyCandidate(
                     instrument=instrument,
@@ -257,6 +398,9 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
                     edge_score=edge_score,
                     signals=signals,
                     generated_at=generated_at,
+                    greeks=greeks,
+                    atm_strike=atm_strike,
+                    liquidity_ok=liquidity_ok,
                 )
             )
 

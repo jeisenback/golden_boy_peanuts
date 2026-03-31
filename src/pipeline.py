@@ -12,7 +12,7 @@ Phase 2 data flow:
     1. run_ingestion()           → MarketState
     2. run_event_detection()     → list[DetectedEvent]  (independent of ingestion)
     3. run_feature_generation(market_state, events=events) → FeatureSet
-    4. evaluate_strategies(feature_set) → list[StrategyCandidate]
+    4. evaluate_strategies(feature_set, market_state=market_state) → list[StrategyCandidate]
 
 Event detection failures are non-fatal: the pipeline continues with an empty
 events list (degraded mode) so that ingestion and feature generation still
@@ -51,7 +51,8 @@ def run_pipeline() -> list[StrategyCandidate]:
                events=events,
            )
         4. evaluate_strategies(       → list[StrategyCandidate]
-               feature_set
+               feature_set,
+               market_state=market_state,
            )
 
     Degraded Mode:
@@ -102,7 +103,7 @@ def run_pipeline() -> list[StrategyCandidate]:
         len(feature_set.feature_errors),
     )
 
-    candidates = evaluate_strategies(feature_set)
+    candidates = evaluate_strategies(feature_set, market_state=market_state)
     logger.info("Strategy evaluation complete: %d candidate(s)", len(candidates))
 
     return candidates
