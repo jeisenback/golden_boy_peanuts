@@ -21,7 +21,7 @@ from datetime import UTC, datetime
 import logging
 
 from src.agents.feature_generation.models import FeatureSet
-from src.agents.ingestion.models import MarketState, OptionStructure
+from src.agents.ingestion.models import MarketState, OptionRecord, OptionStructure
 from src.agents.strategy_evaluation.db import write_strategy_candidates
 from src.agents.strategy_evaluation.models import StrategyCandidate
 from src.core.bsm import BSMGreeks, greeks_for_strategy
@@ -222,6 +222,21 @@ _MIN_OPTION_VOLUME: int = 10
 _MIN_OPTION_OPEN_INTEREST: int = 50
 
 
+def _is_liquid(opt: OptionRecord) -> bool:
+    """Return True if the option meets minimum liquidity thresholds.
+
+    Args:
+        opt: OptionRecord to evaluate.
+
+    Returns:
+        True if volume and open_interest both meet or exceed their minimums.
+        None values are treated as 'unknown' and do not fail the liquidity check.
+    """
+    vol_ok = opt.volume is None or opt.volume >= _MIN_OPTION_VOLUME
+    oi_ok = opt.open_interest is None or opt.open_interest >= _MIN_OPTION_OPEN_INTEREST
+    return vol_ok and oi_ok
+
+
 def _resolve_atm_greeks(
     instrument: str,
     structure: OptionStructure,
@@ -275,9 +290,7 @@ def _resolve_atm_greeks(
         return None
 
     # --- Liquidity guard ---
-    vol_ok = atm_opt.volume is None or atm_opt.volume >= _MIN_OPTION_VOLUME
-    oi_ok = atm_opt.open_interest is None or atm_opt.open_interest >= _MIN_OPTION_OPEN_INTEREST
-    if not vol_ok or not oi_ok:
+    if not _is_liquid(atm_opt):
         logger.debug(
             "ATM option for %s is illiquid (volume=%s, oi=%s) — skipping BSM",
             instrument,
@@ -287,9 +300,7 @@ def _resolve_atm_greeks(
         return None
 
     # --- Time-to-expiry in years ---
-    from datetime import UTC as _UTC  # noqa: PLC0415,RUF100 — local import avoids circular risk
-
-    now = datetime.now(tz=_UTC)
+    now = datetime.now(tz=UTC)
     days_to_expiry = (atm_opt.expiration_date - now).total_seconds() / 86_400.0
     tte_years = days_to_expiry / 365.0
 
@@ -373,12 +384,7 @@ def evaluate_strategies(
                     )
                     if spot_rec is not None:
                         atm = min(exp_opts, key=lambda o: abs(o.strike - spot_rec.price))
-                        vol_ok = atm.volume is None or atm.volume >= _MIN_OPTION_VOLUME
-                        oi_ok = (
-                            atm.open_interest is None
-                            or atm.open_interest >= _MIN_OPTION_OPEN_INTEREST
-                        )
-                        signals = {**signals, "liquidity_ok": str(vol_ok and oi_ok).lower()}
+                        signals = {**signals, "liquidity_ok": str(_is_liquid(atm)).lower()}
 
             candidates.append(
                 StrategyCandidate(

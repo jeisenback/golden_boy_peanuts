@@ -237,18 +237,16 @@ class TestGreeksForStrategy:
         expected_otm_strike = spot * (1.0 + _SPREAD_WIDTH_PERCENT)
         # Verify the spread is priced consistently with the OTM leg definition.
         # Long leg = ATM call at 200; short leg = OTM call at 210.
-        from src.core.bsm import compute_bsm_greeks as _bsm
-        long_call = _bsm(spot, spot, 0.25, 0.30, "call")
-        short_call = _bsm(spot, expected_otm_strike, 0.25, 0.30, "call")
+        long_call = compute_bsm_greeks(spot, spot, 0.25, 0.30, "call")
+        short_call = compute_bsm_greeks(spot, expected_otm_strike, 0.25, 0.30, "call")
         g = greeks_for_strategy(spot, spot, 0.25, 0.30, "call_spread")
         assert g is not None
         assert abs(g.price - (long_call.price - short_call.price)) < 1e-8
 
     def test_straddle_price_equals_sum_of_legs(self) -> None:
         """Straddle price should equal ATM call price + ATM put price."""
-        from src.core.bsm import compute_bsm_greeks as _bsm
-        call_g = _bsm(100.0, 100.0, 0.5, 0.25, "call")
-        put_g = _bsm(100.0, 100.0, 0.5, 0.25, "put")
+        call_g = compute_bsm_greeks(100.0, 100.0, 0.5, 0.25, "call")
+        put_g = compute_bsm_greeks(100.0, 100.0, 0.5, 0.25, "put")
         straddle_g = greeks_for_strategy(100.0, 100.0, 0.5, 0.25, "long_straddle")
         assert straddle_g is not None
         assert abs(straddle_g.price - (call_g.price + put_g.price)) < 1e-8
