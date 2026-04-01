@@ -21,9 +21,10 @@ from datetime import UTC, datetime
 import logging
 
 from src.agents.feature_generation.models import FeatureSet
-from src.agents.ingestion.models import OptionStructure
+from src.agents.ingestion.models import MarketState, OptionRecord, OptionStructure
 from src.agents.strategy_evaluation.db import write_strategy_candidates
 from src.agents.strategy_evaluation.models import StrategyCandidate
+from src.core.bsm import BSMGreeks, greeks_for_strategy
 from src.core.db import get_engine
 
 logger = logging.getLogger(__name__)
@@ -211,7 +212,111 @@ def _curve_steepness_label(feature_set: FeatureSet) -> str:
     return "contango" if steep > 0 else "backwardation"
 
 
-def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
+# ---------------------------------------------------------------------------
+# BSM Greeks attachment (Phase 3 options platform addition)
+#
+# Minimum liquidity thresholds — candidates below these thresholds get
+# liquidity_ok=False in their signals dict and no BSM Greeks attached.
+# ---------------------------------------------------------------------------
+_MIN_OPTION_VOLUME: int = 10
+_MIN_OPTION_OPEN_INTEREST: int = 50
+
+
+def _is_liquid(opt: OptionRecord) -> bool:
+    """Return True if the option meets minimum liquidity thresholds.
+
+    Args:
+        opt: OptionRecord to evaluate.
+
+    Returns:
+        True if volume and open_interest both meet or exceed their minimums.
+        None values are treated as 'unknown' and do not fail the liquidity check.
+    """
+    vol_ok = opt.volume is None or opt.volume >= _MIN_OPTION_VOLUME
+    oi_ok = opt.open_interest is None or opt.open_interest >= _MIN_OPTION_OPEN_INTEREST
+    return vol_ok and oi_ok
+
+
+def _resolve_atm_greeks(
+    instrument: str,
+    structure: OptionStructure,
+    market_state: MarketState,
+) -> BSMGreeks | None:
+    """Resolve BSM Greeks for the ATM option of *instrument* in *market_state*.
+
+    Finds the current spot price and ATM implied volatility from the options
+    chain, then delegates to greeks_for_strategy(). Returns None (with a DEBUG
+    log) if any required input is missing or greeks_for_strategy returns None.
+
+    Liquidity guard: skips options whose volume < _MIN_OPTION_VOLUME or whose
+    open_interest < _MIN_OPTION_OPEN_INTEREST — treats them as illiquid and
+    returns None.
+
+    Args:
+        instrument: Instrument ticker to look up in market_state.
+        structure: Option structure to compute Greeks for.
+        market_state: Current MarketState containing prices and options chain.
+
+    Returns:
+        BSMGreeks for the structure, or None if computation is not possible.
+    """
+    # --- Spot price ---
+    spot_record = next(
+        (r for r in market_state.prices if r.instrument == instrument),
+        None,
+    )
+    if spot_record is None:
+        logger.debug("No spot price for %s in market_state — skipping BSM", instrument)
+        return None
+
+    spot = spot_record.price
+
+    # --- ATM option: nearest expiry, closest strike ---
+    opts = [o for o in market_state.options if o.instrument == instrument]
+    if not opts:
+        logger.debug("No options chain for %s in market_state — skipping BSM", instrument)
+        return None
+
+    nearest_expiry = min(o.expiration_date for o in opts)
+    expiry_opts = [o for o in opts if o.expiration_date == nearest_expiry]
+    atm_opt = min(expiry_opts, key=lambda o: abs(o.strike - spot))
+
+    if atm_opt.implied_volatility is None:
+        logger.debug(
+            "ATM option for %s has no IV (strike=%.2f) — skipping BSM",
+            instrument,
+            atm_opt.strike,
+        )
+        return None
+
+    # --- Liquidity guard ---
+    if not _is_liquid(atm_opt):
+        logger.debug(
+            "ATM option for %s is illiquid (volume=%s, oi=%s) — skipping BSM",
+            instrument,
+            atm_opt.volume,
+            atm_opt.open_interest,
+        )
+        return None
+
+    # --- Time-to-expiry in years ---
+    now = datetime.now(tz=UTC)
+    days_to_expiry = (atm_opt.expiration_date - now).total_seconds() / 86_400.0
+    tte_years = days_to_expiry / 365.0
+
+    return greeks_for_strategy(
+        spot=spot,
+        strike_atm=atm_opt.strike,
+        time_to_expiry_years=tte_years,
+        implied_vol=atm_opt.implied_volatility,
+        structure=structure.value,
+    )
+
+
+def evaluate_strategies(
+    feature_set: FeatureSet,
+    market_state: MarketState | None = None,
+) -> list[StrategyCandidate]:
     """
     Evaluate all eligible option structures across all in-scope instruments.
 
@@ -221,8 +326,18 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     by edge_score descending and persisted to the DB (DB failures are logged and
     do not propagate — candidates are still returned to the caller).
 
+    BSM Greeks (Phase 3 options platform):
+        When market_state is provided, BSM Greeks are computed and attached to
+        each candidate via _resolve_atm_greeks(). The signals dict gains a
+        'liquidity_ok' key ('true'/'false') reflecting whether the ATM option
+        meets _MIN_OPTION_VOLUME and _MIN_OPTION_OPEN_INTEREST thresholds.
+        If BSM computation fails for any reason, candidate.greeks stays None
+        and processing continues — BSM is strictly additive.
+
     Args:
         feature_set: Complete FeatureSet from Feature Generation Agent.
+        market_state: Optional live market snapshot. When provided, BSM Greeks
+            are attached to each candidate and liquidity_ok is set in signals.
 
     Returns:
         List of StrategyCandidate sorted by edge_score descending.
@@ -249,6 +364,28 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
         }
 
         for structure in _PHASE_1_STRUCTURES:
+            greeks: BSMGreeks | None = None
+
+            if market_state is not None:
+                try:
+                    greeks = _resolve_atm_greeks(instrument, structure, market_state)
+                except Exception as exc:
+                    logger.debug("BSM computation failed for %s/%s: %s", instrument, structure, exc)
+
+                # Add liquidity_ok to signals dict (requires market_state)
+                candidate_opts = [
+                    o for o in market_state.options if o.instrument == instrument
+                ]
+                if candidate_opts:
+                    nearest_exp = min(o.expiration_date for o in candidate_opts)
+                    exp_opts = [o for o in candidate_opts if o.expiration_date == nearest_exp]
+                    spot_rec = next(
+                        (r for r in market_state.prices if r.instrument == instrument), None
+                    )
+                    if spot_rec is not None:
+                        atm = min(exp_opts, key=lambda o: abs(o.strike - spot_rec.price))
+                        signals = {**signals, "liquidity_ok": str(_is_liquid(atm)).lower()}
+
             candidates.append(
                 StrategyCandidate(
                     instrument=instrument,
@@ -257,6 +394,7 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
                     edge_score=edge_score,
                     signals=signals,
                     generated_at=generated_at,
+                    greeks=greeks,
                 )
             )
 
