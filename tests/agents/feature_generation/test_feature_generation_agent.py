@@ -16,11 +16,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.agents.alternative_data.models import AlternativeDataState, NarrativeSignal, Sentiment
+from src.agents.alternative_data.models import (
+    AlternativeDataState,
+    EventType,
+    NarrativeSignal,
+    Sentiment,
+    ShippingEvent,
+)
 from src.agents.feature_generation.feature_generation_agent import (
     compute_futures_curve_steepness,
     compute_narrative_velocity,
     compute_sector_dispersion,
+    compute_tanker_disruption_index,
     compute_volatility_gap,
     run_feature_generation,
 )
@@ -633,3 +640,113 @@ class TestComputeNarrativeVelocity:
             result = compute_narrative_velocity(state)
         assert result == pytest.approx(0.0)
         assert any("below threshold" in r.message.lower() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared across TestComputeTankerDisruptionIndex
+# ---------------------------------------------------------------------------
+
+
+def _make_shipping_event(
+    event_type: EventType,
+    latitude: float = 26.0,
+    longitude: float = 56.5,
+    vessel_id: str = "VESSEL1",
+) -> ShippingEvent:
+    """Default lat/lon lands inside the strait_of_hormuz chokepoint box."""
+    return ShippingEvent(
+        vessel_id=vessel_id,
+        event_type=event_type,
+        latitude=latitude,
+        longitude=longitude,
+        timestamp=datetime.now(tz=UTC),
+        source="marinetraffic",
+    )
+
+
+def _make_alternative_data_state_shipping(
+    events: list[ShippingEvent],
+) -> AlternativeDataState:
+    return AlternativeDataState(snapshot_time=datetime.now(tz=UTC), shipping_events=events)
+
+
+class TestComputeTankerDisruptionIndex:
+    """Tests for compute_tanker_disruption_index() — chokepoint disruption ratio."""
+
+    def test_all_anchored_or_delayed_returns_one(self) -> None:
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(EventType.ANCHORED, vessel_id="V1"),
+                _make_shipping_event(EventType.DELAYED, vessel_id="V2"),
+            ]
+        )
+        assert compute_tanker_disruption_index(state) == pytest.approx(1.0)
+
+    def test_all_transit_returns_zero(self) -> None:
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V1"),
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V2"),
+            ]
+        )
+        assert compute_tanker_disruption_index(state) == pytest.approx(0.0)
+
+    def test_mixed_matches_expected_ratio(self) -> None:
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(EventType.ANCHORED, vessel_id="V1"),
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V2"),
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V3"),
+                _make_shipping_event(EventType.DELAYED, vessel_id="V4"),
+            ]
+        )
+        # 2 disrupted (anchored + delayed) / 4 total = 0.5
+        assert compute_tanker_disruption_index(state) == pytest.approx(0.5)
+
+    def test_empty_events_returns_none_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        state = _make_alternative_data_state_shipping([])
+        with caplog.at_level(logging.WARNING):
+            result = compute_tanker_disruption_index(state)
+        assert result is None
+        assert any("no shipping events" in r.message.lower() for r in caplog.records)
+
+    def test_events_outside_chokepoints_returns_none_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Events far from any configured chokepoint contribute nothing — returns None."""
+        state = _make_alternative_data_state_shipping(
+            [_make_shipping_event(EventType.ANCHORED, latitude=0.0, longitude=0.0)]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_tanker_disruption_index(state)
+        assert result is None
+        assert any("chokepoint" in r.message.lower() for r in caplog.records)
+
+    def test_chokepoint_boundary_is_inclusive(self) -> None:
+        """A vessel exactly on a chokepoint's min lat/lon edge is still counted."""
+        state = _make_alternative_data_state_shipping(
+            [_make_shipping_event(EventType.ANCHORED, latitude=25.5, longitude=55.5)]
+        )
+        assert compute_tanker_disruption_index(state) == pytest.approx(1.0)
+
+    def test_events_outside_chokepoint_excluded_from_ratio(self) -> None:
+        """Only in-chokepoint events count toward the ratio's numerator and denominator."""
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(
+                    EventType.TRANSIT, latitude=0.0, longitude=0.0, vessel_id="V1"
+                ),
+                _make_shipping_event(EventType.ANCHORED, vessel_id="V2"),
+            ]
+        )
+        # V1 excluded (outside all chokepoints); V2 in-box and anchored → 1/1 = 1.0
+        assert compute_tanker_disruption_index(state) == pytest.approx(1.0)
+
+    def test_cap_enforced(self) -> None:
+        """Ratio is structurally bounded to 1.0; assert explicitly per AC."""
+        state = _make_alternative_data_state_shipping(
+            [_make_shipping_event(EventType.DELAYED, vessel_id="V1")]
+        )
+        result = compute_tanker_disruption_index(state)
+        assert result is not None
+        assert result <= 1.0
