@@ -467,3 +467,20 @@ Implementation details:
 - 25 unit tests: quartile label boundary conditions, Q4>Q1 assertion, hit rate per structure (all/none/partial), empty result set, DB degraded-mode, full run_backtest mock.
 - All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 291 unit tests).
 - #137 In Review, PR #188 opened 2026-03-23
+
+## Sprint Notes (2026-09-16, session 1)
+
+**#154 CLOSED** — run_alternative_data_ingestion implemented. PR #199 merged to develop.
+**#156 CLOSED** — compute_narrative_velocity implemented. PR #202 merged to develop.
+**#157 IN REVIEW** — compute_tanker_disruption_index implemented. PR #203 open → develop.
+
+- `src/agents/feature_generation/feature_generation_agent.py`: `compute_tanker_disruption_index(alternative_data_state) -> float | None` — ratio of anchored/delayed to total vessels among shipping events falling within a configured chokepoint bounding box, capped at 1.0.
+- `_CHOKEPOINTS` bounding-box constant duplicated in this module (mirrors `alternative_data_agent.py`'s coordinates) per AC — keeps feature-generation free of a runtime dependency on the ingestion module.
+- Returns `None` + WARNING for empty shipping_events, and (an extension beyond the literal AC) also for events present but none within a configured chokepoint.
+- 8 unit tests: all-anchored/delayed, all-transit, mixed ratio, empty events, events outside all chokepoints, chokepoint boundary inclusivity, mixed in/out exclusion, cap enforcement.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 375 unit tests).
+- #157 In Review, PR #203 opened 2026-09-16
+
+**Flag for human lead:** PR #201 (#155, `compute_insider_conviction_score`) is still open and unmerged, and now shows `mergeable_state: dirty` against develop (PR #202 landed on the same file afterward). Not touched this session — needs a conflict-resolution pass before it can merge.
+
+**Flag for human lead:** This file's committed Sprint Issues table (top of file) is still Sprint 9 and does not list issues #149-#158 — those are tracked under the Sprint 10 milestone in GitHub. Sessions have continued working #154/#155/#156/#157 under direct per-issue instruction; the table itself was not edited (per the Hard Stop), only this notes section.
