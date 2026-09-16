@@ -86,6 +86,10 @@ logger = logging.getLogger(__name__)
 # insider-trade hits (no equity filings) by design — see EDGAR notes above.
 _INSTRUMENTS_IN_SCOPE: list[str] = ["USO", "XLE", "XOM", "CVX", "CL=F", "BZ=F"]
 
+# Milliseconds per second — used to convert timedelta.total_seconds() to ms
+# for the structured cycle log's duration_ms field
+_MS_PER_SECOND: int = 1000
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -1187,7 +1191,7 @@ def run_alternative_data_ingestion() -> AlternativeDataState:
     )
 
     # --- Structured cycle log ---
-    duration_ms = int((snapshot_time - start_time).total_seconds() * 1000)
+    duration_ms = int((snapshot_time - start_time).total_seconds() * _MS_PER_SECOND)
     logger.info(
         json.dumps(
             {
