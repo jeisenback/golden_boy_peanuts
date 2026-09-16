@@ -27,6 +27,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from urllib.parse import urlparse
 
+from pydantic import ValidationError
 import pytest
 import requests
 
@@ -36,7 +37,12 @@ from src.agents.alternative_data.alternative_data_agent import (
     fetch_edgar_insider_trades,
     fetch_quiver_enrichment,
 )
-from src.agents.alternative_data.models import InsiderTrade
+from src.agents.alternative_data.models import (
+    EftsSearchResponse,
+    FilingIndexResponse,
+    InsiderTrade,
+    RedditSearchResponse,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -102,9 +108,10 @@ _FORM4_XML_SELL = _FORM4_XML_BUY.replace(
 )
 
 
-def _mock_resp(payload: dict | str, status: int = 200) -> MagicMock:
+def _mock_resp(payload: dict | str, status: int = 200, status_code: int | None = None) -> MagicMock:
     """Return a mock requests.Response with raise_for_status as no-op."""
     mock = MagicMock()
+    mock.status_code = status_code if status_code is not None else status
     mock.raise_for_status.return_value = None
     if isinstance(payload, dict):
         mock.json.return_value = payload
@@ -225,6 +232,117 @@ class TestEftsSearch:
         with patch("requests.get", return_value=_error_resp(requests.HTTPError)):
             with pytest.raises(requests.HTTPError):
                 _efts_search("XOM", "2024-01-01")
+
+
+# ---------------------------------------------------------------------------
+# Tests: Pydantic boundary models — malformed API responses (issue #183)
+# ---------------------------------------------------------------------------
+
+
+class TestEftsBoundaryModelValidation:
+    """Malformed EFTS responses must raise pydantic.ValidationError (#183)."""
+
+    def test_malformed_efts_missing_source_raises(self) -> None:
+        """EFTS hit without _source object raises ValidationError."""
+        bad_payload = {"hits": {"hits": [{"_id": "0001610717-24-000004"}]}}
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate(bad_payload)
+
+    def test_malformed_efts_wrong_type_raises(self) -> None:
+        """EFTS hits as a string (not an object) raises ValidationError."""
+        bad_payload = {"hits": "not-an-object"}
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate(bad_payload)
+
+    def test_efts_valid_response_round_trips(self) -> None:
+        """Valid EFTS response parses correctly through model."""
+        payload = _make_efts_response("XOM")
+        parsed = EftsSearchResponse.model_validate(payload)
+        assert len(parsed.hits.hits) == 1
+        assert parsed.hits.hits[0].id == "0001610717-24-000004"
+        assert parsed.hits.hits[0].source.entity_id == "0000034088"
+
+    def test_missing_top_level_hits_raises(self) -> None:
+        """EFTS response missing 'hits' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate({"total": 0})
+
+    def test_malformed_efts_propagates_from_efts_search(self) -> None:
+        """_efts_search raises ValidationError on malformed EFTS JSON."""
+        bad_payload = {"hits": {"hits": [{"_id": "123"}]}}
+        with patch("requests.get", return_value=_mock_resp(bad_payload)):
+            with pytest.raises(ValidationError):
+                _efts_search("XOM", "2024-01-01")
+
+    def test_validation_error_propagates_through_fetch_edgar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ValidationError from _efts_search is NOT swallowed by fetch_edgar_insider_trades."""
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+        bad_payload = {"hits": {"hits": [{"_id": "123"}]}}
+        with patch("requests.get", return_value=_mock_resp(bad_payload)):
+            with pytest.raises(ValidationError):
+                fetch_edgar_insider_trades(["XOM"])
+
+
+class TestFilingIndexBoundaryModelValidation:
+    """Malformed filing index responses must raise pydantic.ValidationError (#183)."""
+
+    def test_malformed_index_directory_wrong_type_raises(self) -> None:
+        """Filing index with directory as a list (not an object) raises ValidationError."""
+        bad_payload = {"directory": ["not", "an", "object"]}
+        with pytest.raises(ValidationError):
+            FilingIndexResponse.model_validate(bad_payload)
+
+    def test_missing_top_level_directory_raises(self) -> None:
+        """Filing index missing 'directory' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FilingIndexResponse.model_validate({"name": "index.json"})
+
+    def test_valid_index_round_trips(self) -> None:
+        """Valid filing index parses correctly through model."""
+        parsed = FilingIndexResponse.model_validate(_FILING_INDEX)
+        assert len(parsed.directory.item) == 2
+        assert parsed.directory.item[0].name == "wf-form4_20240117.xml"
+
+
+class TestRedditBoundaryModelValidation:
+    """Malformed Reddit responses must raise pydantic.ValidationError (#183)."""
+
+    def test_malformed_reddit_missing_title_raises(self) -> None:
+        """Reddit post without required 'title' field raises ValidationError."""
+        bad_payload = {"data": {"children": [{"data": {"selftext": "no title here"}}]}}
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate(bad_payload)
+
+    def test_malformed_reddit_wrong_structure_raises(self) -> None:
+        """Reddit response with data as a string raises ValidationError."""
+        bad_payload = {"data": "not-an-object"}
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate(bad_payload)
+
+    def test_reddit_valid_response_round_trips(self) -> None:
+        """Valid Reddit response parses correctly through model."""
+        payload = _make_reddit_response([_make_post("XOM rally", "big move", 42)])
+        parsed = RedditSearchResponse.model_validate(payload)
+        assert len(parsed.data.children) == 1
+        assert parsed.data.children[0].data.title == "XOM rally"
+        assert parsed.data.children[0].data.selftext == "big move"
+        assert parsed.data.children[0].data.score == 42
+
+    def test_missing_top_level_data_raises(self) -> None:
+        """Reddit response missing 'data' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate({"kind": "Listing"})
+
+    def test_malformed_reddit_propagates_from_reddit_search(self) -> None:
+        """_reddit_search raises ValidationError on malformed Reddit JSON."""
+        from src.agents.alternative_data.alternative_data_agent import _reddit_search
+
+        bad_payload = {"data": {"children": [{"data": {}}]}}
+        with patch("requests.get", return_value=_mock_resp(bad_payload)):
+            with pytest.raises(ValidationError):
+                _reddit_search("XOM")
 
 
 # ---------------------------------------------------------------------------
@@ -482,3 +600,280 @@ class TestFetchQuiverEnrichment:
 
         assert result == []
         assert any("unexpected response shape" in r.message.lower() for r in caplog.records)
+
+
+# ===========================================================================
+# fetch_reddit_sentiment tests — issue #151
+# ===========================================================================
+
+from src.agents.alternative_data.alternative_data_agent import (  # noqa: E402
+    _classify_sentiment,
+    fetch_reddit_sentiment,
+)
+from src.agents.alternative_data.models import NarrativeSignal  # noqa: E402
+
+_REDDIT_SEARCH_URL = "https://www.reddit.com/r/energy+oil+investing/search.json"
+
+
+def _make_reddit_response(posts: list[dict]) -> dict:
+    """Minimal Reddit search JSON envelope."""
+    return {
+        "data": {
+            "children": [{"data": p} for p in posts],
+        }
+    }
+
+
+def _make_post(title: str = "XOM rally", selftext: str = "", score: int = 10) -> dict:
+    return {"title": title, "selftext": selftext, "score": score}
+
+
+class TestFetchRedditSentimentHappyPath:
+    def test_returns_narrative_signal_for_matching_instrument(self) -> None:
+        posts = [_make_post("XOM surges on strong earnings", score=50)]
+        resp = _mock_resp(_make_reddit_response(posts))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["XOM"])
+
+        assert len(signals) == 1
+        sig = signals[0]
+        assert isinstance(sig, NarrativeSignal)
+        assert sig.instrument == "XOM"
+        assert sig.platform == "reddit"
+        assert sig.source == "reddit"
+        assert sig.score == 50
+        assert sig.mention_count == 1
+
+    def test_score_is_sum_of_post_scores(self) -> None:
+        posts = [_make_post(score=20), _make_post(score=30), _make_post(score=5)]
+        resp = _mock_resp(_make_reddit_response(posts))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["CVX"])
+
+        assert signals[0].score == 55
+        assert signals[0].mention_count == 3
+
+    def test_window_start_and_end_are_set(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        posts = [_make_post()]
+        resp = _mock_resp(_make_reddit_response(posts))
+
+        before = datetime.now(tz=UTC)
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["XOM"])
+        after = datetime.now(tz=UTC)
+
+        sig = signals[0]
+        assert before - timedelta(seconds=1) <= sig.window_end <= after
+        expected_start = sig.window_end - timedelta(days=7)
+        # Allow 1-second tolerance
+        assert abs((sig.window_start - expected_start).total_seconds()) < 2
+
+
+class TestFetchRedditSentimentNoMentions:
+    def test_no_posts_returns_empty_list(self) -> None:
+        resp = _mock_resp(_make_reddit_response([]))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_reddit_sentiment(["WTI"])
+
+        assert signals == []
+
+    def test_instrument_omitted_when_no_posts(self) -> None:
+        empty = _mock_resp(_make_reddit_response([]))
+        with_posts = _mock_resp(_make_reddit_response([_make_post("CVX buy")]))
+
+        with patch("requests.get", side_effect=[empty, with_posts]):
+            signals = fetch_reddit_sentiment(["XOM", "CVX"])
+
+        assert len(signals) == 1
+        assert signals[0].instrument == "CVX"
+
+
+class TestFetchRedditSentiment429:
+    def test_rate_limit_returns_empty_list(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", return_value=rate_limited):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_reddit_sentiment(["XOM"])
+
+        assert signals == []
+        assert any("429" in r.message or "rate limit" in r.message.lower() for r in caplog.records)
+
+    def test_rate_limit_mid_batch_returns_empty(self) -> None:
+        """If second instrument gets 429, whole function returns []."""
+        first_ok = _mock_resp(_make_reddit_response([_make_post()]))
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", side_effect=[first_ok, rate_limited]):
+            signals = fetch_reddit_sentiment(["XOM", "CVX"])
+
+        assert signals == []
+
+
+class TestClassifySentiment:
+    def test_positive_keywords_yield_positive(self) -> None:
+        assert _classify_sentiment(["XOM bullish rally surge"]) == "positive"
+
+    def test_negative_keywords_yield_negative(self) -> None:
+        assert _classify_sentiment(["oil crash bearish drop"]) == "negative"
+
+    def test_neutral_when_balanced(self) -> None:
+        assert _classify_sentiment(["bullish crash"]) == "neutral"
+
+    def test_neutral_when_no_keywords(self) -> None:
+        assert _classify_sentiment(["XOM quarterly earnings report"]) == "neutral"
+
+    def test_case_insensitive(self) -> None:
+        assert _classify_sentiment(["BULLISH RALLY SURGE"]) == "positive"
+
+
+# ===========================================================================
+# fetch_stocktwits_sentiment tests — issue #152
+# ===========================================================================
+
+from src.agents.alternative_data.alternative_data_agent import (  # noqa: E402
+    fetch_stocktwits_sentiment,
+)
+
+_STOCKTWITS_URL_TEMPLATE = "https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json"
+
+
+def _make_stocktwits_response(messages: list[dict]) -> dict:
+    """Minimal Stocktwits symbol stream JSON envelope."""
+    return {"messages": messages}
+
+
+def _make_message(sentiment_label: str | None = None, body: str = "XOM looks good") -> dict:
+    """Build a minimal Stocktwits message dict."""
+    entities: dict = {}
+    if sentiment_label is not None:
+        entities["sentiment"] = {"basic": sentiment_label}
+    else:
+        entities["sentiment"] = None
+    return {"body": body, "entities": entities}
+
+
+class TestFetchStocktwitsHappyPath:
+    def test_bullish_messages_return_positive_signal(self) -> None:
+        messages = [_make_message("Bullish"), _make_message("Bullish"), _make_message("Bearish")]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["XOM"])
+
+        assert len(signals) == 1
+        sig = signals[0]
+        assert isinstance(sig, NarrativeSignal)
+        assert sig.instrument == "XOM"
+        assert sig.platform == "stocktwits"
+        assert sig.source == "stocktwits"
+        assert sig.sentiment == "positive"
+        assert sig.score == 1  # 2 bullish - 1 bearish
+        assert sig.mention_count == 3
+
+    def test_bearish_majority_returns_negative_signal(self) -> None:
+        messages = [_make_message("Bearish"), _make_message("Bearish"), _make_message("Bullish")]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["CVX"])
+
+        assert signals[0].sentiment == "negative"
+        assert signals[0].score == -1
+
+    def test_equal_bullish_bearish_returns_neutral(self) -> None:
+        messages = [_make_message("Bullish"), _make_message("Bearish")]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["USO"])
+
+        assert signals[0].sentiment == "neutral"
+        assert signals[0].score == 0
+
+    def test_unlabeled_messages_return_neutral(self) -> None:
+        messages = [_make_message(None), _make_message(None)]
+        resp = _mock_resp(_make_stocktwits_response(messages))
+
+        with patch("requests.get", return_value=resp):
+            signals = fetch_stocktwits_sentiment(["XLE"])
+
+        assert signals[0].sentiment == "neutral"
+        assert signals[0].mention_count == 2
+
+    def test_multi_instrument_aggregated_independently(self) -> None:
+        bullish_resp = _mock_resp(_make_stocktwits_response([_make_message("Bullish")]))
+        bearish_resp = _mock_resp(_make_stocktwits_response([_make_message("Bearish")]))
+
+        with patch("requests.get", side_effect=[bullish_resp, bearish_resp]):
+            signals = fetch_stocktwits_sentiment(["XOM", "CVX"])
+
+        assert len(signals) == 2
+        assert signals[0].instrument == "XOM"
+        assert signals[0].sentiment == "positive"
+        assert signals[1].instrument == "CVX"
+        assert signals[1].sentiment == "negative"
+
+
+class TestFetchStocktwitsEmptyStream:
+    def test_empty_messages_skips_instrument(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        resp = _mock_resp(_make_stocktwits_response([]))
+
+        with patch("requests.get", return_value=resp):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_stocktwits_sentiment(["WTI"])
+
+        assert signals == []
+        assert any("empty stream" in r.message.lower() for r in caplog.records)
+
+    def test_404_skips_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        not_found = _mock_resp({}, status=404)
+
+        with patch("requests.get", return_value=not_found):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_stocktwits_sentiment(["WTI"])
+
+        assert signals == []
+        assert any("404" in r.message or "not found" in r.message.lower() for r in caplog.records)
+
+
+class TestFetchStocktwits429:
+    def test_rate_limit_returns_empty_list(self, caplog: pytest.LogCaptureFixture) -> None:
+        import logging
+
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", return_value=rate_limited):
+            with caplog.at_level(logging.WARNING):
+                signals = fetch_stocktwits_sentiment(["XOM"])
+
+        assert signals == []
+        assert any("429" in r.message or "rate limit" in r.message.lower() for r in caplog.records)
+
+    def test_rate_limit_mid_batch_returns_empty(self) -> None:
+        first_ok = _mock_resp(_make_stocktwits_response([_make_message("Bullish")]))
+        rate_limited = _mock_resp({}, status=429)
+
+        with patch("requests.get", side_effect=[first_ok, rate_limited]):
+            signals = fetch_stocktwits_sentiment(["XOM", "CVX"])
+
+        assert signals == []
+
+
+class TestFetchStocktwitsHttpError:
+    def test_non_429_http_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+        with patch("requests.get", side_effect=requests.ConnectionError("timeout")):
+            with pytest.raises(requests.ConnectionError):
+                fetch_stocktwits_sentiment(["XOM"])

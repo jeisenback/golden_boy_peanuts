@@ -1,0 +1,14 @@
+{
+  "name": "discord-channel",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Claude Code two-way Discord channel — DMs and guild messages forwarded into session",
+  "main": "discord.mjs",
+  "scripts": {
+    "start": "node --env-file=../../.env discord.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "discord.js": "^14.19.3"
+  }
+}
