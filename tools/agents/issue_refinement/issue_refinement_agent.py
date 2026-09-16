@@ -30,13 +30,13 @@ from datetime import UTC, datetime
 import logging
 import re
 
-from src.agents.issue_refinement.models import (
+from src.core.llm_wrapper import LLMWrapper
+from tools.agents.issue_refinement.models import (
     DoRFinding,
     DoRSeverity,
     IssueMetadata,
     IssueRefinementResult,
 )
-from src.core.llm_wrapper import LLMWrapper
 
 logger = logging.getLogger(__name__)
 

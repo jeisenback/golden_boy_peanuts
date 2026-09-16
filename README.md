@@ -48,8 +48,15 @@ src/
     feature_generation/ # MarketState + events → FeatureSet (vol gaps, signals, etc.)
     strategy_evaluation/ # FeatureSet → ranked StrategyCandidate list
 
+tools/
+  agents/
+    issue_refinement/   # DoR checker for GitHub issues (dev workflow, not pipeline)
+    pr_review/          # Automated PR review agent (dev workflow, not pipeline)
+    doc_generation/     # Documentation generator with Mermaid diagrams (dev workflow)
+
 tests/
   agents/<name>/        # Unit tests (xfail stubs) and integration tests per agent
+  tools/agents/<name>/  # Tests for dev-workflow agents
   conftest.py           # Shared pytest fixtures for all four boundary models
 
 .env.example            # All required environment variables

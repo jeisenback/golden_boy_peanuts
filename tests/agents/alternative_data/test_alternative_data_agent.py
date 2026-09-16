@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 from urllib.parse import urlparse
 
+from pydantic import ValidationError
 import pytest
 import requests
 
@@ -28,7 +29,12 @@ from src.agents.alternative_data.alternative_data_agent import (
     _parse_form4_xml,
     fetch_edgar_insider_trades,
 )
-from src.agents.alternative_data.models import InsiderTrade
+from src.agents.alternative_data.models import (
+    EftsSearchResponse,
+    FilingIndexResponse,
+    InsiderTrade,
+    RedditSearchResponse,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -218,6 +224,117 @@ class TestEftsSearch:
         with patch("requests.get", return_value=_error_resp(requests.HTTPError)):
             with pytest.raises(requests.HTTPError):
                 _efts_search("XOM", "2024-01-01")
+
+
+# ---------------------------------------------------------------------------
+# Tests: Pydantic boundary models — malformed API responses (issue #183)
+# ---------------------------------------------------------------------------
+
+
+class TestEftsBoundaryModelValidation:
+    """Malformed EFTS responses must raise pydantic.ValidationError (#183)."""
+
+    def test_malformed_efts_missing_source_raises(self) -> None:
+        """EFTS hit without _source object raises ValidationError."""
+        bad_payload = {"hits": {"hits": [{"_id": "0001610717-24-000004"}]}}
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate(bad_payload)
+
+    def test_malformed_efts_wrong_type_raises(self) -> None:
+        """EFTS hits as a string (not an object) raises ValidationError."""
+        bad_payload = {"hits": "not-an-object"}
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate(bad_payload)
+
+    def test_efts_valid_response_round_trips(self) -> None:
+        """Valid EFTS response parses correctly through model."""
+        payload = _make_efts_response("XOM")
+        parsed = EftsSearchResponse.model_validate(payload)
+        assert len(parsed.hits.hits) == 1
+        assert parsed.hits.hits[0].id == "0001610717-24-000004"
+        assert parsed.hits.hits[0].source.entity_id == "0000034088"
+
+    def test_missing_top_level_hits_raises(self) -> None:
+        """EFTS response missing 'hits' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate({"total": 0})
+
+    def test_malformed_efts_propagates_from_efts_search(self) -> None:
+        """_efts_search raises ValidationError on malformed EFTS JSON."""
+        bad_payload = {"hits": {"hits": [{"_id": "123"}]}}
+        with patch("requests.get", return_value=_mock_resp(bad_payload)):
+            with pytest.raises(ValidationError):
+                _efts_search("XOM", "2024-01-01")
+
+    def test_validation_error_propagates_through_fetch_edgar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ValidationError from _efts_search is NOT swallowed by fetch_edgar_insider_trades."""
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+        bad_payload = {"hits": {"hits": [{"_id": "123"}]}}
+        with patch("requests.get", return_value=_mock_resp(bad_payload)):
+            with pytest.raises(ValidationError):
+                fetch_edgar_insider_trades(["XOM"])
+
+
+class TestFilingIndexBoundaryModelValidation:
+    """Malformed filing index responses must raise pydantic.ValidationError (#183)."""
+
+    def test_malformed_index_directory_wrong_type_raises(self) -> None:
+        """Filing index with directory as a list (not an object) raises ValidationError."""
+        bad_payload = {"directory": ["not", "an", "object"]}
+        with pytest.raises(ValidationError):
+            FilingIndexResponse.model_validate(bad_payload)
+
+    def test_missing_top_level_directory_raises(self) -> None:
+        """Filing index missing 'directory' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FilingIndexResponse.model_validate({"name": "index.json"})
+
+    def test_valid_index_round_trips(self) -> None:
+        """Valid filing index parses correctly through model."""
+        parsed = FilingIndexResponse.model_validate(_FILING_INDEX)
+        assert len(parsed.directory.item) == 2
+        assert parsed.directory.item[0].name == "wf-form4_20240117.xml"
+
+
+class TestRedditBoundaryModelValidation:
+    """Malformed Reddit responses must raise pydantic.ValidationError (#183)."""
+
+    def test_malformed_reddit_missing_title_raises(self) -> None:
+        """Reddit post without required 'title' field raises ValidationError."""
+        bad_payload = {"data": {"children": [{"data": {"selftext": "no title here"}}]}}
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate(bad_payload)
+
+    def test_malformed_reddit_wrong_structure_raises(self) -> None:
+        """Reddit response with data as a string raises ValidationError."""
+        bad_payload = {"data": "not-an-object"}
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate(bad_payload)
+
+    def test_reddit_valid_response_round_trips(self) -> None:
+        """Valid Reddit response parses correctly through model."""
+        payload = _make_reddit_response([_make_post("XOM rally", "big move", 42)])
+        parsed = RedditSearchResponse.model_validate(payload)
+        assert len(parsed.data.children) == 1
+        assert parsed.data.children[0].data.title == "XOM rally"
+        assert parsed.data.children[0].data.selftext == "big move"
+        assert parsed.data.children[0].data.score == 42
+
+    def test_missing_top_level_data_raises(self) -> None:
+        """Reddit response missing 'data' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate({"kind": "Listing"})
+
+    def test_malformed_reddit_propagates_from_reddit_search(self) -> None:
+        """_reddit_search raises ValidationError on malformed Reddit JSON."""
+        from src.agents.alternative_data.alternative_data_agent import _reddit_search
+
+        bad_payload = {"data": {"children": [{"data": {}}]}}
+        with patch("requests.get", return_value=_mock_resp(bad_payload)):
+            with pytest.raises(ValidationError):
+                _reddit_search("XOM")
 
 
 # ---------------------------------------------------------------------------

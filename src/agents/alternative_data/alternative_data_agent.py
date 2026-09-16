@@ -48,10 +48,13 @@ from pydantic import ValidationError
 import requests
 
 from src.agents.alternative_data.models import (
+    EftsSearchResponse,
     EventType,
+    FilingIndexResponse,
     InsiderTrade,
     MarineTrafficVessel,
     NarrativeSignal,
+    RedditSearchResponse,
     Sentiment,
     ShippingEvent,
 )
@@ -121,6 +124,8 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
             hits = _efts_search(ticker, start_dt)
         except requests.exceptions.RequestException:
             raise  # let tenacity retry
+        except ValidationError:
+            raise  # malformed API response — let tenacity retry
         except (ValueError, KeyError):
             logger.warning("fetch_edgar_insider_trades: EFTS search error for ticker=%s", ticker)
             continue
@@ -142,6 +147,8 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
                 xml_text = _fetch_form4_xml(raw_cik, accession_no)
             except requests.exceptions.RequestException:
                 raise  # let tenacity retry
+            except ValidationError:
+                raise  # malformed API response — let tenacity retry
             except (ValueError, KeyError):
                 logger.warning(
                     "fetch_edgar_insider_trades: failed to fetch XML for " "ticker=%s accession=%s",
@@ -185,6 +192,7 @@ def _efts_search(ticker: str, start_dt: str) -> list[dict[str, Any]]:
 
     Raises:
         requests.exceptions.RequestException: On HTTP or network failure.
+        pydantic.ValidationError: On malformed EFTS response shape.
     """
     resp = requests.get(
         _EFTS_SEARCH_URL,
@@ -198,9 +206,12 @@ def _efts_search(ticker: str, start_dt: str) -> list[dict[str, Any]]:
         timeout=30,
     )
     resp.raise_for_status()
-    data: dict[str, Any] = resp.json()
-    hits: list[dict[str, Any]] = data.get("hits", {}).get("hits", [])
-    return hits[:_MAX_HITS_PER_INSTRUMENT]
+    parsed = EftsSearchResponse.model_validate(resp.json())
+    hits: list[dict[str, Any]] = [
+        {"_id": h.id, "_source": {"entity_id": h.source.entity_id}}
+        for h in parsed.hits.hits[:_MAX_HITS_PER_INSTRUMENT]
+    ]
+    return hits
 
 
 def _fetch_form4_xml(cik: str, accession_no: str) -> str | None:
@@ -226,11 +237,10 @@ def _fetch_form4_xml(cik: str, accession_no: str) -> str | None:
 
     index_resp = requests.get(index_url, headers={"User-Agent": _USER_AGENT}, timeout=30)
     index_resp.raise_for_status()
-    index_data: dict[str, Any] = index_resp.json()
+    parsed_index = FilingIndexResponse.model_validate(index_resp.json())
 
-    items: list[dict[str, Any]] = index_data.get("directory", {}).get("item", [])
     xml_name: str | None = next(
-        (item["name"] for item in items if item.get("name", "").endswith(".xml")),
+        (item.name for item in parsed_index.directory.item if item.name.endswith(".xml")),
         None,
     )
     if xml_name is None:
@@ -478,6 +488,7 @@ def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
 
     Raises:
         requests.exceptions.RequestException: On non-429 HTTP or network failure.
+        pydantic.ValidationError: On malformed Reddit response shape.
     """
     resp = requests.get(
         _REDDIT_SEARCH_URL.format(subreddits=_REDDIT_SUBREDDITS),
@@ -497,9 +508,11 @@ def _reddit_search(instrument: str) -> list[dict[str, Any]] | None:
         return None
 
     resp.raise_for_status()
-    data: dict[str, Any] = resp.json()
-    children: list[dict[str, Any]] = data.get("data", {}).get("children", [])
-    return [child.get("data", {}) for child in children]
+    parsed = RedditSearchResponse.model_validate(resp.json())
+    return [
+        {"title": child.data.title, "selftext": child.data.selftext, "score": child.data.score}
+        for child in parsed.data.children
+    ]
 
 
 def _classify_sentiment(texts: list[str]) -> Sentiment:

@@ -3,13 +3,17 @@ Pydantic models for the Alternative Data Agent (Phase 3).
 
 All external feed data must be validated through these models before
 any downstream processing (ESOD Section 6).
+
+Includes boundary models for raw API responses (EDGAR EFTS, Reddit
+search, filing index) so that malformed external data raises
+pydantic.ValidationError rather than silently returning defaults.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from src.core.compat import StrEnum
 
@@ -66,6 +70,87 @@ class NarrativeSignal(BaseModel):
     window_start: datetime
     window_end: datetime
     source: str = "reddit"
+
+
+# ---------------------------------------------------------------------------
+# EDGAR EFTS API boundary models (issue #183)
+# ---------------------------------------------------------------------------
+
+
+class EftsSource(BaseModel):
+    """_source object inside an EFTS hit."""
+
+    entity_id: str
+
+
+class EftsHit(BaseModel):
+    """Single hit from EFTS search-index response."""
+
+    id: str = Field(alias="_id")
+    source: EftsSource = Field(alias="_source")
+
+    model_config = {"populate_by_name": True}
+
+
+class EftsHitsContainer(BaseModel):
+    """Wrapper for the hits.hits array in EFTS response."""
+
+    hits: list[EftsHit] = Field(default_factory=list)
+
+
+class EftsSearchResponse(BaseModel):
+    """Top-level EFTS search-index JSON response."""
+
+    hits: EftsHitsContainer
+
+
+class FilingIndexItem(BaseModel):
+    """Single item in an EDGAR filing index directory."""
+
+    name: str
+
+
+class FilingIndexDirectory(BaseModel):
+    """directory object in an EDGAR filing index response."""
+
+    item: list[FilingIndexItem] = Field(default_factory=list)
+
+
+class FilingIndexResponse(BaseModel):
+    """Top-level EDGAR filing index JSON response."""
+
+    directory: FilingIndexDirectory
+
+
+# ---------------------------------------------------------------------------
+# Reddit API boundary models (issue #183)
+# ---------------------------------------------------------------------------
+
+
+class RedditPost(BaseModel):
+    """Data payload of a single Reddit search result child."""
+
+    title: str
+    selftext: str = ""
+    score: int = 0
+
+
+class RedditChild(BaseModel):
+    """Single child entry in Reddit search response."""
+
+    data: RedditPost
+
+
+class RedditData(BaseModel):
+    """data envelope of a Reddit search response."""
+
+    children: list[RedditChild] = Field(default_factory=list)
+
+
+class RedditSearchResponse(BaseModel):
+    """Top-level Reddit search JSON response."""
+
+    data: RedditData
 
 
 class EventType(StrEnum):

@@ -37,8 +37,8 @@ from pathlib import Path
 import re
 import sys
 
-from src.agents.doc_generation.doc_generation_agent import run_doc_generation
-from src.agents.doc_generation.models import DocRequest, DocResult
+from tools.agents.doc_generation.doc_generation_agent import run_doc_generation
+from tools.agents.doc_generation.models import DocRequest, DocResult
 
 logging.basicConfig(
     level=logging.INFO,
