@@ -16,8 +16,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.alternative_data.models import AlternativeDataState, InsiderTrade
 from src.agents.feature_generation.feature_generation_agent import (
     compute_futures_curve_steepness,
+    compute_insider_conviction_score,
     compute_sector_dispersion,
     compute_volatility_gap,
     run_feature_generation,
@@ -532,3 +534,90 @@ class TestRunFeatureGeneration:
         ):
             result = run_feature_generation(market_state, [])
         assert result.snapshot_time == snap
+
+
+# ---------------------------------------------------------------------------
+# TestComputeInsiderConvictionScore
+# ---------------------------------------------------------------------------
+
+
+def _make_insider_trade(
+    trade_type: str,
+    value_usd: float | None,
+    instrument: str = "XOM",
+) -> InsiderTrade:
+    return InsiderTrade(
+        instrument=instrument,
+        trade_date=datetime.now(tz=UTC),
+        trade_type=trade_type,
+        shares=1000,
+        value_usd=value_usd,
+        officer_name="Jane Smith",
+        source="edgar",
+    )
+
+
+def _make_alternative_data_state(trades: list[InsiderTrade]) -> AlternativeDataState:
+    return AlternativeDataState(snapshot_time=datetime.now(tz=UTC), insider_trades=trades)
+
+
+class TestComputeInsiderConvictionScore:
+    """Tests for compute_insider_conviction_score() — buy/sell weighted conviction."""
+
+    def test_all_buy_trades_returns_one(self) -> None:
+        """No sell trades → weighted_sell=0 → score is exactly 1.0."""
+        state = _make_alternative_data_state([_make_insider_trade("buy", 100_000.0)])
+        assert compute_insider_conviction_score(state) == pytest.approx(1.0)
+
+    def test_all_sell_trades_returns_zero(self) -> None:
+        """No buy trades → weighted_buy=0 → score is exactly 0.0."""
+        state = _make_alternative_data_state([_make_insider_trade("sell", 100_000.0)])
+        assert compute_insider_conviction_score(state) == pytest.approx(0.0)
+
+    def test_mixed_trades_matches_weighted_formula(self) -> None:
+        """score == weighted_buy / (weighted_buy + weighted_sell) for a known input."""
+        state = _make_alternative_data_state(
+            [_make_insider_trade("buy", 1000.0), _make_insider_trade("sell", 1000.0)]
+        )
+        # weighted_buy = 1000 * 1.0 = 1000; weighted_sell = 1000 * 0.5 = 500
+        expected = 1000.0 / (1000.0 + 500.0)
+        assert compute_insider_conviction_score(state) == pytest.approx(expected)
+
+    def test_empty_trades_returns_none_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        state = _make_alternative_data_state([])
+        with caplog.at_level(logging.WARNING):
+            result = compute_insider_conviction_score(state)
+        assert result is None
+        assert any("no insider trades" in r.message.lower() for r in caplog.records)
+
+    def test_cap_enforced_at_one(self) -> None:
+        """Multiple large buy trades with zero sells never exceed the 1.0 cap."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", 5_000_000.0),
+                _make_insider_trade("buy", 3_000_000.0),
+                _make_insider_trade("buy", 1_000_000.0),
+            ]
+        )
+        assert compute_insider_conviction_score(state) == pytest.approx(1.0)
+
+    def test_grant_and_exercise_trades_excluded(self) -> None:
+        """grant/exercise trade types don't affect the buy/sell ratio."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", 1000.0),
+                _make_insider_trade("grant", 500_000.0),
+                _make_insider_trade("exercise", 500_000.0),
+            ]
+        )
+        assert compute_insider_conviction_score(state) == pytest.approx(1.0)
+
+    def test_trades_with_no_value_usd_are_skipped(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Buy/sell trades with value_usd=None contribute nothing; all-None returns None."""
+        state = _make_alternative_data_state(
+            [_make_insider_trade("buy", None), _make_insider_trade("sell", None)]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_insider_conviction_score(state)
+        assert result is None
+        assert any("no buy/sell trades" in r.message.lower() for r in caplog.records)
