@@ -35,6 +35,12 @@ Stocktwits API notes:
   - Message sentiment label "Bullish" → positive, "Bearish" → negative, absent → neutral.
   - 429 responses logged as WARNING and return [] (not retried).
   - Symbols with no stream data (404 or empty messages) logged as WARNING, return [].
+
+MarineTraffic API notes:
+  - Requires MARINETRAFFIC_API_KEY env var; absent → WARNING + return [].
+  - Uses getVesselsInArea v:8 endpoint with lat/lon bounding boxes for each chokepoint.
+  - Chokepoints: Strait of Hormuz, Suez Canal, Bosphorus (see _CHOKEPOINTS constant).
+  - MMSI used as vessel_id; speed < threshold → "anchored", otherwise "transit".
 """
 
 from __future__ import annotations
@@ -50,12 +56,15 @@ import requests
 
 from src.agents.alternative_data.models import (
     EftsSearchResponse,
+    EventType,
     FilingIndexResponse,
     InsiderTrade,
+    MarineTrafficVessel,
     NarrativeSignal,
     QuiverInsiderRow,
     RedditSearchResponse,
     Sentiment,
+    ShippingEvent,
 )
 from src.core.retry import with_retry
 
@@ -846,3 +855,206 @@ def _stocktwits_stream(instrument: str) -> list[dict[str, Any]] | None:
         logger.warning("fetch_stocktwits_sentiment: empty stream for instrument=%s", instrument)
 
     return messages
+
+
+# ===========================================================================
+# fetch_tanker_flows — issue #153
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_MARINETRAFFIC_API_URL = (
+    "https://services.marinetraffic.com/api/getVesselsInArea/v:8"
+    "/{api_key}"
+    "/MINLAT:{minlat}/MAXLAT:{maxlat}/MINLON:{minlon}/MAXLON:{maxlon}"
+    "/TIMESPAN:{timespan}/msgtype:json"
+)
+
+# Request timeout in seconds for MarineTraffic API calls
+_MARINETRAFFIC_TIMEOUT = 30
+
+# How many minutes back to scan for vessel positions
+_MARINETRAFFIC_TIMESPAN_MINUTES = 60
+
+# Vessels with speed (knots) at or below this threshold are classified "anchored"
+_ANCHORED_SPEED_THRESHOLD = 0.5
+
+# Named chokepoint bounding boxes — (minlat, maxlat, minlon, maxlon)
+# Each entry is: (name, minlat, maxlat, minlon, maxlon)
+_CHOKEPOINTS: list[tuple[str, float, float, float, float]] = [
+    ("strait_of_hormuz", 25.5, 27.0, 55.5, 57.5),
+    ("suez_canal", 29.5, 31.5, 32.0, 33.5),
+    ("bosphorus", 41.0, 41.5, 28.5, 29.5),
+]
+
+
+# ---------------------------------------------------------------------------
+# Public fetch function
+# ---------------------------------------------------------------------------
+
+
+@with_retry()
+def fetch_tanker_flows() -> list[ShippingEvent]:
+    """
+    Fetch vessel positions at key energy supply chokepoints.
+
+    Queries the MarineTraffic getVesselsInArea API for each chokepoint
+    bounding box and classifies vessels as "transit" or "anchored" based
+    on reported speed. Returns [] and logs a WARNING when
+    MARINETRAFFIC_API_KEY is absent.
+
+    Args:
+        None — scans all three configured chokepoints unconditionally.
+
+    Returns:
+        List of ShippingEvent records across all chokepoints.
+        Returns [] if MARINETRAFFIC_API_KEY env var is not set.
+
+    Raises:
+        requests.exceptions.RequestException: Propagated on network failure
+            so tenacity can retry the full call.
+    """
+    api_key = os.environ.get("MARINETRAFFIC_API_KEY", "")
+    if not api_key:
+        logger.warning(
+            "fetch_tanker_flows: MARINETRAFFIC_API_KEY not set — skipping tanker flow fetch"
+        )
+        return []
+
+    fetched_at = datetime.now(tz=UTC)
+    all_events: list[ShippingEvent] = []
+
+    for name, minlat, maxlat, minlon, maxlon in _CHOKEPOINTS:
+        try:
+            vessels = _fetch_vessels_in_area(api_key, minlat, maxlat, minlon, maxlon)
+        except requests.exceptions.RequestException:
+            raise  # let tenacity retry
+        except (ValueError, KeyError, TypeError) as exc:
+            logger.warning(
+                "fetch_tanker_flows: failed to fetch vessels for chokepoint=%s: %s", name, exc
+            )
+            continue
+
+        for vessel in vessels:
+            try:
+                event = _vessel_to_shipping_event(vessel, fetched_at)
+            except (ValueError, KeyError, TypeError) as exc:
+                logger.warning(
+                    "fetch_tanker_flows: skipping malformed vessel record " "at chokepoint=%s: %s",
+                    name,
+                    exc,
+                )
+                continue
+            all_events.append(event)
+
+    return all_events
+
+
+# ---------------------------------------------------------------------------
+# Private helpers
+# ---------------------------------------------------------------------------
+
+
+def _redact_api_key(message: str, api_key: str) -> str:
+    """Replace any occurrence of the raw API key in an error message with '***'."""
+    return message.replace(api_key, "***") if api_key else message
+
+
+def _fetch_vessels_in_area(
+    api_key: str,
+    minlat: float,
+    maxlat: float,
+    minlon: float,
+    maxlon: float,
+) -> list[MarineTrafficVessel]:
+    """
+    Call MarineTraffic getVesselsInArea for a single bounding box.
+
+    Args:
+        api_key: MarineTraffic API key.
+        minlat: Southern latitude boundary.
+        maxlat: Northern latitude boundary.
+        minlon: Western longitude boundary.
+        maxlon: Eastern longitude boundary.
+
+    Returns:
+        List of vessel records validated against MarineTrafficVessel.
+        Individual malformed rows are logged as WARNING and skipped.
+
+    Raises:
+        requests.exceptions.RequestException: On HTTP or network failure.
+            The API key is redacted from the exception message before it
+            propagates, since MarineTraffic embeds it in the request URL
+            and this exception is otherwise logged verbatim by tenacity's
+            before_sleep hook.
+    """
+    url = _MARINETRAFFIC_API_URL.format(
+        api_key=api_key,
+        minlat=minlat,
+        maxlat=maxlat,
+        minlon=minlon,
+        maxlon=maxlon,
+        timespan=_MARINETRAFFIC_TIMESPAN_MINUTES,
+    )
+    try:
+        resp = requests.get(url, timeout=_MARINETRAFFIC_TIMEOUT)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise type(exc)(_redact_api_key(str(exc), api_key)) from exc
+
+    data: list[dict[str, Any]] | dict[str, Any] = resp.json()
+    # MarineTraffic v8 returns a list directly or {"DATA": [...]}
+    raw_vessels: list[dict[str, Any]] = (
+        data if isinstance(data, list) else list(data.get("DATA", []))
+    )
+
+    vessels: list[MarineTrafficVessel] = []
+    for raw in raw_vessels:
+        try:
+            vessels.append(MarineTrafficVessel.model_validate(raw))
+        except ValidationError as exc:
+            logger.warning("fetch_tanker_flows: skipping malformed vessel record: %s", exc)
+            continue
+    return vessels
+
+
+def _vessel_to_shipping_event(
+    vessel: MarineTrafficVessel,
+    fetched_at: datetime,
+) -> ShippingEvent:
+    """
+    Convert a validated MarineTraffic vessel record into a ShippingEvent.
+
+    Vessels with SPEED <= _ANCHORED_SPEED_THRESHOLD knots are classified
+    as "anchored"; all others as "transit".
+
+    Args:
+        vessel:     Validated MarineTrafficVessel from _fetch_vessels_in_area.
+        fetched_at: UTC timestamp when the batch was fetched.
+
+    Returns:
+        ShippingEvent with validated fields.
+    """
+    event_type = (
+        EventType.ANCHORED if vessel.SPEED <= _ANCHORED_SPEED_THRESHOLD else EventType.TRANSIT
+    )
+
+    # TIMESTAMP field (UTC epoch seconds) is optional — fall back to fetched_at
+    if vessel.TIMESTAMP is not None:
+        try:
+            timestamp = datetime.fromtimestamp(vessel.TIMESTAMP, tz=UTC)
+        except (ValueError, OSError):
+            timestamp = fetched_at
+    else:
+        timestamp = fetched_at
+
+    return ShippingEvent(
+        vessel_id=vessel.MMSI,
+        event_type=event_type,
+        latitude=vessel.LAT,
+        longitude=vessel.LON,
+        timestamp=timestamp,
+        source="marinetraffic",
+    )

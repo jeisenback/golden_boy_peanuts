@@ -166,3 +166,46 @@ class RedditSearchResponse(BaseModel):
     """Top-level Reddit search JSON response."""
 
     data: RedditData
+
+
+class EventType(StrEnum):
+    """Vessel event types for shipping_events table (matches DB event_type values)."""
+
+    TRANSIT = "transit"
+    ANCHORED = "anchored"
+    DELAYED = "delayed"
+
+
+class ShippingEvent(BaseModel):
+    """
+    Validated vessel movement event near an energy supply chokepoint.
+
+    Maps to the shipping_events table schema (db/schema.sql).
+    instrument is nullable — a vessel in a chokepoint zone may affect
+    multiple instruments or none specifically.
+    """
+
+    vessel_id: str
+    event_type: EventType
+    latitude: float
+    longitude: float
+    timestamp: datetime
+    source: str = "marinetraffic"
+    instrument: str | None = None
+
+
+class MarineTrafficVessel(BaseModel):
+    """
+    Raw vessel record from MarineTraffic ``getVesselsInArea`` API.
+
+    Validates the response shape at the module boundary before any field
+    access in ``_vessel_to_shipping_event`` (ESOD §6). The API returns
+    LAT/LON/SPEED/TIMESTAMP as strings; Pydantic coerces them to numeric
+    types here rather than at each call site.
+    """
+
+    MMSI: str
+    LAT: float
+    LON: float
+    SPEED: float = 0.0
+    TIMESTAMP: int | None = None
