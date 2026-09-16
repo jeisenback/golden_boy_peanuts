@@ -191,7 +191,8 @@ def write_strategy_outcome(outcome: StrategyOutcome, engine: Engine) -> int:
 
 def fetch_pending_outcomes(engine: Engine) -> list[dict[str, object]]:
     """
-    Return strategy candidates past their expiration date with no recorded outcome.
+    Return strategy candidates past their expiration date with no recorded outcome,
+    or with a provisional outcome (price_at_expiration still NULL).
 
     Each returned dict contains: id, instrument, structure, expiration,
     edge_score, generated_at — enough for the reconciliation job to fetch
@@ -202,19 +203,29 @@ def fetch_pending_outcomes(engine: Engine) -> list[dict[str, object]]:
 
     Returns:
         List of dicts, one per pending candidate.
+
+    Raises:
+        sqlalchemy.exc.SQLAlchemyError: Propagates on connection failure
+            after logging the exception.
     """
+    # Column concatenation (sc.expiration || ' days') is safe — the value
+    # comes from our own strategy_candidates table, not from user input.
     sql = text("""
         SELECT sc.id, sc.instrument, sc.structure, sc.expiration,
                sc.edge_score, sc.generated_at
         FROM strategy_candidates sc
         LEFT JOIN strategy_outcomes so ON so.candidate_id = sc.id
-        WHERE so.id IS NULL
+        WHERE (so.id IS NULL OR so.price_at_expiration IS NULL)
           AND sc.generated_at + (sc.expiration || ' days')::INTERVAL < now()
         ORDER BY sc.generated_at ASC
         """)
 
-    with engine.connect() as conn:
-        rows = conn.execute(sql).fetchall()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+    except Exception:
+        logger.exception("fetch_pending_outcomes failed")
+        raise
 
     return [
         {

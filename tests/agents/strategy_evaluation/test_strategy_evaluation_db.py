@@ -14,6 +14,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 
 from src.agents.strategy_evaluation.db import (
     fetch_pending_outcomes,
@@ -54,7 +55,7 @@ _NOW = datetime.now(tz=UTC).replace(microsecond=0)
 
 
 @pytest.fixture()
-def sqlite_engine():
+def sqlite_engine() -> Engine:
     """In-memory SQLite engine with both tables created."""
     from sqlalchemy import event as sa_event
 

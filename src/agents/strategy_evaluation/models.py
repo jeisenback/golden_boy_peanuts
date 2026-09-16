@@ -41,12 +41,16 @@ class StrategyOutcome(BaseModel):
     job after the candidate's expiration date passes.
     """
 
-    candidate_id: int = Field(..., description="FK to strategy_candidates.id")
-    instrument: str
-    structure: str
+    candidate_id: int = Field(..., gt=0, description="FK to strategy_candidates.id")
+    instrument: str = Field(..., min_length=1)
+    structure: str = Field(
+        ...,
+        min_length=1,
+        description="OptionStructure string value, e.g. 'long_straddle'",
+    )
     generated_at: datetime
     expiration_date: datetime
-    price_at_generation: float
+    price_at_generation: float = Field(..., gt=0.0)
     price_at_expiration: float | None = None
     pct_move: float | None = None
     recorded_at: datetime = Field(..., description="UTC timestamp when outcome was recorded")
