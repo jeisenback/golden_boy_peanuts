@@ -1089,3 +1089,181 @@ class TestVesselToShippingEvent:
         event = _vessel_to_shipping_event(vessel, fetched_at)
 
         assert event.timestamp == fetched_at
+
+
+# ===========================================================================
+# run_alternative_data_ingestion tests — issue #154
+# ===========================================================================
+
+from src.agents.alternative_data.alternative_data_agent import (  # noqa: E402
+    run_alternative_data_ingestion,
+)
+from src.agents.alternative_data.models import AlternativeDataState, Sentiment  # noqa: E402
+
+
+class TestRunAlternativeDataIngestion:
+    """Tests for run_alternative_data_ingestion() orchestration function."""
+
+    _PATCH_EDGAR = "src.agents.alternative_data.alternative_data_agent.fetch_edgar_insider_trades"
+    _PATCH_QUIVER = "src.agents.alternative_data.alternative_data_agent.fetch_quiver_enrichment"
+    _PATCH_REDDIT = "src.agents.alternative_data.alternative_data_agent.fetch_reddit_sentiment"
+    _PATCH_STOCKTWITS = (
+        "src.agents.alternative_data.alternative_data_agent.fetch_stocktwits_sentiment"
+    )
+    _PATCH_TANKER = "src.agents.alternative_data.alternative_data_agent.fetch_tanker_flows"
+    _PATCH_ENGINE = "src.agents.alternative_data.alternative_data_agent.get_engine"
+    _PATCH_WRITE_INSIDER = "src.agents.alternative_data.alternative_data_agent.write_insider_trades"
+    _PATCH_WRITE_SHIPPING = (
+        "src.agents.alternative_data.alternative_data_agent.write_shipping_events"
+    )
+    _PATCH_WRITE_NARRATIVE = (
+        "src.agents.alternative_data.alternative_data_agent.write_narrative_signal"
+    )
+
+    def _make_insider_trade(self, source: str = "edgar") -> InsiderTrade:
+        return InsiderTrade(
+            instrument="XOM",
+            trade_date=datetime.now(tz=UTC),
+            trade_type="buy",
+            shares=1000,
+            value_usd=110000.0,
+            officer_name="Jane Smith",
+            source=source,
+        )
+
+    def _make_narrative_signal(self, platform: str = "reddit") -> NarrativeSignal:
+        window_end = datetime.now(tz=UTC)
+        return NarrativeSignal(
+            instrument="USO",
+            platform=platform,
+            score=5,
+            mention_count=3,
+            sentiment=Sentiment.POSITIVE,
+            window_start=window_end,
+            window_end=window_end,
+            source=platform,
+        )
+
+    def _make_shipping_event(self) -> ShippingEvent:
+        return ShippingEvent(
+            vessel_id="123456789",
+            event_type=EventType.TRANSIT,
+            latitude=26.5,
+            longitude=56.5,
+            timestamp=datetime.now(tz=UTC),
+            source="marinetraffic",
+        )
+
+    def test_all_feeds_success_returns_full_state(self) -> None:
+        """Returns AlternativeDataState with all records when every feed succeeds."""
+        edgar_trades = [self._make_insider_trade("edgar")]
+        quiver_trades = [self._make_insider_trade("quiver")]
+        reddit_signals = [self._make_narrative_signal("reddit")]
+        stocktwits_signals = [self._make_narrative_signal("stocktwits")]
+        shipping_events = [self._make_shipping_event()]
+
+        with (
+            patch(self._PATCH_EDGAR, return_value=edgar_trades),
+            patch(self._PATCH_QUIVER, return_value=quiver_trades),
+            patch(self._PATCH_REDDIT, return_value=reddit_signals),
+            patch(self._PATCH_STOCKTWITS, return_value=stocktwits_signals),
+            patch(self._PATCH_TANKER, return_value=shipping_events),
+            patch(self._PATCH_ENGINE, return_value=MagicMock()),
+            patch(self._PATCH_WRITE_INSIDER, return_value=2),
+            patch(self._PATCH_WRITE_SHIPPING, return_value=1),
+            patch(self._PATCH_WRITE_NARRATIVE, return_value=1),
+        ):
+            result = run_alternative_data_ingestion()
+
+        assert isinstance(result, AlternativeDataState)
+        assert len(result.insider_trades) == 2
+        assert len(result.narrative_signals) == 2
+        assert len(result.shipping_events) == 1
+        assert result.alternative_data_errors == []
+
+    def test_one_feed_failure_appends_error_and_continues(self) -> None:
+        """One failing feed appends to alternative_data_errors; others still populate state."""
+        quiver_trades = [self._make_insider_trade("quiver")]
+        reddit_signals = [self._make_narrative_signal("reddit")]
+        shipping_events = [self._make_shipping_event()]
+
+        with (
+            patch(self._PATCH_EDGAR, side_effect=RuntimeError("EFTS unreachable")),
+            patch(self._PATCH_QUIVER, return_value=quiver_trades),
+            patch(self._PATCH_REDDIT, return_value=reddit_signals),
+            patch(self._PATCH_STOCKTWITS, return_value=[]),
+            patch(self._PATCH_TANKER, return_value=shipping_events),
+            patch(self._PATCH_ENGINE, return_value=MagicMock()),
+            patch(self._PATCH_WRITE_INSIDER, return_value=1),
+            patch(self._PATCH_WRITE_SHIPPING, return_value=1),
+            patch(self._PATCH_WRITE_NARRATIVE, return_value=1),
+        ):
+            result = run_alternative_data_ingestion()
+
+        assert isinstance(result, AlternativeDataState)
+        assert len(result.insider_trades) == 1  # only Quiver records
+        assert len(result.narrative_signals) == 1
+        assert len(result.shipping_events) == 1
+        assert len(result.alternative_data_errors) == 1
+        assert "fetch_edgar_insider_trades" in result.alternative_data_errors[0]
+
+    def test_all_feeds_failure_returns_empty_state_without_raising(self) -> None:
+        """Total feed failure returns empty-but-valid AlternativeDataState; never raises."""
+        with (
+            patch(self._PATCH_EDGAR, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_QUIVER, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_REDDIT, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_STOCKTWITS, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_TANKER, side_effect=ConnectionError("unreachable")),
+            patch(self._PATCH_ENGINE, side_effect=RuntimeError("DATABASE_URL not set")),
+        ):
+            result = run_alternative_data_ingestion()
+
+        assert isinstance(result, AlternativeDataState)
+        assert result.insider_trades == []
+        assert result.narrative_signals == []
+        assert result.shipping_events == []
+        assert len(result.alternative_data_errors) >= 6  # 5 feeds + get_engine
+
+    def test_db_engine_failure_skips_persistence_but_returns_fetched_data(self) -> None:
+        """DB engine acquisition failure is recorded but fetched records are still returned."""
+        edgar_trades = [self._make_insider_trade("edgar")]
+
+        with (
+            patch(self._PATCH_EDGAR, return_value=edgar_trades),
+            patch(self._PATCH_QUIVER, return_value=[]),
+            patch(self._PATCH_REDDIT, return_value=[]),
+            patch(self._PATCH_STOCKTWITS, return_value=[]),
+            patch(self._PATCH_TANKER, return_value=[]),
+            patch(self._PATCH_ENGINE, side_effect=RuntimeError("DATABASE_URL not set")),
+        ):
+            result = run_alternative_data_ingestion()
+
+        assert isinstance(result, AlternativeDataState)
+        assert len(result.insider_trades) == 1
+        assert any("get_engine" in e for e in result.alternative_data_errors)
+
+    def test_structured_cycle_log_emitted(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A structured JSON log line is emitted at cycle completion."""
+        import json
+        import logging
+
+        with (
+            patch(self._PATCH_EDGAR, return_value=[]),
+            patch(self._PATCH_QUIVER, return_value=[]),
+            patch(self._PATCH_REDDIT, return_value=[]),
+            patch(self._PATCH_STOCKTWITS, return_value=[]),
+            patch(self._PATCH_TANKER, return_value=[]),
+            patch(self._PATCH_ENGINE, return_value=MagicMock()),
+        ):
+            with caplog.at_level(logging.INFO):
+                run_alternative_data_ingestion()
+
+        log_records = [
+            r for r in caplog.records if "alternative_data_ingestion_cycle_complete" in r.message
+        ]
+        assert len(log_records) == 1
+        payload = json.loads(log_records[0].message)
+        assert payload["event"] == "alternative_data_ingestion_cycle_complete"
+        assert payload["error_count"] == 0
+        assert "duration_ms" in payload
