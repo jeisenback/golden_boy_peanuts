@@ -46,6 +46,10 @@ _HIT_THRESHOLD: float = 0.05
 # Quartile label names (Q1 = lowest edge scores, Q4 = highest)
 _QUARTILE_LABELS: list[str] = ["Q1", "Q2", "Q3", "Q4"]
 
+# Fallback quartile step when all scores in a small dataset are identical
+# (hi == lo, so statistics.quantiles' interpolation would divide by zero)
+_DEFAULT_QUARTILE_STEP: float = 0.25
+
 
 # ---------------------------------------------------------------------------
 # BacktestReport model
@@ -142,7 +146,7 @@ def _compute_report(
         boundaries: list[float] = statistics.quantiles(scores, n=4)
     else:
         lo, hi = min(scores), max(scores)
-        step = (hi - lo) / 4 if hi > lo else 0.25
+        step = (hi - lo) / 4 if hi > lo else _DEFAULT_QUARTILE_STEP
         boundaries = [lo + step, lo + 2 * step, lo + 3 * step]
 
     quartile_moves: dict[str, list[float]] = {q: [] for q in _QUARTILE_LABELS}
