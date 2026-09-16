@@ -28,15 +28,15 @@ from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 import pytest
 
-from src.agents.issue_refinement.issue_refinement_agent import (
+from src.core.findings import Finding, FindingSeverity
+from tools.agents.issue_refinement.issue_refinement_agent import (
     _check_ac_count,
     _check_labels,
     _check_milestone,
     _check_not_blocked,
     refine_issue,
 )
-from src.agents.issue_refinement.models import DoRSeverity, IssueMetadata
-from src.core.findings import Finding, FindingSeverity
+from tools.agents.issue_refinement.models import DoRSeverity, IssueMetadata
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -75,7 +75,7 @@ def _make_metadata(**overrides: object) -> IssueMetadata:
 
 def _patched_refine(metadata: IssueMetadata) -> IssueRefinementResult:  # type: ignore[name-defined]  # noqa: F821
     """Run refine_issue with LLMWrapper patched to raise EnvironmentError."""
-    with patch("src.agents.issue_refinement.issue_refinement_agent.LLMWrapper") as mock_cls:
+    with patch("tools.agents.issue_refinement.issue_refinement_agent.LLMWrapper") as mock_cls:
         mock_instance = MagicMock()
         mock_instance.complete.side_effect = OSError("ANTHROPIC_API_KEY not set")
         mock_cls.return_value = mock_instance
@@ -316,13 +316,13 @@ class TestSharedFindingType:
 
     def test_pr_review_uses_same_finding_type(self) -> None:
         """ReviewFinding in pr_review/models is the same class as Finding."""
-        from src.agents.pr_review.models import ReviewFinding
         from src.core.findings import Finding
+        from tools.agents.pr_review.models import ReviewFinding
 
         assert ReviewFinding is Finding
 
     def test_pr_review_severity_is_same_enum(self) -> None:
-        from src.agents.pr_review.models import ReviewSeverity
         from src.core.findings import FindingSeverity
+        from tools.agents.pr_review.models import ReviewSeverity
 
         assert ReviewSeverity is FindingSeverity

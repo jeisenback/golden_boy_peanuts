@@ -24,8 +24,8 @@ from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 import pytest
 
-from src.agents.pr_review.models import PRMetadata, ReviewSeverity
-from src.agents.pr_review.pr_review_agent import (
+from tools.agents.pr_review.models import PRMetadata, ReviewSeverity
+from tools.agents.pr_review.pr_review_agent import (
     _check_branch_name,
     _check_langchain_imports,
     _check_target_branch,
@@ -256,7 +256,7 @@ class TestCheckTypeHints:
 class TestReviewPullRequest:
     def _patched_review(self, metadata: PRMetadata) -> PRReviewResult:  # type: ignore[name-defined]  # noqa: F821
         """Run review with LLMWrapper patched to raise NotImplementedError."""
-        with patch("src.agents.pr_review.pr_review_agent.LLMWrapper") as mock_wrapper_cls:
+        with patch("tools.agents.pr_review.pr_review_agent.LLMWrapper") as mock_wrapper_cls:
             mock_instance = MagicMock()
             mock_instance.complete.side_effect = NotImplementedError("not implemented")
             mock_wrapper_cls.return_value = mock_instance
