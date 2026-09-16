@@ -37,6 +37,7 @@ import logging
 from typing import Any
 from xml.etree import ElementTree as ET
 
+from pydantic import ValidationError
 import requests
 
 from src.agents.alternative_data.models import (
@@ -113,6 +114,8 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
             hits = _efts_search(ticker, start_dt)
         except requests.exceptions.RequestException:
             raise  # let tenacity retry
+        except ValidationError:
+            raise  # malformed API response — let tenacity retry
         except (ValueError, KeyError):
             logger.warning("fetch_edgar_insider_trades: EFTS search error for ticker=%s", ticker)
             continue
@@ -134,6 +137,8 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
                 xml_text = _fetch_form4_xml(raw_cik, accession_no)
             except requests.exceptions.RequestException:
                 raise  # let tenacity retry
+            except ValidationError:
+                raise  # malformed API response — let tenacity retry
             except (ValueError, KeyError):
                 logger.warning(
                     "fetch_edgar_insider_trades: failed to fetch XML for " "ticker=%s accession=%s",

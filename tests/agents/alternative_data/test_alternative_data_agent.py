@@ -254,12 +254,27 @@ class TestEftsBoundaryModelValidation:
         assert parsed.hits.hits[0].id == "0001610717-24-000004"
         assert parsed.hits.hits[0].source.entity_id == "0000034088"
 
+    def test_missing_top_level_hits_raises(self) -> None:
+        """EFTS response missing 'hits' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            EftsSearchResponse.model_validate({"total": 0})
+
     def test_malformed_efts_propagates_from_efts_search(self) -> None:
         """_efts_search raises ValidationError on malformed EFTS JSON."""
         bad_payload = {"hits": {"hits": [{"_id": "123"}]}}
         with patch("requests.get", return_value=_mock_resp(bad_payload)):
             with pytest.raises(ValidationError):
                 _efts_search("XOM", "2024-01-01")
+
+    def test_validation_error_propagates_through_fetch_edgar(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ValidationError from _efts_search is NOT swallowed by fetch_edgar_insider_trades."""
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+        bad_payload = {"hits": {"hits": [{"_id": "123"}]}}
+        with patch("requests.get", return_value=_mock_resp(bad_payload)):
+            with pytest.raises(ValidationError):
+                fetch_edgar_insider_trades(["XOM"])
 
 
 class TestFilingIndexBoundaryModelValidation:
@@ -270,6 +285,11 @@ class TestFilingIndexBoundaryModelValidation:
         bad_payload = {"directory": ["not", "an", "object"]}
         with pytest.raises(ValidationError):
             FilingIndexResponse.model_validate(bad_payload)
+
+    def test_missing_top_level_directory_raises(self) -> None:
+        """Filing index missing 'directory' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            FilingIndexResponse.model_validate({"name": "index.json"})
 
     def test_valid_index_round_trips(self) -> None:
         """Valid filing index parses correctly through model."""
@@ -301,6 +321,11 @@ class TestRedditBoundaryModelValidation:
         assert parsed.data.children[0].data.title == "XOM rally"
         assert parsed.data.children[0].data.selftext == "big move"
         assert parsed.data.children[0].data.score == 42
+
+    def test_missing_top_level_data_raises(self) -> None:
+        """Reddit response missing 'data' key entirely raises ValidationError."""
+        with pytest.raises(ValidationError):
+            RedditSearchResponse.model_validate({"kind": "Listing"})
 
     def test_malformed_reddit_propagates_from_reddit_search(self) -> None:
         """_reddit_search raises ValidationError on malformed Reddit JSON."""

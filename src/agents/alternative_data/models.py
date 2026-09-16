@@ -101,7 +101,7 @@ class EftsHitsContainer(BaseModel):
 class EftsSearchResponse(BaseModel):
     """Top-level EFTS search-index JSON response."""
 
-    hits: EftsHitsContainer = Field(default_factory=EftsHitsContainer)
+    hits: EftsHitsContainer
 
 
 class FilingIndexItem(BaseModel):
@@ -119,7 +119,7 @@ class FilingIndexDirectory(BaseModel):
 class FilingIndexResponse(BaseModel):
     """Top-level EDGAR filing index JSON response."""
 
-    directory: FilingIndexDirectory = Field(default_factory=FilingIndexDirectory)
+    directory: FilingIndexDirectory
 
 
 # ---------------------------------------------------------------------------
@@ -150,4 +150,4 @@ class RedditData(BaseModel):
 class RedditSearchResponse(BaseModel):
     """Top-level Reddit search JSON response."""
 
-    data: RedditData = Field(default_factory=RedditData)
+    data: RedditData
