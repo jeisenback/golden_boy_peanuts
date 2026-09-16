@@ -621,8 +621,13 @@ class TestComputeNarrativeVelocity:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         """Total mentions present but below _MIN_MENTIONS_THRESHOLD → 0.0 + WARNING."""
+        from src.agents.feature_generation.feature_generation_agent import (
+            _MIN_MENTIONS_THRESHOLD,
+        )
+
+        below_threshold = _MIN_MENTIONS_THRESHOLD - 2
         state = _make_alternative_data_state_narrative(
-            [_make_narrative_signal(score=2, mention_count=3)]
+            [_make_narrative_signal(score=below_threshold - 1, mention_count=below_threshold)]
         )
         with caplog.at_level(logging.WARNING):
             result = compute_narrative_velocity(state)
