@@ -24,12 +24,12 @@ from unittest.mock import MagicMock, patch
 from pydantic import ValidationError
 import pytest
 
-from src.agents.doc_generation.doc_generation_agent import (
+from tools.agents.doc_generation.doc_generation_agent import (
     _build_user_guide_prompt,
     generate_user_guide,
     run_doc_generation,
 )
-from src.agents.doc_generation.models import DocArtifact, DocRequest, DocResult, DocType
+from tools.agents.doc_generation.models import DocArtifact, DocRequest, DocResult, DocType
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -38,6 +38,7 @@ from src.agents.doc_generation.models import DocArtifact, DocRequest, DocResult,
 _FAKE_CONTENT = (
     "# User Guide\n\nThis is a generated guide.\n\n" "```mermaid\nflowchart LR\n  A --> B\n```\n"
 )
+_LLM_PATCH = "tools.agents.doc_generation.doc_generation_agent.LLMWrapper"
 _TS = datetime.now(tz=UTC)
 
 
@@ -164,7 +165,7 @@ class TestBuildUserGuidePrompt:
 class TestGenerateUserGuide:
     def _patched_generate(self, request: DocRequest, content: str = _FAKE_CONTENT) -> DocArtifact:
         """Run generate_user_guide with LLMWrapper patched to return fake content."""
-        with patch("src.agents.doc_generation.doc_generation_agent.LLMWrapper") as mock_wrapper_cls:
+        with patch(_LLM_PATCH) as mock_wrapper_cls:
             mock_instance = MagicMock()
             mock_instance.complete.return_value = _make_llm_response(content)
             mock_wrapper_cls.return_value = mock_instance
@@ -197,7 +198,7 @@ class TestGenerateUserGuide:
 
     def test_llm_wrapper_called_once(self) -> None:
         req = _make_request()
-        with patch("src.agents.doc_generation.doc_generation_agent.LLMWrapper") as mock_wrapper_cls:
+        with patch(_LLM_PATCH) as mock_wrapper_cls:
             mock_instance = MagicMock()
             mock_instance.complete.return_value = _make_llm_response()
             mock_wrapper_cls.return_value = mock_instance
@@ -206,7 +207,7 @@ class TestGenerateUserGuide:
 
     def test_not_implemented_error_propagates(self) -> None:
         req = _make_request()
-        with patch("src.agents.doc_generation.doc_generation_agent.LLMWrapper") as mock_wrapper_cls:
+        with patch(_LLM_PATCH) as mock_wrapper_cls:
             mock_instance = MagicMock()
             mock_instance.complete.side_effect = NotImplementedError("not implemented")
             mock_wrapper_cls.return_value = mock_instance
@@ -222,7 +223,7 @@ class TestGenerateUserGuide:
 class TestRunDocGeneration:
     def _patched_run(self, request: DocRequest, content: str = _FAKE_CONTENT) -> DocResult:
         """Run run_doc_generation with LLMWrapper patched to return fake content."""
-        with patch("src.agents.doc_generation.doc_generation_agent.LLMWrapper") as mock_wrapper_cls:
+        with patch(_LLM_PATCH) as mock_wrapper_cls:
             mock_instance = MagicMock()
             mock_instance.complete.return_value = _make_llm_response(content)
             mock_wrapper_cls.return_value = mock_instance
@@ -276,7 +277,7 @@ class TestRunDocGeneration:
         req_dict = req.model_dump()
         req_dict["doc_type"] = "unsupported_type"
 
-        with patch("src.agents.doc_generation.doc_generation_agent.LLMWrapper"):
+        with patch(_LLM_PATCH):
             # Manually bypass the enum to reach the else/raise branch
             with patch.object(req, "doc_type", "unsupported_type"):
                 with pytest.raises(NotImplementedError, match="not yet implemented"):

@@ -31,13 +31,13 @@ from datetime import UTC, datetime
 import logging
 import re
 
-from src.agents.pr_review.models import (
+from src.core.llm_wrapper import LLMWrapper
+from tools.agents.pr_review.models import (
     PRMetadata,
     PRReviewResult,
     ReviewFinding,
     ReviewSeverity,
 )
-from src.core.llm_wrapper import LLMWrapper
 
 logger = logging.getLogger(__name__)
 
