@@ -607,7 +607,11 @@ from src.agents.alternative_data.alternative_data_agent import (  # noqa: E402
     _vessel_to_shipping_event,
     fetch_tanker_flows,
 )
-from src.agents.alternative_data.models import EventType, ShippingEvent  # noqa: E402
+from src.agents.alternative_data.models import (  # noqa: E402
+    EventType,
+    MarineTrafficVessel,
+    ShippingEvent,
+)
 
 _MARINETRAFFIC_URL_PREFIX = "https://services.marinetraffic.com/api/getVesselsInArea"
 
@@ -737,6 +741,23 @@ class TestFetchTankerFlowsMalformedVessel:
         assert events == []
         assert any("malformed" in r.message.lower() for r in caplog.records)
 
+    def test_non_numeric_lat_skips_with_warning(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """MarineTrafficVessel boundary validation rejects unparseable LAT (ESOD-1)."""
+        import logging
+
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "test-key")
+        bad_vessel = {"MMSI": "123456789", "LAT": "not-a-number", "LON": "56.5", "SPEED": "5.0"}
+        resps = [_mt_resp([bad_vessel]), _mt_resp([]), _mt_resp([])]
+
+        with patch("requests.get", side_effect=resps):
+            with caplog.at_level(logging.WARNING):
+                events = fetch_tanker_flows()
+
+        assert events == []
+        assert any("malformed" in r.message.lower() for r in caplog.records)
+
 
 class TestFetchTankerFlowsHttpError:
     def test_http_error_propagates(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -747,12 +768,34 @@ class TestFetchTankerFlowsHttpError:
             with pytest.raises(requests.ConnectionError):
                 fetch_tanker_flows()
 
+    def test_api_key_redacted_from_propagated_exception(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """API key in the request URL must never reach logs via the propagated exception."""
+        monkeypatch.setenv("MARINETRAFFIC_API_KEY", "super-secret-key")
+        monkeypatch.setenv("TENACITY_MAX_RETRIES", "1")
+
+        url_with_key = (
+            "https://services.marinetraffic.com/api/getVesselsInArea/v:8"
+            "/super-secret-key/MINLAT:25.5/MAXLAT:27.0/MINLON:55.5/MAXLON:57.5"
+        )
+        error = requests.exceptions.HTTPError(
+            f"404 Client Error: Not Found for url: {url_with_key}"
+        )
+
+        with patch("requests.get", side_effect=error):
+            with pytest.raises(requests.exceptions.HTTPError) as excinfo:
+                fetch_tanker_flows()
+
+        assert "super-secret-key" not in str(excinfo.value)
+        assert "***" in str(excinfo.value)
+
 
 class TestVesselToShippingEvent:
     def test_timestamp_field_parsed(self) -> None:
         from datetime import UTC, datetime
 
-        vessel = _make_vessel(timestamp=1700000000)
+        vessel = MarineTrafficVessel.model_validate(_make_vessel(timestamp=1700000000))
         fetched_at = datetime.now(tz=UTC)
         event = _vessel_to_shipping_event(vessel, fetched_at)
 
@@ -761,7 +804,7 @@ class TestVesselToShippingEvent:
     def test_missing_timestamp_falls_back_to_fetched_at(self) -> None:
         from datetime import UTC, datetime
 
-        vessel = _make_vessel()  # no timestamp
+        vessel = MarineTrafficVessel.model_validate(_make_vessel())  # no timestamp
         fetched_at = datetime(2024, 1, 15, 12, 0, tzinfo=UTC)
         event = _vessel_to_shipping_event(vessel, fetched_at)
 

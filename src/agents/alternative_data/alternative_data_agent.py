@@ -44,11 +44,13 @@ import os
 from typing import Any
 from xml.etree import ElementTree as ET
 
+from pydantic import ValidationError
 import requests
 
 from src.agents.alternative_data.models import (
     EventType,
     InsiderTrade,
+    MarineTrafficVessel,
     NarrativeSignal,
     Sentiment,
     ShippingEvent,
@@ -778,13 +780,18 @@ def fetch_tanker_flows() -> list[ShippingEvent]:
 # ---------------------------------------------------------------------------
 
 
+def _redact_api_key(message: str, api_key: str) -> str:
+    """Replace any occurrence of the raw API key in an error message with '***'."""
+    return message.replace(api_key, "***") if api_key else message
+
+
 def _fetch_vessels_in_area(
     api_key: str,
     minlat: float,
     maxlat: float,
     minlon: float,
     maxlon: float,
-) -> list[dict[str, Any]]:
+) -> list[MarineTrafficVessel]:
     """
     Call MarineTraffic getVesselsInArea for a single bounding box.
 
@@ -796,10 +803,15 @@ def _fetch_vessels_in_area(
         maxlon: Eastern longitude boundary.
 
     Returns:
-        List of vessel data dicts from the API response.
+        List of vessel records validated against MarineTrafficVessel.
+        Individual malformed rows are logged as WARNING and skipped.
 
     Raises:
         requests.exceptions.RequestException: On HTTP or network failure.
+            The API key is redacted from the exception message before it
+            propagates, since MarineTraffic embeds it in the request URL
+            and this exception is otherwise logged verbatim by tenacity's
+            before_sleep hook.
     """
     url = _MARINETRAFFIC_API_URL.format(
         api_key=api_key,
@@ -809,58 +821,63 @@ def _fetch_vessels_in_area(
         maxlon=maxlon,
         timespan=_MARINETRAFFIC_TIMESPAN_MINUTES,
     )
-    resp = requests.get(url, timeout=_MARINETRAFFIC_TIMEOUT)
-    resp.raise_for_status()
+    try:
+        resp = requests.get(url, timeout=_MARINETRAFFIC_TIMEOUT)
+        resp.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        raise type(exc)(_redact_api_key(str(exc), api_key)) from exc
+
     data: list[dict[str, Any]] | dict[str, Any] = resp.json()
     # MarineTraffic v8 returns a list directly or {"DATA": [...]}
-    if isinstance(data, list):
-        return data
-    return list(data.get("DATA", []))
+    raw_vessels: list[dict[str, Any]] = (
+        data if isinstance(data, list) else list(data.get("DATA", []))
+    )
+
+    vessels: list[MarineTrafficVessel] = []
+    for raw in raw_vessels:
+        try:
+            vessels.append(MarineTrafficVessel.model_validate(raw))
+        except ValidationError as exc:
+            logger.warning("fetch_tanker_flows: skipping malformed vessel record: %s", exc)
+            continue
+    return vessels
 
 
 def _vessel_to_shipping_event(
-    vessel: dict[str, Any],
+    vessel: MarineTrafficVessel,
     fetched_at: datetime,
 ) -> ShippingEvent:
     """
-    Convert a MarineTraffic vessel dict into a ShippingEvent record.
+    Convert a validated MarineTraffic vessel record into a ShippingEvent.
 
     Vessels with SPEED <= _ANCHORED_SPEED_THRESHOLD knots are classified
     as "anchored"; all others as "transit".
 
     Args:
-        vessel:    Raw vessel dict from MarineTraffic API.
+        vessel:     Validated MarineTrafficVessel from _fetch_vessels_in_area.
         fetched_at: UTC timestamp when the batch was fetched.
 
     Returns:
         ShippingEvent with validated fields.
-
-    Raises:
-        KeyError: If a required field (MMSI, LAT, LON) is missing.
-        ValueError: If LAT/LON/SPEED cannot be converted to float.
     """
-    vessel_id = str(vessel["MMSI"])
-    lat = float(vessel["LAT"])
-    lon = float(vessel["LON"])
-    speed = float(vessel.get("SPEED", 0))
-
-    event_type = EventType.ANCHORED if speed <= _ANCHORED_SPEED_THRESHOLD else EventType.TRANSIT
+    event_type = (
+        EventType.ANCHORED if vessel.SPEED <= _ANCHORED_SPEED_THRESHOLD else EventType.TRANSIT
+    )
 
     # TIMESTAMP field (UTC epoch seconds) is optional — fall back to fetched_at
-    ts_raw = vessel.get("TIMESTAMP")
-    if ts_raw:
+    if vessel.TIMESTAMP is not None:
         try:
-            timestamp = datetime.fromtimestamp(int(ts_raw), tz=UTC)
+            timestamp = datetime.fromtimestamp(vessel.TIMESTAMP, tz=UTC)
         except (ValueError, OSError):
             timestamp = fetched_at
     else:
         timestamp = fetched_at
 
     return ShippingEvent(
-        vessel_id=vessel_id,
+        vessel_id=vessel.MMSI,
         event_type=event_type,
-        latitude=lat,
-        longitude=lon,
+        latitude=vessel.LAT,
+        longitude=vessel.LON,
         timestamp=timestamp,
         source="marinetraffic",
     )
