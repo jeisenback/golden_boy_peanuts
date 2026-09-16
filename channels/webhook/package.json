@@ -2,10 +2,12 @@
   "name": "webhook-channel",
   "version": "0.0.1",
   "type": "module",
-  "engines": {
-    "node": ">=18"
-  },
+  "description": "Claude Code channel — forwards HTTP POSTs (CI, feature requests, market alerts) into the session",
+  "main": "webhook.mjs",
   "scripts": {
-    "start": "node index.mjs"
+    "start": "node webhook.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0"
   }
 }

@@ -439,6 +439,21 @@ Implementation details:
 - All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan, 288 unit tests).
 - #152 In Review, PR #184 opened 2026-03-22
 
+## Sprint Notes (2026-03-22, session 4)
+
+**#152 CLOSED** — PR #184 merged to develop by human lead 2026-03-22.
+
+**#153 IN REVIEW** — fetch_tanker_flows implemented. PR #185 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_tanker_flows()` queries MarineTraffic getVesselsInArea v:8 for 3 chokepoints (Strait of Hormuz, Suez Canal, Bosphorus).
+- `src/agents/alternative_data/models.py`: `EventType` StrEnum + `ShippingEvent` Pydantic model added.
+- `MARINETRAFFIC_API_KEY` absent → WARNING + []; malformed vessel records → WARNING + skip.
+- Speed ≤ 0.5 knots → anchored; otherwise transit. `_CHOKEPOINTS` named constant with bounding boxes.
+- 11 unit tests covering all AC scenarios; 299 total passing.
+- `.env.example` updated with MARINETRAFFIC_API_KEY placeholder and comment.
+- All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan).
+- #153 In Review, PR #185 opened 2026-03-22
+
 ## Sprint Notes (2026-03-23, session 1)
 
 **#130 IN REVIEW** — strategy_outcomes table + write/fetch DB functions. PR #186 open → develop.

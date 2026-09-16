@@ -24,8 +24,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 
-from src.agents.doc_generation.models import DocArtifact, DocRequest, DocResult, DocType
 from src.core.llm_wrapper import LLMWrapper
+from tools.agents.doc_generation.models import DocArtifact, DocRequest, DocResult, DocType
 
 logger = logging.getLogger(__name__)
 

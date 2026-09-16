@@ -275,3 +275,38 @@ CREATE TABLE IF NOT EXISTS backtest_reports (
 
 CREATE INDEX IF NOT EXISTS idx_backtest_reports_generated_at
     ON backtest_reports (generated_at DESC);
+
+
+-- -----------------------------------------------------------------------------
+-- strategy_outcomes (issue #130)
+--
+-- Records the actual price movement of the underlying instrument after each
+-- strategy candidate is generated. Closes the feedback loop needed to validate
+-- whether edge scores are predictive.
+--
+-- price_at_expiration and pct_move are nullable — populated by a reconciliation
+-- job after the candidate's expiration date passes.
+-- Append-only: outcomes are never deleted or edited.
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS strategy_outcomes (
+    id                    BIGSERIAL        PRIMARY KEY,
+    candidate_id          BIGINT           NOT NULL UNIQUE REFERENCES strategy_candidates(id),
+    instrument            TEXT             NOT NULL,
+    structure             TEXT             NOT NULL
+                              CHECK (structure IN ('long_straddle','call_spread','put_spread','calendar_spread')),
+    generated_at          TIMESTAMPTZ      NOT NULL,
+    expiration_date       TIMESTAMPTZ      NOT NULL,
+    price_at_generation   DOUBLE PRECISION NOT NULL,
+    price_at_expiration   DOUBLE PRECISION,
+    pct_move              DOUBLE PRECISION,
+    recorded_at           TIMESTAMPTZ      NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_outcomes_candidate_id
+    ON strategy_outcomes (candidate_id);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_outcomes_expiration_date
+    ON strategy_outcomes (expiration_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_outcomes_instrument
+    ON strategy_outcomes (instrument, recorded_at DESC);
