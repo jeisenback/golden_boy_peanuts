@@ -6,7 +6,7 @@ Responsibilities (Design Doc Section 4, PRD Section 4.3):
   - Compute futures curve steepness (WTI forward curve)
   - Compute sector dispersion across XOM, CVX, USO, XLE
   - Compute insider conviction scores from EDGAR data
-  - Compute narrative velocity / headline acceleration
+  - Compute narrative velocity / headline acceleration (issue #156)
   - Compute supply shock probability from event scores
   - Persist FeatureSet to PostgreSQL for Strategy Evaluation Agent
 
@@ -23,6 +23,7 @@ import statistics
 
 import yfinance as yf
 
+from src.agents.alternative_data.models import AlternativeDataState
 from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.db import read_price_history, write_feature_set
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
@@ -55,6 +56,14 @@ _FRONT_MONTH_INSTRUMENT: str = "CL=F"
 
 # Second-month WTI futures ticker for yfinance fetch
 _SECOND_MONTH_TICKER: str = "CLG=F"
+
+# compute_narrative_velocity: maximum returned value (issue #156)
+_NARRATIVE_VELOCITY_CAP: float = 1.0
+
+# compute_narrative_velocity: minimum total mention_count across narrative_signals
+# required before the ratio is considered reliable; below this, velocity is
+# reported as 0.0 (too little volume to distinguish signal from noise)
+_MIN_MENTIONS_THRESHOLD: int = 5
 
 
 def _month_code_for(month: int) -> str:
@@ -362,6 +371,49 @@ def compute_supply_shock_probability(events: list[DetectedEvent]) -> float | Non
         total += type_w * intensity_w * ev.confidence_score
 
     return min(total, 1.0)
+
+
+def compute_narrative_velocity(alternative_data_state: AlternativeDataState) -> float | None:
+    """
+    Compute narrative velocity from aggregated Reddit/Stocktwits signals.
+
+    Velocity = (net positive mentions) / (total mention volume), where net
+    positive mentions is the sum of NarrativeSignal.score (each signal's
+    aggregate net upvote/sentiment score, which can be negative) across all
+    signals, floored at 0.0, and total mention volume is the sum of
+    NarrativeSignal.mention_count. This measures what fraction of narrative
+    volume this cycle is trending positive — a high ratio means most mention
+    volume carries positive sentiment; a low ratio means neutral, negative,
+    or thin volume.
+
+    Args:
+        alternative_data_state: Output of run_alternative_data_ingestion()
+            (issue #154), containing narrative_signals from Reddit/Stocktwits.
+
+    Returns:
+        Float in [0.0, 1.0], or None if there are no narrative signals at
+        all (WARNING logged). Returns 0.0 (not a division error) when total
+        mention_count is below _MIN_MENTIONS_THRESHOLD.
+    """
+    signals = alternative_data_state.narrative_signals
+    if not signals:
+        logger.warning("compute_narrative_velocity: no narrative signals — returning None")
+        return None
+
+    positive_mentions = max(sum(s.score for s in signals), 0)
+    total_mentions = sum(s.mention_count for s in signals)
+
+    if total_mentions < _MIN_MENTIONS_THRESHOLD:
+        logger.warning(
+            "compute_narrative_velocity: total mention_count=%d below threshold=%d — "
+            "returning 0.0",
+            total_mentions,
+            _MIN_MENTIONS_THRESHOLD,
+        )
+        return 0.0
+
+    velocity = positive_mentions / total_mentions
+    return min(velocity, _NARRATIVE_VELOCITY_CAP)
 
 
 def run_feature_generation(

@@ -16,8 +16,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.alternative_data.models import AlternativeDataState, NarrativeSignal, Sentiment
 from src.agents.feature_generation.feature_generation_agent import (
     compute_futures_curve_steepness,
+    compute_narrative_velocity,
     compute_sector_dispersion,
     compute_volatility_gap,
     run_feature_generation,
@@ -532,3 +534,102 @@ class TestRunFeatureGeneration:
         ):
             result = run_feature_generation(market_state, [])
         assert result.snapshot_time == snap
+
+
+# ---------------------------------------------------------------------------
+# TestComputeNarrativeVelocity
+# ---------------------------------------------------------------------------
+
+
+def _make_narrative_signal(
+    score: int,
+    mention_count: int,
+    platform: str = "reddit",
+    instrument: str = "USO",
+) -> NarrativeSignal:
+    now = datetime.now(tz=UTC)
+    return NarrativeSignal(
+        instrument=instrument,
+        platform=platform,
+        score=score,
+        mention_count=mention_count,
+        sentiment=Sentiment.POSITIVE if score > 0 else Sentiment.NEGATIVE,
+        window_start=now,
+        window_end=now,
+        source=platform,
+    )
+
+
+def _make_alternative_data_state_narrative(
+    signals: list[NarrativeSignal],
+) -> AlternativeDataState:
+    return AlternativeDataState(snapshot_time=datetime.now(tz=UTC), narrative_signals=signals)
+
+
+class TestComputeNarrativeVelocity:
+    """Tests for compute_narrative_velocity() — net-positive / total mention ratio."""
+
+    def test_rising_sentiment_caps_at_one(self) -> None:
+        """score == mention_count (all mentions net-positive) → ratio saturates at cap."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=100, mention_count=100)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(1.0)
+
+    def test_falling_sentiment_returns_near_zero(self) -> None:
+        """Net-negative score is floored at 0 before dividing → velocity is 0.0."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=-50, mention_count=100)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(0.0)
+
+    def test_mixed_signals_matches_expected_ratio(self) -> None:
+        """Two signals aggregate: positive_mentions=sum(score), total=sum(mention_count)."""
+        state = _make_alternative_data_state_narrative(
+            [
+                _make_narrative_signal(score=30, mention_count=50, platform="reddit"),
+                _make_narrative_signal(score=10, mention_count=50, platform="stocktwits"),
+            ]
+        )
+        # positive_mentions = 30 + 10 = 40; total_mentions = 50 + 50 = 100
+        assert compute_narrative_velocity(state) == pytest.approx(0.4)
+
+    def test_zero_baseline_returns_zero_not_division_error(self) -> None:
+        """total_mentions below _MIN_MENTIONS_THRESHOLD returns 0.0, never raises."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=0, mention_count=0)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(0.0)
+
+    def test_empty_signals_returns_none_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        state = _make_alternative_data_state_narrative([])
+        with caplog.at_level(logging.WARNING):
+            result = compute_narrative_velocity(state)
+        assert result is None
+        assert any("no narrative signals" in r.message.lower() for r in caplog.records)
+
+    def test_cap_enforced_when_score_exceeds_mention_count(self) -> None:
+        """Pathological score > mention_count (shouldn't happen, but must not exceed cap)."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=200, mention_count=100)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(1.0)
+
+    def test_below_min_mentions_threshold_returns_zero_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Total mentions present but below _MIN_MENTIONS_THRESHOLD → 0.0 + WARNING."""
+        from src.agents.feature_generation.feature_generation_agent import (
+            _MIN_MENTIONS_THRESHOLD,
+        )
+
+        below_threshold = _MIN_MENTIONS_THRESHOLD - 2
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=below_threshold - 1, mention_count=below_threshold)]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_narrative_velocity(state)
+        assert result == pytest.approx(0.0)
+        assert any("below threshold" in r.message.lower() for r in caplog.records)
