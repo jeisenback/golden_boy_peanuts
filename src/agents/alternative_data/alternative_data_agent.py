@@ -6,6 +6,8 @@ Fetches alternative signals for the energy options opportunity agent:
   - fetch_quiver_enrichment: Quiver Quantitative optional insider enrichment (issue #150)
   - fetch_reddit_sentiment: Reddit public JSON API narrative velocity (issue #151)
   - fetch_stocktwits_sentiment: Stocktwits symbol stream retail sentiment (issue #152)
+  - fetch_tanker_flows: MarineTraffic chokepoint vessel events (issue #153)
+  - run_alternative_data_ingestion: orchestrates all fetch functions above (issue #154)
 
 ESOD constraints: @with_retry() on all external API calls, Pydantic boundary
 models, type hints on all public functions, WARNING logs for missing/malformed
@@ -46,6 +48,7 @@ MarineTraffic API notes:
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+import json
 import logging
 import os
 from typing import Any
@@ -53,8 +56,15 @@ from xml.etree import ElementTree as ET
 
 from pydantic import ValidationError
 import requests
+from sqlalchemy.engine import Engine
 
+from src.agents.alternative_data.db import (
+    write_insider_trades,
+    write_narrative_signal,
+    write_shipping_events,
+)
 from src.agents.alternative_data.models import (
+    AlternativeDataState,
     EftsSearchResponse,
     EventType,
     FilingIndexResponse,
@@ -66,9 +76,15 @@ from src.agents.alternative_data.models import (
     Sentiment,
     ShippingEvent,
 )
+from src.core.db import get_engine
 from src.core.retry import with_retry
 
 logger = logging.getLogger(__name__)
+
+# In-scope instrument universe for run_alternative_data_ingestion() (matches
+# INSTRUMENTS_IN_SCOPE in strategy_evaluation_agent.py). WTI/BZ yield zero
+# insider-trade hits (no equity filings) by design — see EDGAR notes above.
+_INSTRUMENTS_IN_SCOPE: list[str] = ["USO", "XLE", "XOM", "CVX", "CL=F", "BZ=F"]
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -1058,3 +1074,131 @@ def _vessel_to_shipping_event(
         timestamp=timestamp,
         source="marinetraffic",
     )
+
+
+# ===========================================================================
+# run_alternative_data_ingestion — issue #154
+# ===========================================================================
+
+
+def run_alternative_data_ingestion() -> AlternativeDataState:
+    """
+    Execute one full alternative-data ingestion cycle.
+
+    Calls fetch_edgar_insider_trades(), fetch_quiver_enrichment(),
+    fetch_reddit_sentiment(), fetch_stocktwits_sentiment(), and
+    fetch_tanker_flows() in independent try/except blocks so one feed
+    failure does not abort the others. Persists all successfully fetched
+    records to PostgreSQL; DB write failures are also caught and recorded
+    rather than propagated.
+
+    Emits a structured JSON log at cycle end with insider_trade_records,
+    narrative_signal_records, shipping_event_records, error_count, and
+    duration_ms.
+
+    Returns:
+        AlternativeDataState with insider_trades, narrative_signals,
+        shipping_events, and alternative_data_errors populated.
+        alternative_data_errors is the ESOD-4 structured error response:
+        callers MUST inspect it to distinguish feed failures from DB
+        outages. An empty list indicates a fully successful cycle.
+        Never raises — even total feed failure returns an empty-but-valid
+        state.
+    """
+    start_time = datetime.now(tz=UTC)
+    insider_trades: list[InsiderTrade] = []
+    narrative_signals: list[NarrativeSignal] = []
+    shipping_events: list[ShippingEvent] = []
+    errors: list[str] = []
+
+    # --- Fetch feeds (each isolated so one failure cannot abort the others) ---
+    try:
+        insider_trades.extend(fetch_edgar_insider_trades(_INSTRUMENTS_IN_SCOPE))
+    except Exception as exc:
+        logger.exception("fetch_edgar_insider_trades failed")
+        errors.append(f"fetch_edgar_insider_trades: {exc}")
+
+    try:
+        insider_trades.extend(fetch_quiver_enrichment(_INSTRUMENTS_IN_SCOPE))
+    except Exception as exc:
+        logger.exception("fetch_quiver_enrichment failed")
+        errors.append(f"fetch_quiver_enrichment: {exc}")
+
+    try:
+        narrative_signals.extend(fetch_reddit_sentiment(_INSTRUMENTS_IN_SCOPE))
+    except Exception as exc:
+        logger.exception("fetch_reddit_sentiment failed")
+        errors.append(f"fetch_reddit_sentiment: {exc}")
+
+    try:
+        narrative_signals.extend(fetch_stocktwits_sentiment(_INSTRUMENTS_IN_SCOPE))
+    except Exception as exc:
+        logger.exception("fetch_stocktwits_sentiment failed")
+        errors.append(f"fetch_stocktwits_sentiment: {exc}")
+
+    try:
+        shipping_events.extend(fetch_tanker_flows())
+    except Exception as exc:
+        logger.exception("fetch_tanker_flows failed")
+        errors.append(f"fetch_tanker_flows: {exc}")
+
+    # --- Persist to PostgreSQL ---
+    _engine: Engine | None = None
+    try:
+        _engine = get_engine()
+    except Exception as exc:
+        logger.exception("Failed to acquire DB engine — skipping persistence")
+        errors.append(f"get_engine: {exc}")
+
+    if _engine is not None and insider_trades:
+        try:
+            write_insider_trades(insider_trades, _engine)
+        except Exception as exc:
+            logger.exception("write_insider_trades failed; insider trade records not persisted")
+            errors.append(f"write_insider_trades: {exc}")
+
+    if _engine is not None and shipping_events:
+        try:
+            write_shipping_events(shipping_events, _engine)
+        except Exception as exc:
+            logger.exception("write_shipping_events failed; shipping event records not persisted")
+            errors.append(f"write_shipping_events: {exc}")
+
+    if _engine is not None and narrative_signals:
+        for signal in narrative_signals:
+            try:
+                write_narrative_signal(signal, _engine)
+            except Exception as exc:
+                logger.exception(
+                    "write_narrative_signal failed for instrument=%s platform=%s",
+                    signal.instrument,
+                    signal.platform,
+                )
+                errors.append(f"write_narrative_signal: {exc}")
+
+    # --- Assemble AlternativeDataState ---
+    snapshot_time = datetime.now(tz=UTC)
+    state = AlternativeDataState(
+        snapshot_time=snapshot_time,
+        insider_trades=insider_trades,
+        narrative_signals=narrative_signals,
+        shipping_events=shipping_events,
+        alternative_data_errors=errors,
+    )
+
+    # --- Structured cycle log ---
+    duration_ms = int((snapshot_time - start_time).total_seconds() * 1000)
+    logger.info(
+        json.dumps(
+            {
+                "event": "alternative_data_ingestion_cycle_complete",
+                "insider_trade_records": len(insider_trades),
+                "narrative_signal_records": len(narrative_signals),
+                "shipping_event_records": len(shipping_events),
+                "error_count": len(errors),
+                "duration_ms": duration_ms,
+            }
+        )
+    )
+
+    return state

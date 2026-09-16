@@ -209,3 +209,20 @@ class MarineTrafficVessel(BaseModel):
     LON: float
     SPEED: float = 0.0
     TIMESTAMP: int | None = None
+
+
+class AlternativeDataState(BaseModel):
+    """
+    Unified state object produced by one alternative-data ingestion cycle.
+
+    Primary output of run_alternative_data_ingestion() (issue #154).
+    alternative_data_errors accumulates per-fetch-function failures — an
+    empty list indicates every feed succeeded; the state is still valid
+    (though possibly empty) when some or all feeds fail.
+    """
+
+    snapshot_time: datetime
+    insider_trades: list[InsiderTrade] = Field(default_factory=list)
+    narrative_signals: list[NarrativeSignal] = Field(default_factory=list)
+    shipping_events: list[ShippingEvent] = Field(default_factory=list)
+    alternative_data_errors: list[str] = Field(default_factory=list)

@@ -14,17 +14,42 @@ Re-ingestion is idempotent:
     narrative_signals — UNIQUE (instrument, platform, window_start); use
                         ON CONFLICT DO NOTHING to skip already-fetched windows.
 
-Functions are stubs pending implementation in issues #149-#153.
+sentiment vocabulary: the NarrativeSignal.sentiment field is the application-level
+Sentiment enum (positive/neutral/negative), which does not match the
+narrative_signals.sentiment CHECK constraint (bullish/bearish/neutral/mixed) —
+the schema was written before the Sentiment enum existed (issue #148 predates
+#151/#152). write_narrative_signal() translates via _SENTIMENT_DB_MAP rather
+than altering the already-shipped enum or the table's CHECK constraint
+(schema changes require human review — ESOD Hard Stop).
+
+read_* functions remain stubs; not required by run_alternative_data_ingestion()
+(issue #154) and out of scope until a caller needs them.
 """
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
+from src.agents.alternative_data.models import (
+    InsiderTrade,
+    NarrativeSignal,
+    Sentiment,
+    ShippingEvent,
+)
+
 logger = logging.getLogger(__name__)
+
+# NarrativeSignal.sentiment (Sentiment enum) -> narrative_signals.sentiment CHECK vocabulary
+_SENTIMENT_DB_MAP: dict[Sentiment, str] = {
+    Sentiment.POSITIVE: "bullish",
+    Sentiment.NEGATIVE: "bearish",
+    Sentiment.NEUTRAL: "neutral",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -32,24 +57,55 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def write_insider_trades(records: list[dict[str, Any]], engine: Engine) -> int:
+def write_insider_trades(records: list[InsiderTrade], engine: Engine) -> int:
     """
     Persist insider trade records to insider_trades table.
 
     Args:
-        records: List of dicts with keys:
-            instrument (str), trade_date (datetime), trade_type (str),
-            shares (int | None), value_usd (float | None),
-            officer_name (str | None), source (str), fetched_at (datetime)
+        records: Validated InsiderTrade objects to insert.
         engine: SQLAlchemy Engine.
 
     Returns:
         Number of rows inserted.
 
     Raises:
-        NotImplementedError: Until implemented in issue #149.
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
+            connection failure after logging the exception.
     """
-    raise NotImplementedError("write_insider_trades not yet implemented — see issue #149")
+    if not records:
+        return 0
+
+    fetched_at = datetime.now(tz=UTC)
+    sql = text("""
+        INSERT INTO insider_trades
+            (instrument, trade_date, trade_type, shares, value_usd, officer_name,
+             source, fetched_at)
+        VALUES
+            (:instrument, :trade_date, :trade_type, :shares, :value_usd, :officer_name,
+             :source, :fetched_at)
+        """)
+    rows = [
+        {
+            "instrument": r.instrument,
+            "trade_date": r.trade_date,
+            "trade_type": r.trade_type,
+            "shares": r.shares,
+            "value_usd": r.value_usd,
+            "officer_name": r.officer_name,
+            "source": r.source,
+            "fetched_at": fetched_at,
+        }
+        for r in records
+    ]
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, rows)
+    except Exception:
+        logger.exception("write_insider_trades failed; %d record(s) not persisted", len(records))
+        raise
+
+    logger.info("Wrote %d insider trade record(s) to insider_trades", len(records))
+    return len(records)
 
 
 def read_insider_trades(
@@ -80,24 +136,55 @@ def read_insider_trades(
 # ---------------------------------------------------------------------------
 
 
-def write_shipping_events(records: list[dict[str, Any]], engine: Engine) -> int:
+def write_shipping_events(records: list[ShippingEvent], engine: Engine) -> int:
     """
     Persist vessel/tanker movement events to shipping_events table.
 
     Args:
-        records: List of dicts with keys:
-            instrument (str | None), vessel_id (str), event_type (str),
-            latitude (float | None), longitude (float | None),
-            timestamp (datetime), source (str), fetched_at (datetime)
+        records: Validated ShippingEvent objects to insert.
         engine: SQLAlchemy Engine.
 
     Returns:
         Number of rows inserted.
 
     Raises:
-        NotImplementedError: Until implemented in issue #153.
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation or
+            connection failure after logging the exception.
     """
-    raise NotImplementedError("write_shipping_events not yet implemented — see issue #153")
+    if not records:
+        return 0
+
+    fetched_at = datetime.now(tz=UTC)
+    sql = text("""
+        INSERT INTO shipping_events
+            (instrument, vessel_id, event_type, latitude, longitude, timestamp,
+             source, fetched_at)
+        VALUES
+            (:instrument, :vessel_id, :event_type, :latitude, :longitude, :timestamp,
+             :source, :fetched_at)
+        """)
+    rows = [
+        {
+            "instrument": r.instrument,
+            "vessel_id": r.vessel_id,
+            "event_type": r.event_type.value,
+            "latitude": r.latitude,
+            "longitude": r.longitude,
+            "timestamp": r.timestamp,
+            "source": r.source,
+            "fetched_at": fetched_at,
+        }
+        for r in records
+    ]
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, rows)
+    except Exception:
+        logger.exception("write_shipping_events failed; %d record(s) not persisted", len(records))
+        raise
+
+    logger.info("Wrote %d shipping event record(s) to shipping_events", len(records))
+    return len(records)
 
 
 def read_shipping_events(
@@ -128,27 +215,75 @@ def read_shipping_events(
 # ---------------------------------------------------------------------------
 
 
-def write_narrative_signal(record: dict[str, Any], engine: Engine) -> int:
+def write_narrative_signal(record: NarrativeSignal, engine: Engine) -> int:
     """
     Persist a single narrative velocity signal to narrative_signals.
 
     Uses ON CONFLICT DO NOTHING on (instrument, platform, window_start) so
-    re-fetching the same window is idempotent.
+    re-fetching the same window is idempotent. record.sentiment (the
+    application-level Sentiment enum) is translated to the table's
+    bullish/bearish/neutral vocabulary via _SENTIMENT_DB_MAP.
 
     Args:
-        record: Dict with keys:
-            instrument (str), platform (str), score (float | None),
-            mention_count (int | None), sentiment (str | None),
-            window_start (datetime), window_end (datetime), fetched_at (datetime)
+        record: Validated NarrativeSignal to insert.
         engine: SQLAlchemy Engine.
 
     Returns:
         1 if inserted, 0 if skipped due to conflict.
 
     Raises:
-        NotImplementedError: Until implemented in issues #151 / #152.
+        sqlalchemy.exc.SQLAlchemyError: Propagates on constraint violation
+            (other than the (instrument, platform, window_start) conflict,
+            which is caught by ON CONFLICT DO NOTHING) or connection failure
+            after logging the exception.
     """
-    raise NotImplementedError("write_narrative_signal not yet implemented — see issues #151 / #152")
+    fetched_at = datetime.now(tz=UTC)
+    sql = text("""
+        INSERT INTO narrative_signals
+            (instrument, platform, score, mention_count, sentiment,
+             window_start, window_end, fetched_at)
+        VALUES
+            (:instrument, :platform, :score, :mention_count, :sentiment,
+             :window_start, :window_end, :fetched_at)
+        ON CONFLICT (instrument, platform, window_start) DO NOTHING
+        """)
+    params = {
+        "instrument": record.instrument,
+        "platform": record.platform,
+        "score": record.score,
+        "mention_count": record.mention_count,
+        "sentiment": _SENTIMENT_DB_MAP[record.sentiment],
+        "window_start": record.window_start,
+        "window_end": record.window_end,
+        "fetched_at": fetched_at,
+    }
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(sql, params)
+            inserted = result.rowcount
+    except Exception:
+        logger.exception(
+            "write_narrative_signal failed for instrument=%s platform=%s",
+            record.instrument,
+            record.platform,
+        )
+        raise
+
+    if inserted:
+        logger.info(
+            "Wrote narrative signal for instrument=%s platform=%s",
+            record.instrument,
+            record.platform,
+        )
+    else:
+        logger.info(
+            "Skipped narrative signal for instrument=%s platform=%s window_start=%s "
+            "(already exists)",
+            record.instrument,
+            record.platform,
+            record.window_start,
+        )
+    return max(inserted, 0)
 
 
 def read_latest_narrative_signal(
