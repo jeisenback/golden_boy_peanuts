@@ -484,3 +484,19 @@ Implementation details:
 **Flag for human lead:** PR #201 (#155, `compute_insider_conviction_score`) is still open and unmerged, and now shows `mergeable_state: dirty` against develop (PR #202 landed on the same file afterward). Not touched this session — needs a conflict-resolution pass before it can merge.
 
 **Flag for human lead:** This file's committed Sprint Issues table (top of file) is still Sprint 9 and does not list issues #149-#158 — those are tracked under the Sprint 10 milestone in GitHub. Sessions have continued working #154/#155/#156/#157 under direct per-issue instruction; the table itself was not edited (per the Hard Stop), only this notes section.
+
+## Sprint Notes (2026-09-17, session 1)
+
+**#155 CLOSED** — compute_insider_conviction_score merged (PR #201, conflict resolved + a real correctness bug fixed: non-finite `value_usd` producing `nan`, caught by a `chatgpt-codex-connector` review comment).
+**#157 CLOSED** — compute_tanker_disruption_index merged (PR #203, conflict resolved after #201 merged).
+**#158 IN REVIEW** — compute_edge_score extended with full Phase 3 signal set. PR #204 open → develop.
+
+- `src/agents/strategy_evaluation/strategy_evaluation_agent.py`: `compute_edge_score()` gains 3 new optional params (`insider_conviction_score`, `narrative_velocity`, `tanker_disruption_index`) — signature change proposed as an issue comment on #158 and approved by human lead before implementation (Hard Stop compliance).
+- Phase 3 signals join the base score **additively** (`_INSIDER_CONVICTION_WEIGHT=0.15`, `_NARRATIVE_VELOCITY_WEIGHT=0.10`, `_TANKER_DISRUPTION_WEIGHT=0.15`), distinct from the existing **multiplicative** Phase 2 signals.
+- Cross-sector boost (`_CROSS_SECTOR_BOOST=0.10`) applies when `sector_dispersion` > existing `_DISPERSION_HIGH_THRESHOLD` AND `insider_conviction_score` > new `_INSIDER_CONVICTION_HIGH_THRESHOLD=0.70`.
+- `evaluate_strategies()` intentionally left unchanged — wiring the 3 new params through it is out of #158's AC scope (`FeatureSet` doesn't carry `tanker_disruption_index` yet).
+- 8 new tests: backward compat, each Phase 3 signal isolated, all combined, boost applied/not-applied (2 variants), clamp.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 393 unit tests).
+- #158 In Review, PR #204 opened 2026-09-17
+
+This closes the Phase 3 signal-computation dependency chain (#154 → #155/#156/#157 → #158), all now merged or in review.
