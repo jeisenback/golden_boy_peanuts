@@ -532,6 +532,8 @@ class TestEvaluateStrategies:
         with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
             result = evaluate_strategies(fs)
         uso = next(c for c in result if c.instrument == "USO")
+        # Phase 3 kwargs omitted intentionally — mirrors the pre-#209 call site,
+        # since fs itself has no Phase 3 fields set (all default to None).
         expected = compute_edge_score(
             "USO",
             fs,
