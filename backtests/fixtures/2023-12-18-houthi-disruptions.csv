@@ -1,0 +1,7 @@
+instrument,price,instrument_type,implied_vol,atm_strike,expiration_date
+USO,65.40,etf,0.47,65.00,2024-01-19
+XLE,86.30,etf,0.44,86.00,2024-01-19
+XOM,99.50,equity,0.41,99.00,2024-01-19
+CVX,148.00,equity,0.39,148.00,2024-01-19
+CL=F,73.51,crude_futures,0.52,73.00,2024-01-22
+BZ=F,79.25,crude_futures,0.50,79.00,2024-01-22
