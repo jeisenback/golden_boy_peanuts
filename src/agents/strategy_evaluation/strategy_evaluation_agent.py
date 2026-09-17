@@ -4,7 +4,9 @@ Strategy Evaluation Agent
 Responsibilities (Design Doc Section 4, PRD Section 4.4):
   - Evaluate long straddle, call spread, put spread, calendar spread
     structures based on signals from FeatureSet
-  - Compute a composite edge_score in [0.0, 1.0] per candidate
+  - Compute a composite edge_score in [0.0, 1.0] per candidate, including
+    Phase 3 signals (insider conviction, narrative velocity, tanker
+    disruption) and a cross-sector correlation boost (issue #158)
   - Rank candidates by edge_score descending
   - Attach contributing signal references for explainability
   - Output StrategyCandidate list matching PRD Section 9 schema
@@ -81,28 +83,70 @@ _SUPPLY_SHOCK_MEDIUM_THRESHOLD: float = 0.30  # probability > 30% = medium
 _SUPPLY_SHOCK_WEIGHT: float = 0.30
 _CURVE_STEEPNESS_WEIGHT: float = 0.15
 
+# ---------------------------------------------------------------------------
+# Phase 3 additive signals (issue #158)
+#
+# Unlike the Phase 2 multipliers above, the three Phase 3 signals join the
+# base score additively (per this feature's AC), alongside vol_gap and
+# sector_dispersion:
+#
+#   base = vol_gap_contribution + disp_contribution
+#        + insider_conviction_score * _INSIDER_CONVICTION_WEIGHT
+#        + narrative_velocity * _NARRATIVE_VELOCITY_WEIGHT
+#        + tanker_disruption_index * _TANKER_DISRUPTION_WEIGHT
+#
+# A None signal contributes 0.0, matching the existing Phase 1/2 convention.
+#
+# Cross-sector correlation: when sector_dispersion is high (broad sector
+# stress) AND insider_conviction_score is high (insiders buying into that
+# stress), the two reinforce each other — apply a small multiplicative
+# boost on top of the additive base and Phase 2 multipliers.
+# ---------------------------------------------------------------------------
+_INSIDER_CONVICTION_WEIGHT: float = 0.15
+_NARRATIVE_VELOCITY_WEIGHT: float = 0.10
+_TANKER_DISRUPTION_WEIGHT: float = 0.15
+
+# "High" conviction cutoff for the cross-sector boost condition (conviction scale is [0.0, 1.0])
+_INSIDER_CONVICTION_HIGH_THRESHOLD: float = 0.70
+
+# Cross-sector boost multiplier applied when both conditions above hold
+_CROSS_SECTOR_BOOST: float = 0.10
+
 
 def compute_edge_score(
     instrument: str,
     feature_set: FeatureSet,
     supply_shock_probability: float | None = None,
     futures_curve_steepness: float | None = None,
+    insider_conviction_score: float | None = None,
+    narrative_velocity: float | None = None,
+    tanker_disruption_index: float | None = None,
 ) -> float:
     """
     Compute a composite edge score for a given instrument from the FeatureSet.
 
     Phase 1 base score: weighted sum of volatility gap and sector dispersion.
+    Phase 3 additive signals: insider conviction, narrative velocity, and
+    tanker disruption join the base score as additional weighted terms.
     Phase 2 multipliers: supply shock probability and futures curve steepness
-    amplify the base score when present.
+    amplify the base score when present. A cross-sector correlation boost
+    applies on top when sector dispersion and insider conviction are both high.
 
     Formula:
         base = vol_gap_norm * _VOL_GAP_WEIGHT + disp_norm * _DISPERSION_WEIGHT
+             + insider_conviction * _INSIDER_CONVICTION_WEIGHT
+             + narrative_velocity * _NARRATIVE_VELOCITY_WEIGHT
+             + tanker_disruption * _TANKER_DISRUPTION_WEIGHT
         score = base * (1 + _SUPPLY_SHOCK_WEIGHT * supply_shock)
               * (1 + _CURVE_STEEPNESS_WEIGHT * |curve_steepness|)
+        if sector_dispersion > _DISPERSION_HIGH_THRESHOLD
+           and insider_conviction > _INSIDER_CONVICTION_HIGH_THRESHOLD:
+            score *= (1 + _CROSS_SECTOR_BOOST)
         return min(score, 1.0)
 
-    When supply_shock_probability or futures_curve_steepness is None, the
-    corresponding multiplier is 1.0 (no effect), preserving Phase 1 behavior.
+    When any Phase 2/3 signal is None, it contributes 0.0 (additive signals)
+    or has a 1.0 (no-op) multiplier (Phase 2 signals), preserving Phase 1
+    behavior when only Phase 1 signals are supplied.
 
     Args:
         instrument: Ticker symbol of the instrument to evaluate.
@@ -111,6 +155,12 @@ def compute_edge_score(
             Pydantic validation on FeatureSet.supply_shock_probability enforces range.
         futures_curve_steepness: Unbounded float (WTI futures curve slope; contango > 0).
             None if unavailable.
+        insider_conviction_score: Float in [0.0, 1.0] from compute_insider_conviction_score,
+            or None if unavailable.
+        narrative_velocity: Float in [0.0, 1.0] from compute_narrative_velocity,
+            or None if unavailable.
+        tanker_disruption_index: Float in [0.0, 1.0] from compute_tanker_disruption_index,
+            or None if unavailable.
 
     Returns:
         Float in [0.0, 1.0]. Higher = stronger signal confluence.
@@ -131,13 +181,36 @@ def compute_edge_score(
     disp_norm = feature_set.sector_dispersion if feature_set.sector_dispersion is not None else 0.0
     disp_contribution = disp_norm * _DISPERSION_WEIGHT
 
-    base_score = vol_gap_contribution + disp_contribution
+    # --- Phase 3 additive signal contributions ---
+    insider_contribution = (insider_conviction_score or 0.0) * _INSIDER_CONVICTION_WEIGHT
+    narrative_contribution = (narrative_velocity or 0.0) * _NARRATIVE_VELOCITY_WEIGHT
+    tanker_contribution = (tanker_disruption_index or 0.0) * _TANKER_DISRUPTION_WEIGHT
+
+    base_score = (
+        vol_gap_contribution
+        + disp_contribution
+        + insider_contribution
+        + narrative_contribution
+        + tanker_contribution
+    )
 
     # --- Phase 2 multipliers ---
     shock_multiplier = 1.0 + _SUPPLY_SHOCK_WEIGHT * (supply_shock_probability or 0.0)
     curve_multiplier = 1.0 + _CURVE_STEEPNESS_WEIGHT * abs(futures_curve_steepness or 0.0)
 
-    return min(base_score * shock_multiplier * curve_multiplier, 1.0)
+    score = base_score * shock_multiplier * curve_multiplier
+
+    # --- Cross-sector correlation boost (issue #158) ---
+    disp = feature_set.sector_dispersion
+    if (
+        disp is not None
+        and disp > _DISPERSION_HIGH_THRESHOLD
+        and insider_conviction_score is not None
+        and insider_conviction_score > _INSIDER_CONVICTION_HIGH_THRESHOLD
+    ):
+        score *= 1.0 + _CROSS_SECTOR_BOOST
+
+    return min(score, 1.0)
 
 
 def _vol_gap_label(instrument: str, feature_set: FeatureSet) -> str:
