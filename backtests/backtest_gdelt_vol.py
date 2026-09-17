@@ -24,6 +24,12 @@ MIN_PERIODS_DIVISOR: int = 4  # divisor to compute adaptive min_periods from win
 DEFAULT_ZSCORE_THRESHOLD: float = 2.0  # z-score threshold for GDELT burst detection
 REALIZED_RETURN_MIN_PERIODS: int = 1  # min_periods for realized return rolling sum
 
+# replay_events_from_gdelt: fallback close price used only when the prices CSV
+# has no row for an event date (approximate WTI mid-range; a WARNING is logged
+# whenever this fallback is used, since it means the replay ran on fabricated
+# rather than real price data).
+_FALLBACK_CLOSE_PRICE: float = 50.0
+
 logger = logging.getLogger(__name__)
 
 
@@ -307,7 +313,21 @@ def replay_events_from_gdelt(
         try:
             snap = pd.Timestamp(date_str, tz="UTC").to_pydatetime()
             price_row = pr.reindex([pd.Timestamp(date_str)]).ffill()
-            close_val = float(price_row["close"].iloc[0]) if len(price_row) else 50.0
+            raw_close = price_row["close"].iloc[0]
+            if pd.isna(raw_close):
+                # reindex() always returns exactly one row for a single-date
+                # index, so `len(price_row)` is never 0 here — a missing price
+                # (nothing to forward-fill from) surfaces as NaN instead.
+                logger.warning(
+                    "replay_events_from_gdelt: no price data available for %s "
+                    "(nothing to forward-fill from) — using fallback close "
+                    "price %.2f",
+                    date_str,
+                    _FALLBACK_CLOSE_PRICE,
+                )
+                close_val = _FALLBACK_CLOSE_PRICE
+            else:
+                close_val = float(raw_close)
             market_state = MarketState(
                 snapshot_time=snap,
                 prices=[
