@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from backtests.backtest_gdelt_vol import _FALLBACK_CLOSE_PRICE, evaluate, replay_events_from_gdelt
 import pandas as pd
+import pytest
 
 
 def test_evaluate_sample(tmp_path) -> None:
@@ -23,7 +24,16 @@ def test_replay_events_from_gdelt_uses_fallback_price_and_warns_on_missing_data(
     """Event date predates all price data (nothing to forward-fill from) →
     the reindex/ffill result is NaN, not an empty row, so the fallback must
     be keyed off NaN detection rather than row count. The fallback price
-    should be used and a WARNING logged, not silently propagated as NaN."""
+    should be used and a WARNING logged, not silently propagated as NaN.
+
+    Skips when sqlalchemy is unavailable: replay_events_from_gdelt() lazily
+    imports scripts.backtest_harness, which pulls in sqlalchemy transitively.
+    The "run-backtests" CI job (.github/workflows/backtests.yml) deliberately
+    installs a minimal dependency set without it.
+    """
+    pytest.importorskip("sqlalchemy")
+    import scripts.backtest_harness  # noqa: F401  ensures patch() below can resolve it
+
     gdelt_path = tmp_path / "gdelt.csv"
     prices_path = tmp_path / "prices.csv"
     pd.DataFrame({"date": ["2020-01-10"], "articles": [999]}).to_csv(gdelt_path, index=False)
@@ -46,7 +56,14 @@ def test_replay_events_from_gdelt_uses_fallback_price_and_warns_on_missing_data(
 
 def test_replay_events_from_gdelt_uses_real_price_when_available(tmp_path) -> None:
     """Event date has a matching price row → the real close price is used,
-    not the fallback."""
+    not the fallback.
+
+    Skips when sqlalchemy is unavailable — see the sibling fallback-path test
+    for why.
+    """
+    pytest.importorskip("sqlalchemy")
+    import scripts.backtest_harness  # noqa: F401  ensures patch() below can resolve it
+
     gdelt_path = tmp_path / "gdelt.csv"
     prices_path = tmp_path / "prices.csv"
     pd.DataFrame({"date": ["2020-01-10"], "articles": [999]}).to_csv(gdelt_path, index=False)
