@@ -660,6 +660,33 @@ class TestComputeInsiderConvictionScore:
         result = compute_insider_conviction_score(state)
         assert result == pytest.approx(expected)
 
+    def test_insider_conviction_score_golden_dataset(self) -> None:
+        """Golden dataset (issue #161): a realistic Form 4 filing window.
+
+        Two officer buys, one sell, plus a grant and an exercise (both
+        excluded from the ratio per the function's documented behavior).
+        Expected score is hand-computed from the documented weighted-ratio
+        formula, independent of the implementation under test.
+        """
+        trades = [
+            _make_insider_trade("buy", 250_000.0),  # CEO buy
+            _make_insider_trade("buy", 75_000.0),  # CFO buy
+            _make_insider_trade("sell", 100_000.0),  # VP sell
+            _make_insider_trade("grant", 500_000.0),  # excluded
+            _make_insider_trade("exercise", 50_000.0),  # excluded
+        ]
+        state = _make_alternative_data_state(trades)
+
+        # weighted_buy = (250_000 + 75_000) * 1.0 = 325_000
+        # weighted_sell = 100_000 * 0.5 = 50_000
+        weighted_buy = (250_000.0 + 75_000.0) * 1.0
+        weighted_sell = 100_000.0 * 0.5
+        expected = weighted_buy / (weighted_buy + weighted_sell)  # ≈ 0.8667
+
+        result = compute_insider_conviction_score(state)
+        assert result is not None
+        assert abs(result - expected) < 0.01
+
 
 # ---------------------------------------------------------------------------
 # TestComputeNarrativeVelocity
@@ -758,6 +785,29 @@ class TestComputeNarrativeVelocity:
             result = compute_narrative_velocity(state)
         assert result == pytest.approx(0.0)
         assert any("below threshold" in r.message.lower() for r in caplog.records)
+
+    def test_narrative_velocity_golden_dataset(self) -> None:
+        """Golden dataset (issue #161): known multi-platform mention counts.
+
+        Reddit and Stocktwits signals plus one net-negative Reddit signal in
+        the same window. Expected velocity is hand-computed from the
+        documented net-positive / total-mention-volume formula, independent
+        of the implementation under test.
+        """
+        signals = [
+            _make_narrative_signal(score=45, mention_count=80, platform="reddit"),
+            _make_narrative_signal(score=20, mention_count=40, platform="stocktwits"),
+            _make_narrative_signal(score=-10, mention_count=30, platform="reddit"),
+        ]
+        state = _make_alternative_data_state_narrative(signals)
+
+        positive_mentions = max(45 + 20 + (-10), 0)
+        total_mentions = 80 + 40 + 30
+        expected = positive_mentions / total_mentions  # ≈ 0.3667
+
+        result = compute_narrative_velocity(state)
+        assert result is not None
+        assert abs(result - expected) < 0.01
 
 
 # ---------------------------------------------------------------------------
@@ -868,3 +918,30 @@ class TestComputeTankerDisruptionIndex:
         result = compute_tanker_disruption_index(state)
         assert result is not None
         assert result <= 1.0
+
+    def test_tanker_disruption_index_golden_dataset(self) -> None:
+        """Golden dataset (issue #161): known vessel events across all 3 chokepoints.
+
+        One anchored and one transiting vessel in the Strait of Hormuz, one
+        delayed vessel in the Suez Canal, one transiting vessel in the
+        Bosphorus, and one anchored vessel outside all chokepoints (excluded
+        from both numerator and denominator). Expected index is hand-computed
+        from the documented disrupted/total ratio, independent of the
+        implementation under test.
+        """
+        events = [
+            _make_shipping_event(EventType.ANCHORED, latitude=26.0, longitude=56.5, vessel_id="V1"),
+            _make_shipping_event(EventType.TRANSIT, latitude=26.0, longitude=56.5, vessel_id="V2"),
+            _make_shipping_event(EventType.DELAYED, latitude=30.5, longitude=32.5, vessel_id="V3"),
+            _make_shipping_event(EventType.TRANSIT, latitude=41.2, longitude=29.0, vessel_id="V4"),
+            _make_shipping_event(EventType.ANCHORED, latitude=0.0, longitude=0.0, vessel_id="V5"),
+        ]
+        state = _make_alternative_data_state_shipping(events)
+
+        # V5 excluded (outside all chokepoints). In-chokepoint: V1-V4 (4 total).
+        # Disrupted (anchored/delayed): V1, V3 → 2 of 4.
+        expected = 2 / 4
+
+        result = compute_tanker_disruption_index(state)
+        assert result is not None
+        assert abs(result - expected) < 0.01
