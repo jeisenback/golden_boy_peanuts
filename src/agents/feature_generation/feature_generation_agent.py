@@ -7,6 +7,7 @@ Responsibilities (Design Doc Section 4, PRD Section 4.3):
   - Compute sector dispersion across XOM, CVX, USO, XLE
   - Compute insider conviction scores from EDGAR/Quiver data (issue #155)
   - Compute narrative velocity / headline acceleration (issue #156)
+  - Compute tanker disruption index from MarineTraffic chokepoint data (issue #157)
   - Compute supply shock probability from event scores
   - Persist FeatureSet to PostgreSQL for Strategy Evaluation Agent
 
@@ -23,7 +24,7 @@ import statistics
 
 import yfinance as yf
 
-from src.agents.alternative_data.models import AlternativeDataState
+from src.agents.alternative_data.models import AlternativeDataState, EventType
 from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.db import read_price_history, write_feature_set
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
@@ -77,6 +78,23 @@ _NARRATIVE_VELOCITY_CAP: float = 1.0
 # required before the ratio is considered reliable; below this, velocity is
 # reported as 0.0 (too little volume to distinguish signal from noise)
 _MIN_MENTIONS_THRESHOLD: int = 5
+
+# compute_tanker_disruption_index: named chokepoint bounding boxes (issue #157).
+# Mirrors alternative_data_agent.py's _CHOKEPOINTS coordinates — each entry is
+# (name, minlat, maxlat, minlon, maxlon). Duplicated here (rather than imported)
+# so this module's signal computation has no runtime dependency on the ingestion
+# agent module.
+_CHOKEPOINTS: list[tuple[str, float, float, float, float]] = [
+    ("strait_of_hormuz", 25.5, 27.0, 55.5, 57.5),
+    ("suez_canal", 29.5, 31.5, 32.0, 33.5),
+    ("bosphorus", 41.0, 41.5, 28.5, 29.5),
+]
+
+# compute_tanker_disruption_index: maximum returned value
+_TANKER_DISRUPTION_CAP: float = 1.0
+
+# compute_tanker_disruption_index: shipping event types counted as disruption
+_DISRUPTED_EVENT_TYPES: frozenset[EventType] = frozenset({EventType.ANCHORED, EventType.DELAYED})
 
 
 def _month_code_for(month: int) -> str:
@@ -475,6 +493,51 @@ def compute_narrative_velocity(alternative_data_state: AlternativeDataState) -> 
 
     velocity = positive_mentions / total_mentions
     return min(velocity, _NARRATIVE_VELOCITY_CAP)
+
+
+def _in_any_chokepoint(latitude: float, longitude: float) -> bool:
+    """Return True if (latitude, longitude) falls within any configured chokepoint box."""
+    return any(
+        minlat <= latitude <= maxlat and minlon <= longitude <= maxlon
+        for _, minlat, maxlat, minlon, maxlon in _CHOKEPOINTS
+    )
+
+
+def compute_tanker_disruption_index(alternative_data_state: AlternativeDataState) -> float | None:
+    """
+    Compute a tanker disruption index from MarineTraffic shipping events.
+
+    Index = (anchored/delayed vessels) / (total vessels) among the shipping
+    events that fall within a configured chokepoint bounding box
+    (_CHOKEPOINTS). Events outside all chokepoints are excluded from both
+    the numerator and denominator — they carry no chokepoint-congestion
+    signal.
+
+    Args:
+        alternative_data_state: Output of run_alternative_data_ingestion()
+            (issue #154), containing shipping_events from MarineTraffic.
+
+    Returns:
+        Float in [0.0, 1.0], or None if there are no shipping events at all,
+        or none fall within a configured chokepoint (WARNING logged either
+        way).
+    """
+    events = alternative_data_state.shipping_events
+    if not events:
+        logger.warning("compute_tanker_disruption_index: no shipping events — returning None")
+        return None
+
+    in_chokepoint = [e for e in events if _in_any_chokepoint(e.latitude, e.longitude)]
+    if not in_chokepoint:
+        logger.warning(
+            "compute_tanker_disruption_index: no shipping events within configured "
+            "chokepoint bounding boxes — returning None"
+        )
+        return None
+
+    disrupted = sum(1 for e in in_chokepoint if e.event_type in _DISRUPTED_EVENT_TYPES)
+    index = disrupted / len(in_chokepoint)
+    return min(index, _TANKER_DISRUPTION_CAP)
 
 
 def run_feature_generation(
