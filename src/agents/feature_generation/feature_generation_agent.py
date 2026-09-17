@@ -5,7 +5,7 @@ Responsibilities (Design Doc Section 4, PRD Section 4.3):
   - Compute volatility gaps (realized vs. implied)
   - Compute futures curve steepness (WTI forward curve)
   - Compute sector dispersion across XOM, CVX, USO, XLE
-  - Compute insider conviction scores from EDGAR data
+  - Compute insider conviction scores from EDGAR/Quiver data (issue #155)
   - Compute narrative velocity / headline acceleration (issue #156)
   - Compute supply shock probability from event scores
   - Persist FeatureSet to PostgreSQL for Strategy Evaluation Agent
@@ -56,6 +56,19 @@ _FRONT_MONTH_INSTRUMENT: str = "CL=F"
 
 # Second-month WTI futures ticker for yfinance fetch
 _SECOND_MONTH_TICKER: str = "CLG=F"
+
+# compute_insider_conviction_score: buy/sell trade_type weights (issue #155).
+# Buy value counts fully toward conviction; sell value counts at a reduced
+# weight so heavy insider selling still pulls the score down, but less
+# sharply than an equal-weighted buy/sell ratio would.
+_BUY_WEIGHT: float = 1.0
+_SELL_WEIGHT: float = 0.5
+
+# Maximum value returned by compute_insider_conviction_score
+_CONVICTION_CAP: float = 1.0
+
+# Guard: weighted buy+sell total must exceed this before the ratio is safe to compute
+_ZERO_CONVICTION_TOTAL: float = 0.0
 
 # compute_narrative_velocity: maximum returned value (issue #156)
 _NARRATIVE_VELOCITY_CAP: float = 1.0
@@ -371,6 +384,54 @@ def compute_supply_shock_probability(events: list[DetectedEvent]) -> float | Non
         total += type_w * intensity_w * ev.confidence_score
 
     return min(total, 1.0)
+
+
+def compute_insider_conviction_score(alternative_data_state: AlternativeDataState) -> float | None:
+    """
+    Convert insider trade activity into a conviction signal.
+
+    Score = weighted buy value / weighted total (buy + sell) value, where buy
+    value counts at _BUY_WEIGHT and sell value counts at _SELL_WEIGHT. A
+    score near 1.0 means insider activity was almost entirely buying; a
+    score near 0.0 means almost entirely selling. Grant and exercise trades
+    are not market conviction signals and are excluded from both totals.
+
+    Args:
+        alternative_data_state: Output of run_alternative_data_ingestion()
+            (issue #154), containing insider_trades from EDGAR and Quiver.
+
+    Returns:
+        Float in [0.0, 1.0], or None if there are no insider trades, or no
+        buy/sell trades with a finite recorded value_usd (WARNING logged
+        either way). Trades with a non-finite value_usd (inf/nan — a
+        malformed upstream record) are skipped rather than propagated into
+        the ratio.
+    """
+    trades = alternative_data_state.insider_trades
+    if not trades:
+        logger.warning("compute_insider_conviction_score: no insider trades — returning None")
+        return None
+
+    weighted_buy = 0.0
+    weighted_sell = 0.0
+    for trade in trades:
+        if trade.value_usd is None or not math.isfinite(trade.value_usd):
+            continue
+        if trade.trade_type == "buy":
+            weighted_buy += trade.value_usd * _BUY_WEIGHT
+        elif trade.trade_type == "sell":
+            weighted_sell += trade.value_usd * _SELL_WEIGHT
+
+    weighted_total = weighted_buy + weighted_sell
+    if weighted_total <= _ZERO_CONVICTION_TOTAL:
+        logger.warning(
+            "compute_insider_conviction_score: no buy/sell trades with a recorded "
+            "value_usd — returning None"
+        )
+        return None
+
+    score = weighted_buy / weighted_total
+    return min(score, _CONVICTION_CAP)
 
 
 def compute_narrative_velocity(alternative_data_state: AlternativeDataState) -> float | None:
