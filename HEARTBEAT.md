@@ -535,3 +535,15 @@ This closes the Phase 3 signal-computation dependency chain (#154 → #155/#156/
 - 2 new tests: `test_phase3_signals_on_feature_set_increase_edge_score` (Phase 3 fields populated → higher edge_score than otherwise-identical baseline) and `test_phase3_signals_none_matches_pre_209_behavior` (Phase 3 fields None → edge_score unchanged from pre-#209 behavior).
 - All 5 local_check.sh stages pass (412 unit tests, up from 410).
 - #162 (Phase 3 UAT) is unblocked once #209 merges.
+
+## Sprint Notes (2026-09-17, session 5)
+
+**#209 CLOSED** — Phase 3 signal wiring merged (PR #210); all 18 CI workflow runs passed on the merged commit.
+**#162 AWAITING HUMAN REVIEW** — Phase 3 UAT scenario run and report written. PR to be opened → develop. **Not closed** — this issue's own AC requires "UAT report reviewed and approved by human lead" as an explicit gate, unlike #160/#161/#209 which closed on green CI alone.
+
+- `scripts/uat_run.py`: added `run_phase3_scenario()`. Scenario anchored to a real, WebSearch-verified historical event — the 2021 Suez Canal blockage (Ever Given, 2021-03-23 to 2021-03-29; [Wikipedia](https://en.wikipedia.org/wiki/2021_Suez_Canal_obstruction)), a well-documented tanker chokepoint disruption with a reported positive correlation to crude oil price returns. Injected 9 `ShippingEvent` records (1 anchored + 8 delayed, all within the Suez chokepoint bounding box) and 1 `NarrativeSignal` — synthetic/injected data (no live MarineTraffic/Reddit history queried), dated to and order-of-magnitude representative of the real event, same injection methodology as the existing Phase 2 GDELT scenario. Ran the real `compute_tanker_disruption_index()`/`compute_narrative_velocity()` on the injected records (→ 1.0 / 0.8), then called the real `evaluate_strategies()` on a Phase 1+2-only baseline `FeatureSet` vs. an otherwise-identical one with those two Phase 3 signals added.
+- **Result: `BZ=F` edge_score 0.45 (baseline) → 0.68 (Phase 3) = +0.23 measurable increase** — the first real pipeline-path demonstration of Phase 3 signal influence, only possible after #209's wiring fix earlier this session.
+- `insider_conviction_score` intentionally left uninjected (AC only requires "at least one" signal category; avoided asserting an unverified specific historical insider trade).
+- No Docker/Postgres needed — `scripts/uat_run.py` runs fully offline; `evaluate_strategies()`'s DB write is degraded-mode (warns, doesn't raise) and is explicitly mocked here for a clean comparison.
+- Report: `docs/uat_reports/162-uat-report-2026-09-17.md`. **Flag for human lead**: issue #162's own AC text specifies the report filename as `161-uat-report-YYYY-MM-DD.md`, but #161 was the golden-dataset QA issue, not this UAT one — filed as `162-uat-report-...md` instead (matching the `112-uat-report...` ↔ issue #112 convention), with the discrepancy flagged explicitly in both the report and this note rather than silently resolved.
+- All 5 local_check.sh stages pass (412 unit tests, unchanged — no test files touched this session for #162).
