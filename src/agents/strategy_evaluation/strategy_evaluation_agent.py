@@ -296,6 +296,11 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     by edge_score descending and persisted to the DB (DB failures are logged and
     do not propagate — candidates are still returned to the caller).
 
+    Phase 3 signals (insider_conviction_score, narrative_velocity,
+    tanker_disruption_index) are read from feature_set and passed through to
+    compute_edge_score() when present; a None value contributes 0.0, matching
+    Phase 1/2 behavior when they're unset (issue #209).
+
     Args:
         feature_set: Complete FeatureSet from Feature Generation Agent.
 
@@ -312,6 +317,9 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
             feature_set,
             supply_shock_probability=feature_set.supply_shock_probability,
             futures_curve_steepness=feature_set.futures_curve_steepness,
+            insider_conviction_score=feature_set.insider_conviction_score,
+            narrative_velocity=feature_set.narrative_velocity,
+            tanker_disruption_index=feature_set.tanker_disruption_index,
         )
         if edge_score < _MIN_EDGE_SCORE:
             continue

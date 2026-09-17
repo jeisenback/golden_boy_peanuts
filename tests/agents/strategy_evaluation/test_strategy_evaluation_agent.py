@@ -39,6 +39,9 @@ def _make_feature_set(
     sector_dispersion: float | None = None,
     supply_shock_probability: float | None = None,
     futures_curve_steepness: float | None = None,
+    insider_conviction_score: float | None = None,
+    narrative_velocity: float | None = None,
+    tanker_disruption_index: float | None = None,
 ) -> FeatureSet:
     return FeatureSet(
         snapshot_time=datetime.now(tz=UTC),
@@ -46,6 +49,9 @@ def _make_feature_set(
         sector_dispersion=sector_dispersion,
         supply_shock_probability=supply_shock_probability,
         futures_curve_steepness=futures_curve_steepness,
+        insider_conviction_score=insider_conviction_score,
+        narrative_velocity=narrative_velocity,
+        tanker_disruption_index=tanker_disruption_index,
     )
 
 
@@ -500,3 +506,36 @@ class TestEvaluateStrategies:
         ]
         actual_order = [(candidate.instrument, candidate.structure) for candidate in result]
         assert actual_order == expected_order
+
+    def test_phase3_signals_on_feature_set_increase_edge_score(self) -> None:
+        """Phase 3 signals present on the FeatureSet raise edge_score vs. them being None (#209)."""
+        baseline_fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        phase3_fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            insider_conviction_score=0.8,
+            narrative_velocity=0.6,
+            tanker_disruption_index=0.7,
+        )
+
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            baseline_result = evaluate_strategies(baseline_fs)
+            phase3_result = evaluate_strategies(phase3_fs)
+
+        baseline_uso = next(c for c in baseline_result if c.instrument == "USO")
+        phase3_uso = next(c for c in phase3_result if c.instrument == "USO")
+        assert phase3_uso.edge_score > baseline_uso.edge_score
+
+    def test_phase3_signals_none_matches_pre_209_behavior(self) -> None:
+        """Omitting Phase 3 fields on the FeatureSet leaves edge_score unchanged."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        uso = next(c for c in result if c.instrument == "USO")
+        expected = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=fs.supply_shock_probability,
+            futures_curve_steepness=fs.futures_curve_steepness,
+        )
+        assert uso.edge_score == pytest.approx(expected)
