@@ -628,6 +628,35 @@ class TestComputeInsiderConvictionScore:
         assert result is None
         assert any("no buy/sell trades" in r.message.lower() for r in caplog.records)
 
+    def test_non_finite_value_usd_trades_are_skipped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Malformed inf/nan value_usd is excluded, not propagated into the ratio."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", float("inf")),
+                _make_insider_trade("sell", float("nan")),
+            ]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_insider_conviction_score(state)
+        assert result is None
+        assert any("no buy/sell trades" in r.message.lower() for r in caplog.records)
+
+    def test_non_finite_value_usd_excluded_from_mixed_trades(self) -> None:
+        """A malformed inf trade is dropped; the remaining finite trades still score normally."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", float("inf")),
+                _make_insider_trade("buy", 1000.0),
+                _make_insider_trade("sell", 1000.0),
+            ]
+        )
+        # inf trade skipped: weighted_buy = 1000 * 1.0 = 1000; weighted_sell = 1000 * 0.5 = 500
+        expected = 1000.0 / (1000.0 + 500.0)
+        result = compute_insider_conviction_score(state)
+        assert result == pytest.approx(expected)
+
 
 # ---------------------------------------------------------------------------
 # TestComputeNarrativeVelocity

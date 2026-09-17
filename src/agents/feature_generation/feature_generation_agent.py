@@ -67,6 +67,9 @@ _SELL_WEIGHT: float = 0.5
 # Maximum value returned by compute_insider_conviction_score
 _CONVICTION_CAP: float = 1.0
 
+# Guard: weighted buy+sell total must exceed this before the ratio is safe to compute
+_ZERO_CONVICTION_TOTAL: float = 0.0
+
 # compute_narrative_velocity: maximum returned value (issue #156)
 _NARRATIVE_VELOCITY_CAP: float = 1.0
 
@@ -399,7 +402,10 @@ def compute_insider_conviction_score(alternative_data_state: AlternativeDataStat
 
     Returns:
         Float in [0.0, 1.0], or None if there are no insider trades, or no
-        buy/sell trades with a recorded value_usd (WARNING logged either way).
+        buy/sell trades with a finite recorded value_usd (WARNING logged
+        either way). Trades with a non-finite value_usd (inf/nan — a
+        malformed upstream record) are skipped rather than propagated into
+        the ratio.
     """
     trades = alternative_data_state.insider_trades
     if not trades:
@@ -409,7 +415,7 @@ def compute_insider_conviction_score(alternative_data_state: AlternativeDataStat
     weighted_buy = 0.0
     weighted_sell = 0.0
     for trade in trades:
-        if trade.value_usd is None:
+        if trade.value_usd is None or not math.isfinite(trade.value_usd):
             continue
         if trade.trade_type == "buy":
             weighted_buy += trade.value_usd * _BUY_WEIGHT
@@ -417,7 +423,7 @@ def compute_insider_conviction_score(alternative_data_state: AlternativeDataStat
             weighted_sell += trade.value_usd * _SELL_WEIGHT
 
     weighted_total = weighted_buy + weighted_sell
-    if weighted_total <= 0.0:
+    if weighted_total <= _ZERO_CONVICTION_TOTAL:
         logger.warning(
             "compute_insider_conviction_score: no buy/sell trades with a recorded "
             "value_usd — returning None"
