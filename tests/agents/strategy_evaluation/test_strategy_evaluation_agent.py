@@ -237,24 +237,28 @@ class TestComputeEdgeScore:
 
     def test_cross_sector_boost_applied_when_both_high(self) -> None:
         """High dispersion + high insider conviction applies the _CROSS_SECTOR_BOOST multiplier."""
+        from src.agents.strategy_evaluation.strategy_evaluation_agent import (
+            _CROSS_SECTOR_BOOST,
+        )
+
         fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.5)
         score = compute_edge_score("USO", fs, insider_conviction_score=0.8)
         base = 0.5 * 0.30 + 0.8 * 0.15  # disp_contribution + insider_contribution
-        expected = base * 1.10  # _CROSS_SECTOR_BOOST
+        expected = base * (1.0 + _CROSS_SECTOR_BOOST)
         assert score == pytest.approx(expected)
 
     def test_cross_sector_boost_not_applied_when_only_dispersion_high(self) -> None:
         """High dispersion but insider conviction below threshold → no boost."""
         fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.5)
         score = compute_edge_score("USO", fs, insider_conviction_score=0.5)
-        expected = 0.5 * 0.30 + 0.5 * 0.15  # no 1.10x boost applied
+        expected = 0.5 * 0.30 + 0.5 * 0.15  # no _CROSS_SECTOR_BOOST applied
         assert score == pytest.approx(expected)
 
     def test_cross_sector_boost_not_applied_when_only_conviction_high(self) -> None:
         """High insider conviction but dispersion below threshold → no boost."""
         fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.05)
         score = compute_edge_score("USO", fs, insider_conviction_score=0.9)
-        expected = 0.05 * 0.30 + 0.9 * 0.15  # no 1.10x boost applied
+        expected = 0.05 * 0.30 + 0.9 * 0.15  # no _CROSS_SECTOR_BOOST applied
         assert score == pytest.approx(expected)
 
     def test_score_clamped_at_one_with_all_signals_maxed(self) -> None:

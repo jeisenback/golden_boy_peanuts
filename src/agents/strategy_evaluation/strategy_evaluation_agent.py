@@ -126,11 +126,12 @@ def compute_edge_score(
     Compute a composite edge score for a given instrument from the FeatureSet.
 
     Phase 1 base score: weighted sum of volatility gap and sector dispersion.
+    Phase 2 multipliers: supply shock probability and futures curve steepness
+    amplify the base score when present.
     Phase 3 additive signals: insider conviction, narrative velocity, and
     tanker disruption join the base score as additional weighted terms.
-    Phase 2 multipliers: supply shock probability and futures curve steepness
-    amplify the base score when present. A cross-sector correlation boost
-    applies on top when sector dispersion and insider conviction are both high.
+    A cross-sector correlation boost applies on top when sector dispersion
+    and insider conviction are both high.
 
     Formula:
         base = vol_gap_norm * _VOL_GAP_WEIGHT + disp_norm * _DISPERSION_WEIGHT
@@ -208,7 +209,8 @@ def compute_edge_score(
         and insider_conviction_score is not None
         and insider_conviction_score > _INSIDER_CONVICTION_HIGH_THRESHOLD
     ):
-        score *= 1.0 + _CROSS_SECTOR_BOOST
+        boost_multiplier = 1.0 + _CROSS_SECTOR_BOOST
+        score *= boost_multiplier
 
     return min(score, 1.0)
 
