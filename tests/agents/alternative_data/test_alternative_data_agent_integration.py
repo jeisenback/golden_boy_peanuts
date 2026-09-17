@@ -62,6 +62,12 @@ _PATCH_ENGINE = "src.agents.alternative_data.alternative_data_agent.get_engine"
 _SCHEMA_PATH = pathlib.Path(__file__).parents[3] / "db" / "schema.sql"
 _PG_IMAGE: str = "postgres:15"
 
+# Float-equality tolerances for round-trip assertions, one order of magnitude
+# tighter than each column's own NUMERIC precision so real precision loss
+# still fails the assertion.
+_USD_TOLERANCE: float = 1e-2  # insider_trades.value_usd is NUMERIC(18,2)
+_COORD_TOLERANCE: float = 1e-4  # shipping_events lat/lon are NUMERIC(9,6)
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -176,9 +182,9 @@ def test_write_insider_trades_round_trip(pg_engine: Engine) -> None:
     assert len(rows) == 2
     by_instrument = {r[0]: r for r in rows}
     assert by_instrument["CVX"][1] == "sell"
-    assert abs(float(by_instrument["CVX"][2]) - 20_000.0) < 1e-2
+    assert abs(float(by_instrument["CVX"][2]) - 20_000.0) < _USD_TOLERANCE
     assert by_instrument["XOM"][1] == "buy"
-    assert abs(float(by_instrument["XOM"][2]) - 50_000.0) < 1e-2
+    assert abs(float(by_instrument["XOM"][2]) - 50_000.0) < _USD_TOLERANCE
     assert all(r[3] == "Jane Smith" for r in rows)
     assert all(r[4] == "edgar" for r in rows)
 
@@ -235,8 +241,8 @@ def test_write_shipping_events_round_trip(pg_engine: Engine) -> None:
     by_vessel = {r[0]: r for r in rows}
     assert by_vessel["V1"][1] == "transit"
     assert by_vessel["V2"][1] == "anchored"
-    assert all(abs(float(r[2]) - 26.0) < 1e-4 for r in rows)
-    assert all(abs(float(r[3]) - 56.5) < 1e-4 for r in rows)
+    assert all(abs(float(r[2]) - 26.0) < _COORD_TOLERANCE for r in rows)
+    assert all(abs(float(r[3]) - 56.5) < _COORD_TOLERANCE for r in rows)
     assert all(r[4] == "CL=F" for r in rows)
 
 
