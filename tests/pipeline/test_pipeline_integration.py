@@ -154,15 +154,18 @@ def pg_engine() -> Generator[Engine, None, None]:
 def _clean_tables(pg_engine: Engine) -> Generator[None, None, None]:
     """Truncate all pipeline tables before each test for isolation.
 
-    Resets market_prices, options_chain, feature_sets, and strategy_candidates
-    so that each test starts from a known-empty state regardless of insertion
-    order or prior test failures.
+    Resets market_prices, options_chain, feature_sets, strategy_candidates,
+    and strategy_outcomes so that each test starts from a known-empty state
+    regardless of insertion order or prior test failures. strategy_outcomes
+    has a foreign key to strategy_candidates, so it must be truncated in the
+    same statement (Postgres refuses to truncate a table that is still
+    referenced by an untruncated table).
     """
     with pg_engine.begin() as conn:
         conn.execute(
             text(
                 "TRUNCATE market_prices, options_chain, feature_sets,"
-                " strategy_candidates RESTART IDENTITY"
+                " strategy_candidates, strategy_outcomes RESTART IDENTITY"
             )
         )
     yield
