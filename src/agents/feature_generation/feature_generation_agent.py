@@ -5,8 +5,9 @@ Responsibilities (Design Doc Section 4, PRD Section 4.3):
   - Compute volatility gaps (realized vs. implied)
   - Compute futures curve steepness (WTI forward curve)
   - Compute sector dispersion across XOM, CVX, USO, XLE
-  - Compute insider conviction scores from EDGAR data
-  - Compute narrative velocity / headline acceleration
+  - Compute insider conviction scores from EDGAR/Quiver data (issue #155)
+  - Compute narrative velocity / headline acceleration (issue #156)
+  - Compute tanker disruption index from MarineTraffic chokepoint data (issue #157)
   - Compute supply shock probability from event scores
   - Persist FeatureSet to PostgreSQL for Strategy Evaluation Agent
 
@@ -23,6 +24,7 @@ import statistics
 
 import yfinance as yf
 
+from src.agents.alternative_data.models import AlternativeDataState, EventType
 from src.agents.event_detection.models import DetectedEvent
 from src.agents.feature_generation.db import read_price_history, write_feature_set
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
@@ -55,6 +57,44 @@ _FRONT_MONTH_INSTRUMENT: str = "CL=F"
 
 # Second-month WTI futures ticker for yfinance fetch
 _SECOND_MONTH_TICKER: str = "CLG=F"
+
+# compute_insider_conviction_score: buy/sell trade_type weights (issue #155).
+# Buy value counts fully toward conviction; sell value counts at a reduced
+# weight so heavy insider selling still pulls the score down, but less
+# sharply than an equal-weighted buy/sell ratio would.
+_BUY_WEIGHT: float = 1.0
+_SELL_WEIGHT: float = 0.5
+
+# Maximum value returned by compute_insider_conviction_score
+_CONVICTION_CAP: float = 1.0
+
+# Guard: weighted buy+sell total must exceed this before the ratio is safe to compute
+_ZERO_CONVICTION_TOTAL: float = 0.0
+
+# compute_narrative_velocity: maximum returned value (issue #156)
+_NARRATIVE_VELOCITY_CAP: float = 1.0
+
+# compute_narrative_velocity: minimum total mention_count across narrative_signals
+# required before the ratio is considered reliable; below this, velocity is
+# reported as 0.0 (too little volume to distinguish signal from noise)
+_MIN_MENTIONS_THRESHOLD: int = 5
+
+# compute_tanker_disruption_index: named chokepoint bounding boxes (issue #157).
+# Mirrors alternative_data_agent.py's _CHOKEPOINTS coordinates — each entry is
+# (name, minlat, maxlat, minlon, maxlon). Duplicated here (rather than imported)
+# so this module's signal computation has no runtime dependency on the ingestion
+# agent module.
+_CHOKEPOINTS: list[tuple[str, float, float, float, float]] = [
+    ("strait_of_hormuz", 25.5, 27.0, 55.5, 57.5),
+    ("suez_canal", 29.5, 31.5, 32.0, 33.5),
+    ("bosphorus", 41.0, 41.5, 28.5, 29.5),
+]
+
+# compute_tanker_disruption_index: maximum returned value
+_TANKER_DISRUPTION_CAP: float = 1.0
+
+# compute_tanker_disruption_index: shipping event types counted as disruption
+_DISRUPTED_EVENT_TYPES: frozenset[EventType] = frozenset({EventType.ANCHORED, EventType.DELAYED})
 
 
 def _month_code_for(month: int) -> str:
@@ -362,6 +402,142 @@ def compute_supply_shock_probability(events: list[DetectedEvent]) -> float | Non
         total += type_w * intensity_w * ev.confidence_score
 
     return min(total, 1.0)
+
+
+def compute_insider_conviction_score(alternative_data_state: AlternativeDataState) -> float | None:
+    """
+    Convert insider trade activity into a conviction signal.
+
+    Score = weighted buy value / weighted total (buy + sell) value, where buy
+    value counts at _BUY_WEIGHT and sell value counts at _SELL_WEIGHT. A
+    score near 1.0 means insider activity was almost entirely buying; a
+    score near 0.0 means almost entirely selling. Grant and exercise trades
+    are not market conviction signals and are excluded from both totals.
+
+    Args:
+        alternative_data_state: Output of run_alternative_data_ingestion()
+            (issue #154), containing insider_trades from EDGAR and Quiver.
+
+    Returns:
+        Float in [0.0, 1.0], or None if there are no insider trades, or no
+        buy/sell trades with a finite recorded value_usd (WARNING logged
+        either way). Trades with a non-finite value_usd (inf/nan — a
+        malformed upstream record) are skipped rather than propagated into
+        the ratio.
+    """
+    trades = alternative_data_state.insider_trades
+    if not trades:
+        logger.warning("compute_insider_conviction_score: no insider trades — returning None")
+        return None
+
+    weighted_buy = 0.0
+    weighted_sell = 0.0
+    for trade in trades:
+        if trade.value_usd is None or not math.isfinite(trade.value_usd):
+            continue
+        if trade.trade_type == "buy":
+            weighted_buy += trade.value_usd * _BUY_WEIGHT
+        elif trade.trade_type == "sell":
+            weighted_sell += trade.value_usd * _SELL_WEIGHT
+
+    weighted_total = weighted_buy + weighted_sell
+    if weighted_total <= _ZERO_CONVICTION_TOTAL:
+        logger.warning(
+            "compute_insider_conviction_score: no buy/sell trades with a recorded "
+            "value_usd — returning None"
+        )
+        return None
+
+    score = weighted_buy / weighted_total
+    return min(score, _CONVICTION_CAP)
+
+
+def compute_narrative_velocity(alternative_data_state: AlternativeDataState) -> float | None:
+    """
+    Compute narrative velocity from aggregated Reddit/Stocktwits signals.
+
+    Velocity = (net positive mentions) / (total mention volume), where net
+    positive mentions is the sum of NarrativeSignal.score (each signal's
+    aggregate net upvote/sentiment score, which can be negative) across all
+    signals, floored at 0.0, and total mention volume is the sum of
+    NarrativeSignal.mention_count. This measures what fraction of narrative
+    volume this cycle is trending positive — a high ratio means most mention
+    volume carries positive sentiment; a low ratio means neutral, negative,
+    or thin volume.
+
+    Args:
+        alternative_data_state: Output of run_alternative_data_ingestion()
+            (issue #154), containing narrative_signals from Reddit/Stocktwits.
+
+    Returns:
+        Float in [0.0, 1.0], or None if there are no narrative signals at
+        all (WARNING logged). Returns 0.0 (not a division error) when total
+        mention_count is below _MIN_MENTIONS_THRESHOLD.
+    """
+    signals = alternative_data_state.narrative_signals
+    if not signals:
+        logger.warning("compute_narrative_velocity: no narrative signals — returning None")
+        return None
+
+    positive_mentions = max(sum(s.score for s in signals), 0)
+    total_mentions = sum(s.mention_count for s in signals)
+
+    if total_mentions < _MIN_MENTIONS_THRESHOLD:
+        logger.warning(
+            "compute_narrative_velocity: total mention_count=%d below threshold=%d — "
+            "returning 0.0",
+            total_mentions,
+            _MIN_MENTIONS_THRESHOLD,
+        )
+        return 0.0
+
+    velocity = positive_mentions / total_mentions
+    return min(velocity, _NARRATIVE_VELOCITY_CAP)
+
+
+def _in_any_chokepoint(latitude: float, longitude: float) -> bool:
+    """Return True if (latitude, longitude) falls within any configured chokepoint box."""
+    return any(
+        minlat <= latitude <= maxlat and minlon <= longitude <= maxlon
+        for _, minlat, maxlat, minlon, maxlon in _CHOKEPOINTS
+    )
+
+
+def compute_tanker_disruption_index(alternative_data_state: AlternativeDataState) -> float | None:
+    """
+    Compute a tanker disruption index from MarineTraffic shipping events.
+
+    Index = (anchored/delayed vessels) / (total vessels) among the shipping
+    events that fall within a configured chokepoint bounding box
+    (_CHOKEPOINTS). Events outside all chokepoints are excluded from both
+    the numerator and denominator — they carry no chokepoint-congestion
+    signal.
+
+    Args:
+        alternative_data_state: Output of run_alternative_data_ingestion()
+            (issue #154), containing shipping_events from MarineTraffic.
+
+    Returns:
+        Float in [0.0, 1.0], or None if there are no shipping events at all,
+        or none fall within a configured chokepoint (WARNING logged either
+        way).
+    """
+    events = alternative_data_state.shipping_events
+    if not events:
+        logger.warning("compute_tanker_disruption_index: no shipping events — returning None")
+        return None
+
+    in_chokepoint = [e for e in events if _in_any_chokepoint(e.latitude, e.longitude)]
+    if not in_chokepoint:
+        logger.warning(
+            "compute_tanker_disruption_index: no shipping events within configured "
+            "chokepoint bounding boxes — returning None"
+        )
+        return None
+
+    disrupted = sum(1 for e in in_chokepoint if e.event_type in _DISRUPTED_EVENT_TYPES)
+    index = disrupted / len(in_chokepoint)
+    return min(index, _TANKER_DISRUPTION_CAP)
 
 
 def run_feature_generation(

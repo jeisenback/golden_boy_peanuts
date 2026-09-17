@@ -412,3 +412,91 @@ Implementation details:
 - `_TX_CODE_MAP`: P→buy, S→sell, A→grant, M→exercise; other codes (F, J) skipped silently.
 - 16 unit tests across `TestParseForm4Xml`, `TestEftsSearch`, `TestFetchEdgarInsiderTrades`.
 - All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 266 unit tests).
+
+## Sprint Notes (2026-03-22, session 2)
+
+**#151 IN REVIEW** — fetch_reddit_sentiment implemented. PR #182 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_reddit_sentiment(instruments)` queries r/energy+oil+investing via Reddit public JSON API (no auth key); aggregates net upvote score and mention count per instrument.
+- `src/agents/alternative_data/models.py`: `NarrativeSignal` Pydantic model + `Sentiment` StrEnum added.
+- `_classify_sentiment()`: keyword heuristic using `frozenset` O(1) sets; returns positive/neutral/negative.
+- `@with_retry()` applied; 429 rate-limit logged as WARNING and returns `[]` immediately (no retry).
+- 13 unit tests: happy path, score aggregation, window boundary, no mentions, instrument omission, 429 mid-batch, sentiment classification (5 cases).
+- chore: auto-fixed pre-existing black format failures on 8 unrelated db.py / integration test files.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 278 unit tests).
+- #151 In Review, PR #182 opened 2026-03-22
+
+## Sprint Notes (2026-03-22, session 3)
+
+**#151 CLOSED** — PR #182 merged to develop by human lead 2026-03-22.
+
+**#152 IN REVIEW** — fetch_stocktwits_sentiment implemented. PR #184 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_stocktwits_sentiment(instruments)` queries Stocktwits public symbol stream API (no auth key); Bullish/Bearish label counts → positive/negative/neutral; score = net bullish minus bearish.
+- `@with_retry()` applied; 429 → WARNING + []; 404/empty stream → WARNING + skip instrument.
+- `_stocktwits_stream()` private helper; 404 and 429 handled before `raise_for_status()`.
+- 12 unit tests: bullish majority, bearish majority, neutral (equal), unlabeled neutral, multi-instrument, empty stream, 404, 429 graceful skip, mid-batch 429, HTTP error propagation.
+- All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan, 288 unit tests).
+- #152 In Review, PR #184 opened 2026-03-22
+
+## Sprint Notes (2026-03-22, session 4)
+
+**#152 CLOSED** — PR #184 merged to develop by human lead 2026-03-22.
+
+**#153 IN REVIEW** — fetch_tanker_flows implemented. PR #185 open → develop.
+
+- `src/agents/alternative_data/alternative_data_agent.py`: `fetch_tanker_flows()` queries MarineTraffic getVesselsInArea v:8 for 3 chokepoints (Strait of Hormuz, Suez Canal, Bosphorus).
+- `src/agents/alternative_data/models.py`: `EventType` StrEnum + `ShippingEvent` Pydantic model added.
+- `MARINETRAFFIC_API_KEY` absent → WARNING + []; malformed vessel records → WARNING + skip.
+- Speed ≤ 0.5 knots → anchored; otherwise transit. `_CHOKEPOINTS` named constant with bounding boxes.
+- 11 unit tests covering all AC scenarios; 299 total passing.
+- `.env.example` updated with MARINETRAFFIC_API_KEY placeholder and comment.
+- All 5 local_check.sh stages pass (ruff, black 26.3.1, mypy strict, import scan).
+- #153 In Review, PR #185 opened 2026-03-22
+
+## Sprint Notes (2026-03-23, session 1)
+
+**#130 IN REVIEW** — strategy_outcomes table + write/fetch DB functions. PR #186 open → develop.
+**#166 IN REVIEW** — Backtest harness (fixture-driven replay). PR #187 open → develop.
+**#137 IN REVIEW** — Edge score validation harness. PR #188 open → develop.
+
+- `src/core/backtest.py`: `run_backtest(lookback_days=90)` queries strategy_candidates JOIN strategy_outcomes; groups by edge_score quartile (Q1-Q4); computes mean abs pct_move and hit rates per structure; returns BacktestReport.
+- `BacktestReport` Pydantic model persisted to backtest_reports table (degraded-mode: logs WARNING, never raises on DB failure).
+- `db/migrations/add_backtest_reports.sql` + `db/schema.sql` updated with backtest_reports table.
+- CLI: `python -m src.core.backtest --lookback-days 90` prints JSON to stdout.
+- 25 unit tests: quartile label boundary conditions, Q4>Q1 assertion, hit rate per structure (all/none/partial), empty result set, DB degraded-mode, full run_backtest mock.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 291 unit tests).
+- #137 In Review, PR #188 opened 2026-03-23
+
+## Sprint Notes (2026-09-16, session 1)
+
+**#154 CLOSED** — run_alternative_data_ingestion implemented. PR #199 merged to develop.
+**#156 CLOSED** — compute_narrative_velocity implemented. PR #202 merged to develop.
+**#157 IN REVIEW** — compute_tanker_disruption_index implemented. PR #203 open → develop.
+
+- `src/agents/feature_generation/feature_generation_agent.py`: `compute_tanker_disruption_index(alternative_data_state) -> float | None` — ratio of anchored/delayed to total vessels among shipping events falling within a configured chokepoint bounding box, capped at 1.0.
+- `_CHOKEPOINTS` bounding-box constant duplicated in this module (mirrors `alternative_data_agent.py`'s coordinates) per AC — keeps feature-generation free of a runtime dependency on the ingestion module.
+- Returns `None` + WARNING for empty shipping_events, and (an extension beyond the literal AC) also for events present but none within a configured chokepoint.
+- 8 unit tests: all-anchored/delayed, all-transit, mixed ratio, empty events, events outside all chokepoints, chokepoint boundary inclusivity, mixed in/out exclusion, cap enforcement.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 375 unit tests).
+- #157 In Review, PR #203 opened 2026-09-16
+
+**Flag for human lead:** PR #201 (#155, `compute_insider_conviction_score`) is still open and unmerged, and now shows `mergeable_state: dirty` against develop (PR #202 landed on the same file afterward). Not touched this session — needs a conflict-resolution pass before it can merge.
+
+**Flag for human lead:** This file's committed Sprint Issues table (top of file) is still Sprint 9 and does not list issues #149-#158 — those are tracked under the Sprint 10 milestone in GitHub. Sessions have continued working #154/#155/#156/#157 under direct per-issue instruction; the table itself was not edited (per the Hard Stop), only this notes section.
+
+## Sprint Notes (2026-09-17, session 1)
+
+**#155 CLOSED** — compute_insider_conviction_score merged (PR #201, conflict resolved + a real correctness bug fixed: non-finite `value_usd` producing `nan`, caught by a `chatgpt-codex-connector` review comment).
+**#157 CLOSED** — compute_tanker_disruption_index merged (PR #203, conflict resolved after #201 merged).
+**#158 IN REVIEW** — compute_edge_score extended with full Phase 3 signal set. PR #204 open → develop.
+
+- `src/agents/strategy_evaluation/strategy_evaluation_agent.py`: `compute_edge_score()` gains 3 new optional params (`insider_conviction_score`, `narrative_velocity`, `tanker_disruption_index`) — signature change proposed as an issue comment on #158 and approved by human lead before implementation (Hard Stop compliance).
+- Phase 3 signals join the base score **additively** (`_INSIDER_CONVICTION_WEIGHT=0.15`, `_NARRATIVE_VELOCITY_WEIGHT=0.10`, `_TANKER_DISRUPTION_WEIGHT=0.15`), distinct from the existing **multiplicative** Phase 2 signals.
+- Cross-sector boost (`_CROSS_SECTOR_BOOST=0.10`) applies when `sector_dispersion` > existing `_DISPERSION_HIGH_THRESHOLD` AND `insider_conviction_score` > new `_INSIDER_CONVICTION_HIGH_THRESHOLD=0.70`.
+- `evaluate_strategies()` intentionally left unchanged — wiring the 3 new params through it is out of #158's AC scope (`FeatureSet` doesn't carry `tanker_disruption_index` yet).
+- 8 new tests: backward compat, each Phase 3 signal isolated, all combined, boost applied/not-applied (2 variants), clamp.
+- All 5 local_check.sh stages pass (ruff, black, mypy strict, import scan, 393 unit tests).
+- #158 In Review, PR #204 opened 2026-09-17
+
+This closes the Phase 3 signal-computation dependency chain (#154 → #155/#156/#157 → #158), all now merged or in review.

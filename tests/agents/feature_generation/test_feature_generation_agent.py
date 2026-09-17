@@ -16,9 +16,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.alternative_data.models import (
+    AlternativeDataState,
+    EventType,
+    InsiderTrade,
+    NarrativeSignal,
+    Sentiment,
+    ShippingEvent,
+)
 from src.agents.feature_generation.feature_generation_agent import (
     compute_futures_curve_steepness,
+    compute_insider_conviction_score,
+    compute_narrative_velocity,
     compute_sector_dispersion,
+    compute_tanker_disruption_index,
     compute_volatility_gap,
     run_feature_generation,
 )
@@ -532,3 +543,328 @@ class TestRunFeatureGeneration:
         ):
             result = run_feature_generation(market_state, [])
         assert result.snapshot_time == snap
+
+
+# ---------------------------------------------------------------------------
+# TestComputeInsiderConvictionScore
+# ---------------------------------------------------------------------------
+
+
+def _make_insider_trade(
+    trade_type: str,
+    value_usd: float | None,
+    instrument: str = "XOM",
+) -> InsiderTrade:
+    return InsiderTrade(
+        instrument=instrument,
+        trade_date=datetime.now(tz=UTC),
+        trade_type=trade_type,
+        shares=1000,
+        value_usd=value_usd,
+        officer_name="Jane Smith",
+        source="edgar",
+    )
+
+
+def _make_alternative_data_state(trades: list[InsiderTrade]) -> AlternativeDataState:
+    return AlternativeDataState(snapshot_time=datetime.now(tz=UTC), insider_trades=trades)
+
+
+class TestComputeInsiderConvictionScore:
+    """Tests for compute_insider_conviction_score() — buy/sell weighted conviction."""
+
+    def test_all_buy_trades_returns_one(self) -> None:
+        """No sell trades → weighted_sell=0 → score is exactly 1.0."""
+        state = _make_alternative_data_state([_make_insider_trade("buy", 100_000.0)])
+        assert compute_insider_conviction_score(state) == pytest.approx(1.0)
+
+    def test_all_sell_trades_returns_zero(self) -> None:
+        """No buy trades → weighted_buy=0 → score is exactly 0.0."""
+        state = _make_alternative_data_state([_make_insider_trade("sell", 100_000.0)])
+        assert compute_insider_conviction_score(state) == pytest.approx(0.0)
+
+    def test_mixed_trades_matches_weighted_formula(self) -> None:
+        """score == weighted_buy / (weighted_buy + weighted_sell) for a known input."""
+        state = _make_alternative_data_state(
+            [_make_insider_trade("buy", 1000.0), _make_insider_trade("sell", 1000.0)]
+        )
+        # weighted_buy = 1000 * 1.0 = 1000; weighted_sell = 1000 * 0.5 = 500
+        expected = 1000.0 / (1000.0 + 500.0)
+        assert compute_insider_conviction_score(state) == pytest.approx(expected)
+
+    def test_empty_trades_returns_none_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        state = _make_alternative_data_state([])
+        with caplog.at_level(logging.WARNING):
+            result = compute_insider_conviction_score(state)
+        assert result is None
+        assert any("no insider trades" in r.message.lower() for r in caplog.records)
+
+    def test_cap_enforced_at_one(self) -> None:
+        """Multiple large buy trades with zero sells never exceed the 1.0 cap."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", 5_000_000.0),
+                _make_insider_trade("buy", 3_000_000.0),
+                _make_insider_trade("buy", 1_000_000.0),
+            ]
+        )
+        assert compute_insider_conviction_score(state) == pytest.approx(1.0)
+
+    def test_grant_and_exercise_trades_excluded(self) -> None:
+        """grant/exercise trade types don't affect the buy/sell ratio."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", 1000.0),
+                _make_insider_trade("grant", 500_000.0),
+                _make_insider_trade("exercise", 500_000.0),
+            ]
+        )
+        assert compute_insider_conviction_score(state) == pytest.approx(1.0)
+
+    def test_trades_with_no_value_usd_are_skipped(self, caplog: pytest.LogCaptureFixture) -> None:
+        """Buy/sell trades with value_usd=None contribute nothing; all-None returns None."""
+        state = _make_alternative_data_state(
+            [_make_insider_trade("buy", None), _make_insider_trade("sell", None)]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_insider_conviction_score(state)
+        assert result is None
+        assert any("no buy/sell trades" in r.message.lower() for r in caplog.records)
+
+    def test_non_finite_value_usd_trades_are_skipped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Malformed inf/nan value_usd is excluded, not propagated into the ratio."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", float("inf")),
+                _make_insider_trade("sell", float("nan")),
+            ]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_insider_conviction_score(state)
+        assert result is None
+        assert any("no buy/sell trades" in r.message.lower() for r in caplog.records)
+
+    def test_non_finite_value_usd_excluded_from_mixed_trades(self) -> None:
+        """A malformed inf trade is dropped; the remaining finite trades still score normally."""
+        state = _make_alternative_data_state(
+            [
+                _make_insider_trade("buy", float("inf")),
+                _make_insider_trade("buy", 1000.0),
+                _make_insider_trade("sell", 1000.0),
+            ]
+        )
+        # inf trade skipped: weighted_buy = 1000 * 1.0 = 1000; weighted_sell = 1000 * 0.5 = 500
+        expected = 1000.0 / (1000.0 + 500.0)
+        result = compute_insider_conviction_score(state)
+        assert result == pytest.approx(expected)
+
+
+# ---------------------------------------------------------------------------
+# TestComputeNarrativeVelocity
+# ---------------------------------------------------------------------------
+
+
+def _make_narrative_signal(
+    score: int,
+    mention_count: int,
+    platform: str = "reddit",
+    instrument: str = "USO",
+) -> NarrativeSignal:
+    now = datetime.now(tz=UTC)
+    return NarrativeSignal(
+        instrument=instrument,
+        platform=platform,
+        score=score,
+        mention_count=mention_count,
+        sentiment=Sentiment.POSITIVE if score > 0 else Sentiment.NEGATIVE,
+        window_start=now,
+        window_end=now,
+        source=platform,
+    )
+
+
+def _make_alternative_data_state_narrative(
+    signals: list[NarrativeSignal],
+) -> AlternativeDataState:
+    return AlternativeDataState(snapshot_time=datetime.now(tz=UTC), narrative_signals=signals)
+
+
+class TestComputeNarrativeVelocity:
+    """Tests for compute_narrative_velocity() — net-positive / total mention ratio."""
+
+    def test_rising_sentiment_caps_at_one(self) -> None:
+        """score == mention_count (all mentions net-positive) → ratio saturates at cap."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=100, mention_count=100)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(1.0)
+
+    def test_falling_sentiment_returns_near_zero(self) -> None:
+        """Net-negative score is floored at 0 before dividing → velocity is 0.0."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=-50, mention_count=100)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(0.0)
+
+    def test_mixed_signals_matches_expected_ratio(self) -> None:
+        """Two signals aggregate: positive_mentions=sum(score), total=sum(mention_count)."""
+        state = _make_alternative_data_state_narrative(
+            [
+                _make_narrative_signal(score=30, mention_count=50, platform="reddit"),
+                _make_narrative_signal(score=10, mention_count=50, platform="stocktwits"),
+            ]
+        )
+        # positive_mentions = 30 + 10 = 40; total_mentions = 50 + 50 = 100
+        assert compute_narrative_velocity(state) == pytest.approx(0.4)
+
+    def test_zero_baseline_returns_zero_not_division_error(self) -> None:
+        """total_mentions below _MIN_MENTIONS_THRESHOLD returns 0.0, never raises."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=0, mention_count=0)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(0.0)
+
+    def test_empty_signals_returns_none_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        state = _make_alternative_data_state_narrative([])
+        with caplog.at_level(logging.WARNING):
+            result = compute_narrative_velocity(state)
+        assert result is None
+        assert any("no narrative signals" in r.message.lower() for r in caplog.records)
+
+    def test_cap_enforced_when_score_exceeds_mention_count(self) -> None:
+        """Pathological score > mention_count (shouldn't happen, but must not exceed cap)."""
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=200, mention_count=100)]
+        )
+        assert compute_narrative_velocity(state) == pytest.approx(1.0)
+
+    def test_below_min_mentions_threshold_returns_zero_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Total mentions present but below _MIN_MENTIONS_THRESHOLD → 0.0 + WARNING."""
+        from src.agents.feature_generation.feature_generation_agent import (
+            _MIN_MENTIONS_THRESHOLD,
+        )
+
+        below_threshold = _MIN_MENTIONS_THRESHOLD - 2
+        state = _make_alternative_data_state_narrative(
+            [_make_narrative_signal(score=below_threshold - 1, mention_count=below_threshold)]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_narrative_velocity(state)
+        assert result == pytest.approx(0.0)
+        assert any("below threshold" in r.message.lower() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared across TestComputeTankerDisruptionIndex
+# ---------------------------------------------------------------------------
+
+
+def _make_shipping_event(
+    event_type: EventType,
+    latitude: float = 26.0,
+    longitude: float = 56.5,
+    vessel_id: str = "VESSEL1",
+) -> ShippingEvent:
+    """Default lat/lon lands inside the strait_of_hormuz chokepoint box."""
+    return ShippingEvent(
+        vessel_id=vessel_id,
+        event_type=event_type,
+        latitude=latitude,
+        longitude=longitude,
+        timestamp=datetime.now(tz=UTC),
+        source="marinetraffic",
+    )
+
+
+def _make_alternative_data_state_shipping(
+    events: list[ShippingEvent],
+) -> AlternativeDataState:
+    return AlternativeDataState(snapshot_time=datetime.now(tz=UTC), shipping_events=events)
+
+
+class TestComputeTankerDisruptionIndex:
+    """Tests for compute_tanker_disruption_index() — chokepoint disruption ratio."""
+
+    def test_all_anchored_or_delayed_returns_one(self) -> None:
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(EventType.ANCHORED, vessel_id="V1"),
+                _make_shipping_event(EventType.DELAYED, vessel_id="V2"),
+            ]
+        )
+        assert compute_tanker_disruption_index(state) == pytest.approx(1.0)
+
+    def test_all_transit_returns_zero(self) -> None:
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V1"),
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V2"),
+            ]
+        )
+        assert compute_tanker_disruption_index(state) == pytest.approx(0.0)
+
+    def test_mixed_matches_expected_ratio(self) -> None:
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(EventType.ANCHORED, vessel_id="V1"),
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V2"),
+                _make_shipping_event(EventType.TRANSIT, vessel_id="V3"),
+                _make_shipping_event(EventType.DELAYED, vessel_id="V4"),
+            ]
+        )
+        # 2 disrupted (anchored + delayed) / 4 total = 0.5
+        assert compute_tanker_disruption_index(state) == pytest.approx(0.5)
+
+    def test_empty_events_returns_none_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        state = _make_alternative_data_state_shipping([])
+        with caplog.at_level(logging.WARNING):
+            result = compute_tanker_disruption_index(state)
+        assert result is None
+        assert any("no shipping events" in r.message.lower() for r in caplog.records)
+
+    def test_events_outside_chokepoints_returns_none_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Events far from any configured chokepoint contribute nothing — returns None."""
+        state = _make_alternative_data_state_shipping(
+            [_make_shipping_event(EventType.ANCHORED, latitude=0.0, longitude=0.0)]
+        )
+        with caplog.at_level(logging.WARNING):
+            result = compute_tanker_disruption_index(state)
+        assert result is None
+        assert any("chokepoint" in r.message.lower() for r in caplog.records)
+
+    def test_chokepoint_boundary_is_inclusive(self) -> None:
+        """A vessel exactly on a chokepoint's min lat/lon edge is still counted."""
+        state = _make_alternative_data_state_shipping(
+            [_make_shipping_event(EventType.ANCHORED, latitude=25.5, longitude=55.5)]
+        )
+        assert compute_tanker_disruption_index(state) == pytest.approx(1.0)
+
+    def test_events_outside_chokepoint_excluded_from_ratio(self) -> None:
+        """Only in-chokepoint events count toward the ratio's numerator and denominator."""
+        state = _make_alternative_data_state_shipping(
+            [
+                _make_shipping_event(
+                    EventType.TRANSIT, latitude=0.0, longitude=0.0, vessel_id="V1"
+                ),
+                _make_shipping_event(EventType.ANCHORED, vessel_id="V2"),
+            ]
+        )
+        # V1 excluded (outside all chokepoints); V2 in-box and anchored → 1/1 = 1.0
+        assert compute_tanker_disruption_index(state) == pytest.approx(1.0)
+
+    def test_cap_enforced(self) -> None:
+        """Ratio is structurally bounded to 1.0; assert explicitly per AC."""
+        state = _make_alternative_data_state_shipping(
+            [_make_shipping_event(EventType.DELAYED, vessel_id="V1")]
+        )
+        result = compute_tanker_disruption_index(state)
+        assert result is not None
+        assert result <= 1.0
