@@ -535,3 +535,15 @@ This closes the Phase 3 signal-computation dependency chain (#154 → #155/#156/
 - 2 new tests: `test_phase3_signals_on_feature_set_increase_edge_score` (Phase 3 fields populated → higher edge_score than otherwise-identical baseline) and `test_phase3_signals_none_matches_pre_209_behavior` (Phase 3 fields None → edge_score unchanged from pre-#209 behavior).
 - All 5 local_check.sh stages pass (412 unit tests, up from 410).
 - #162 (Phase 3 UAT) is unblocked once #209 merges.
+
+## Sprint Notes (2026-09-19, session 1)
+
+**#212 IN REVIEW** — OVX historical implied-vol loader. Created this session (not yet in the Sprint Issues table — human to add) and implemented; PR #213 opened → develop. #212 In Review, PR #213 opened 2026-09-19.
+
+- Why: the Polygon/Massive plan returns 403 for option prices before ~late 2024, so the COVID/Ukraine/Houthi events cannot be backtested with real option data. The #170 coverage claim only covered contract listings, not prices (`scripts/massive_price_probe.py`, uncommitted, confirms option aggregates work inside the plan window). CBOE OVX (free, FRED `OVXCLS`) is used as the historical implied-vol proxy instead.
+- `src/backtest/ovx_loader.py`: FRED fetch/parse (`@with_retry`, timeout, Pydantic), realized vol excluding non-positive closes, `historical_volatility_gap()` in annualized fractions (OVX points / 100).
+- Harness falls back to OVX only for crude proxies (CL=F, BZ=F, USO) that have prices but no option IV; `replay_pipeline` signature unchanged. Fallback is limited to instruments present in the market state, otherwise the #166 missing-fixture test (empty state -> `[]`) fails.
+- Deviations from #212 AC (flagged on the issue and PR): `load_ovx` returns `dict[date, float]` not `pd.Series` (pandas is not a declared dependency); `historical_volatility_gap` takes `closes=`/`ovx=` keyword args.
+- Result (`docs/backtest_reports/212-ovx-gap-quartiles.md`, 1644 days, April 2020 excluded): widest-gap quartile mean 10-day forward move 7.43% vs 5.33-5.69% for Q1-Q3; Spearman rho +0.095. Signal direction is right but weak; descriptive only.
+- All 5 local_check.sh stages pass (426 unit tests, up from 412).
+- Open for human: HEARTBEAT lists Sprint 9 target close as 2026-03-28 (stale); UAT re-run on 2026-09-19 passed (`docs/uat_reports/112-uat-report-2026-09-19.md`, uncommitted).
