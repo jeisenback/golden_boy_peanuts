@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.backtest.ovx_loader import (  # noqa: E402
+from src.backtest.ovx_loader import (
     fetch_closes_yfinance,
     historical_volatility_gap,
     load_ovx,
@@ -29,10 +29,11 @@ from src.backtest.ovx_loader import (  # noqa: E402
 REPORT_PATH = Path("docs/backtest_reports/212-ovx-gap-quartiles.md")
 _LOOKBACK_DAYS = 30
 _FORWARD_TRADING_DAYS = 10
-_FORWARD_CALENDAR_BUFFER = 16
+logger = logging.getLogger(__name__)
 
 
 def _ranks(values: list[float]) -> list[float]:
+    """Return the 0-based rank of each value (ties broken by input order)."""
     order = sorted(range(len(values)), key=values.__getitem__)
     ranks = [0.0] * len(values)
     for rank, idx in enumerate(order):
@@ -41,6 +42,14 @@ def _ranks(values: list[float]) -> list[float]:
 
 
 def main() -> int:
+    """
+    Run the quartile study and write REPORT_PATH.
+
+    Fetches OVX from FRED and CL=F closes from yfinance (both retried).
+
+    Returns:
+        0 on success, 1 if either live data fetch fails.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--start", default="2020-01-01")
     args = parser.parse_args()
@@ -48,8 +57,12 @@ def main() -> int:
     end = datetime.now(tz=UTC).date()
     logging.getLogger("src.backtest.ovx_loader").setLevel(logging.ERROR)
 
-    ovx = load_ovx(start, end)
-    closes = fetch_closes_yfinance("CL=F", start - timedelta(days=60), end)
+    try:
+        ovx = load_ovx(start, end)
+        closes = fetch_closes_yfinance("CL=F", start - timedelta(days=60), end)
+    except Exception:
+        logger.exception("ovx_gap_quartiles: live data fetch failed; no report written")
+        return 1
     bad_days = [d for d, c in closes.items() if c <= 0.0]
     valid_dates = sorted(d for d, c in closes.items() if c > 0.0)
     index_of = {d: i for i, d in enumerate(valid_dates)}
