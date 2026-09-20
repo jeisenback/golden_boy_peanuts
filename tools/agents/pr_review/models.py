@@ -72,3 +72,16 @@ class PRReviewResult(BaseModel):
     blocker_count: int = Field(default=0, ge=0)
     warning_count: int = Field(default=0, ge=0)
     suggestion_count: int = Field(default=0, ge=0)
+    static_blocker_count: int = Field(
+        default=0,
+        ge=0,
+        description="Blockers from deterministic checks only; these alone fail CI",
+    )
+    coverage_notes: list[str] = Field(
+        default_factory=list,
+        description="What the LLM pass did not review (excluded, truncated, or failed)",
+    )
+    llm_unavailable_reason: str | None = Field(
+        default=None,
+        description="Set when the LLM review failed; only deterministic checks are complete",
+    )
