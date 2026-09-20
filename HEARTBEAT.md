@@ -559,3 +559,18 @@ This closes the Phase 3 signal-computation dependency chain (#154 → #155/#156/
 - Result (`docs/backtest_reports/212-ovx-gap-quartiles.md`, 1644 days, April 2020 excluded): widest-gap quartile mean 10-day forward move 7.43% vs 5.33-5.69% for Q1-Q3; Spearman rho +0.095. Signal direction is right but weak; descriptive only.
 - All 5 local_check.sh stages pass (426 unit tests, up from 412).
 - Open for human: HEARTBEAT lists Sprint 9 target close as 2026-03-28 (stale); UAT re-run on 2026-09-19 passed (`docs/uat_reports/112-uat-report-2026-09-19.md`, uncommitted).
+
+## Sprint Notes (2026-09-20, session 1)
+
+**#212 MERGED** (PR #213, 2026-09-19) — OVX historical implied-vol loader. Issue #212 itself is still open: its unchecked AC items and the two documented deviations (`dict[date, float]` instead of `pd.Series`; keyword-only `closes=`/`ovx=`) need human sign-off before closure.
+**#214 CLOSED** — PR Review Agent made trustworthy and resilient; merged in PR #215 (2026-09-20). One-off issue with no milestone, not in the Sprint Issues table.
+
+- Structured LLM findings: prompt asks for a JSON array; severities are kept (rule prefix `llm:`) so LLM blockers show in the status line. Unparseable output surfaces as `llm:unparsed`, never silently downgraded.
+- Diff review is per file in bounded chunks (max 4 LLM calls, 12000 chars each); csv/json/HEARTBEAT/generated docs are excluded; excluded/truncated/dropped files are listed under "Review coverage" in the comment.
+- LLM/API failure no longer crashes the job: deterministic checks still post with an "LLM review unavailable" note. Root cause of the 2026-09-17 #211 failure was Anthropic API credit balance too low (billing), not code.
+- Review comment is edited in place via a hidden `<!-- pr-review-agent -->` marker (confirmed live: one comment, two runs).
+- **Decision (human to confirm):** only deterministic blockers fail CI; LLM-reported blockers show in the status line but do not fail the job, because LLM findings have included false positives. Flip by changing the last line of `main()` in `scripts/run_pr_review.py` to `return 0 if result.approved else 1`.
+- Known limit: a single file over 12000 chars is truncated (and reported); splitting oversized files at hunk boundaries would fix it. No issue filed yet.
+- The Issue Refinement Agent labels milestone-less issues `blocked`; that label had to be removed by hand on #214.
+- #211 (#162 Phase 3 UAT) also merged 2026-09-20; issue #162 still awaits human review of the UAT report per its own AC.
+- HEARTBEAT still lists Sprint 9 target close as 2026-03-28 (stale). Untracked and uncommitted: `scripts/massive_price_probe.py`, `docs/uat_reports/112-uat-report-2026-09-19.md`.
