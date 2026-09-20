@@ -275,7 +275,8 @@ def _split_diff_by_file(diff: str) -> list[tuple[str, str]]:
         diff: Unified diff text as produced by `gh pr diff`.
 
     Returns:
-        List of (new-side path, full diff section) in original order.
+        List of (new-side path, full diff section) in original order. Sections whose
+        header cannot be parsed get the path "(unknown)".
     """
     files: list[tuple[str, str]] = []
     for section in re.split(r"(?m)^(?=diff --git )", diff):
@@ -428,11 +429,13 @@ def _parse_llm_findings(
     findings: list[ReviewFinding] = []
     malformed = 0
     for item in parsed:
+        candidate = item
+        if isinstance(item, dict) and isinstance(item.get("severity"), str):
+            candidate = {**item, "severity": item["severity"].strip().lower()}
         try:
-            if isinstance(item, dict) and isinstance(item.get("severity"), str):
-                item = {**item, "severity": item["severity"].strip().lower()}
-            payload = _LLMFindingPayload.model_validate(item)
-        except ValidationError:
+            payload = _LLMFindingPayload.model_validate(candidate)
+        except ValidationError as exc:
+            logger.debug("PR #%d: malformed LLM item %r: %s", pr_number, item, exc)
             malformed += 1
             continue
         rule = payload.rule
