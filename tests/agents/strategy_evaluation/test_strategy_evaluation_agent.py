@@ -10,6 +10,8 @@ Coverage goal (expand per GitHub Issue):
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.strategy_evaluation.models import StrategyCandidate
 from src.agents.strategy_evaluation.strategy_evaluation_agent import (
@@ -37,6 +39,9 @@ def _make_feature_set(
     sector_dispersion: float | None = None,
     supply_shock_probability: float | None = None,
     futures_curve_steepness: float | None = None,
+    insider_conviction_score: float | None = None,
+    narrative_velocity: float | None = None,
+    tanker_disruption_index: float | None = None,
 ) -> FeatureSet:
     return FeatureSet(
         snapshot_time=datetime.now(tz=UTC),
@@ -44,6 +49,9 @@ def _make_feature_set(
         sector_dispersion=sector_dispersion,
         supply_shock_probability=supply_shock_probability,
         futures_curve_steepness=futures_curve_steepness,
+        insider_conviction_score=insider_conviction_score,
+        narrative_velocity=narrative_velocity,
+        tanker_disruption_index=tanker_disruption_index,
     )
 
 
@@ -174,6 +182,109 @@ class TestComputeEdgeScore:
             futures_curve_steepness=0.0,
         )
         assert score_zero == score_none
+
+    # --- Phase 3 additive signal tests (issue #158) ---
+
+    def test_phase1_phase2_unchanged_when_phase3_omitted(self) -> None:
+        """Omitting the three Phase 3 params matches passing them explicitly as None."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            supply_shock_probability=0.4,
+            futures_curve_steepness=0.05,
+        )
+        score_omitted = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=0.4,
+            futures_curve_steepness=0.05,
+        )
+        score_explicit_none = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=0.4,
+            futures_curve_steepness=0.05,
+            insider_conviction_score=None,
+            narrative_velocity=None,
+            tanker_disruption_index=None,
+        )
+        assert score_omitted == score_explicit_none
+
+    def test_insider_conviction_contributes_in_isolation(self) -> None:
+        """insider_conviction_score=0.5, all else zero/None → 0.5 * _INSIDER_CONVICTION_WEIGHT."""
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
+        score = compute_edge_score("USO", fs, insider_conviction_score=0.5)
+        assert score == pytest.approx(0.5 * 0.15)
+
+    def test_narrative_velocity_contributes_in_isolation(self) -> None:
+        """narrative_velocity=0.5, all else zero/None → 0.5 * _NARRATIVE_VELOCITY_WEIGHT."""
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
+        score = compute_edge_score("USO", fs, narrative_velocity=0.5)
+        assert score == pytest.approx(0.5 * 0.10)
+
+    def test_tanker_disruption_contributes_in_isolation(self) -> None:
+        """tanker_disruption_index=0.5, all else zero/None → 0.5 * _TANKER_DISRUPTION_WEIGHT."""
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
+        score = compute_edge_score("USO", fs, tanker_disruption_index=0.5)
+        assert score == pytest.approx(0.5 * 0.15)
+
+    def test_all_phase3_signals_combined(self) -> None:
+        """All three Phase 3 signals sum additively when combined."""
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
+        score = compute_edge_score(
+            "USO",
+            fs,
+            insider_conviction_score=0.5,
+            narrative_velocity=0.5,
+            tanker_disruption_index=0.5,
+        )
+        expected = 0.5 * 0.15 + 0.5 * 0.10 + 0.5 * 0.15
+        assert score == pytest.approx(expected)
+
+    def test_cross_sector_boost_applied_when_both_high(self) -> None:
+        """High dispersion + high insider conviction applies the _CROSS_SECTOR_BOOST multiplier."""
+        from src.agents.strategy_evaluation.strategy_evaluation_agent import (
+            _CROSS_SECTOR_BOOST,
+        )
+
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.5)
+        score = compute_edge_score("USO", fs, insider_conviction_score=0.8)
+        base = 0.5 * 0.30 + 0.8 * 0.15  # disp_contribution + insider_contribution
+        expected = base * (1.0 + _CROSS_SECTOR_BOOST)
+        assert score == pytest.approx(expected)
+
+    def test_cross_sector_boost_not_applied_when_only_dispersion_high(self) -> None:
+        """High dispersion but insider conviction below threshold → no boost."""
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.5)
+        score = compute_edge_score("USO", fs, insider_conviction_score=0.5)
+        expected = 0.5 * 0.30 + 0.5 * 0.15  # no _CROSS_SECTOR_BOOST applied
+        assert score == pytest.approx(expected)
+
+    def test_cross_sector_boost_not_applied_when_only_conviction_high(self) -> None:
+        """High insider conviction but dispersion below threshold → no boost."""
+        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.05)
+        score = compute_edge_score("USO", fs, insider_conviction_score=0.9)
+        expected = 0.05 * 0.30 + 0.9 * 0.15  # no _CROSS_SECTOR_BOOST applied
+        assert score == pytest.approx(expected)
+
+    def test_score_clamped_at_one_with_all_signals_maxed(self) -> None:
+        """All Phase 1/2/3 signals at max, plus cross-sector boost, still clamps to 1.0."""
+        fs = _make_feature_set(
+            [_make_vg("USO", 1.0)],
+            sector_dispersion=1.0,
+            supply_shock_probability=1.0,
+            futures_curve_steepness=1.0,
+        )
+        score = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=1.0,
+            futures_curve_steepness=1.0,
+            insider_conviction_score=1.0,
+            narrative_velocity=1.0,
+            tanker_disruption_index=1.0,
+        )
+        assert score == 1.0
 
 
 class TestEvaluateStrategies:
@@ -395,3 +506,38 @@ class TestEvaluateStrategies:
         ]
         actual_order = [(candidate.instrument, candidate.structure) for candidate in result]
         assert actual_order == expected_order
+
+    def test_phase3_signals_on_feature_set_increase_edge_score(self) -> None:
+        """Phase 3 signals present on the FeatureSet raise edge_score vs. them being None (#209)."""
+        baseline_fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        phase3_fs = _make_feature_set(
+            [_make_vg("USO", 0.20)],
+            sector_dispersion=0.5,
+            insider_conviction_score=0.8,
+            narrative_velocity=0.6,
+            tanker_disruption_index=0.7,
+        )
+
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            baseline_result = evaluate_strategies(baseline_fs)
+            phase3_result = evaluate_strategies(phase3_fs)
+
+        baseline_uso = next(c for c in baseline_result if c.instrument == "USO")
+        phase3_uso = next(c for c in phase3_result if c.instrument == "USO")
+        assert phase3_uso.edge_score > baseline_uso.edge_score
+
+    def test_phase3_signals_none_matches_pre_209_behavior(self) -> None:
+        """Omitting Phase 3 fields on the FeatureSet leaves edge_score unchanged."""
+        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+        with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
+            result = evaluate_strategies(fs)
+        uso = next(c for c in result if c.instrument == "USO")
+        # Phase 3 kwargs omitted intentionally — mirrors the pre-#209 call site,
+        # since fs itself has no Phase 3 fields set (all default to None).
+        expected = compute_edge_score(
+            "USO",
+            fs,
+            supply_shock_probability=fs.supply_shock_probability,
+            futures_curve_steepness=fs.futures_curve_steepness,
+        )
+        assert uso.edge_score == pytest.approx(expected)

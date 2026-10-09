@@ -18,8 +18,8 @@ jobs:
           cache: "pip"
       - run: pip install -r requirements-dev.txt
       # Auto-fix is NOT permitted in CI (SDLC Section 5 — fix locally)
-      - run: ruff check src/ tests/
-      - run: black --check src/ tests/
+      - run: ruff check src/ tools/ tests/
+      - run: black --check src/ tools/ tests/
 
   type-check:
     name: mypy Strict Type Check
@@ -31,7 +31,7 @@ jobs:
           python-version: "3.11"
           cache: "pip"
       - run: pip install -r requirements-dev.txt
-      - run: mypy src/
+      - run: mypy src/ tools/
 
   unit-tests:
     name: Unit Tests

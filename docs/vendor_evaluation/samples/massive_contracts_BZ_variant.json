@@ -1,0 +1,9 @@
+{
+  "url": "https://api.massive.com/v3/reference/options/contracts?underlying_ticker=BZ&limit=50&order=asc&sort=ticker&apiKey=Akd09GtuNfr_mwckP9MQsxj4VQ7GDfFo",
+  "status_code": 429,
+  "json": {
+    "status": "ERROR",
+    "request_id": "fc495e2576d1071d18ce40654ef6f00d",
+    "error": "You've exceeded the maximum requests per minute, please wait or upgrade your subscription to continue. https://massive.com/pricing"
+  }
+}

@@ -1,0 +1,1447 @@
+{
+  "url": "https://api.massive.com/v3/reference/options/contracts?underlying_ticker=CVX&as_of=2021-09-21&limit=100&order=asc&sort=ticker&apiKey=Akd09GtuNfr_mwckP9MQsxj4VQ7GDfFo",
+  "status_code": 200,
+  "json": {
+    "results": [
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 2.5,
+        "ticker": "O:CVX1220121C00002500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 5,
+        "ticker": "O:CVX1220121C00005000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 7.5,
+        "ticker": "O:CVX1220121C00007500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 10,
+        "ticker": "O:CVX1220121C00010000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 12.5,
+        "ticker": "O:CVX1220121C00012500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 15,
+        "ticker": "O:CVX1220121C00015000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 17.5,
+        "ticker": "O:CVX1220121C00017500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 20,
+        "ticker": "O:CVX1220121C00020000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 22.5,
+        "ticker": "O:CVX1220121C00022500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 25,
+        "ticker": "O:CVX1220121C00025000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 27.5,
+        "ticker": "O:CVX1220121C00027500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 30,
+        "ticker": "O:CVX1220121C00030000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 32.5,
+        "ticker": "O:CVX1220121C00032500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 35,
+        "ticker": "O:CVX1220121C00035000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 2.5,
+        "ticker": "O:CVX1220121P00002500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 5,
+        "ticker": "O:CVX1220121P00005000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 7.5,
+        "ticker": "O:CVX1220121P00007500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 10,
+        "ticker": "O:CVX1220121P00010000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 12.5,
+        "ticker": "O:CVX1220121P00012500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 15,
+        "ticker": "O:CVX1220121P00015000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 17.5,
+        "ticker": "O:CVX1220121P00017500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 20,
+        "ticker": "O:CVX1220121P00020000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 22.5,
+        "ticker": "O:CVX1220121P00022500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 25,
+        "ticker": "O:CVX1220121P00025000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 27.5,
+        "ticker": "O:CVX1220121P00027500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 30,
+        "ticker": "O:CVX1220121P00030000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 32.5,
+        "ticker": "O:CVX1220121P00032500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 35,
+        "ticker": "O:CVX1220121P00035000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 2.5,
+        "ticker": "O:CVX1230120C00002500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 5,
+        "ticker": "O:CVX1230120C00005000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 7.5,
+        "ticker": "O:CVX1230120C00007500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 10,
+        "ticker": "O:CVX1230120C00010000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 12.5,
+        "ticker": "O:CVX1230120C00012500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 15,
+        "ticker": "O:CVX1230120C00015000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 17.5,
+        "ticker": "O:CVX1230120C00017500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 2.5,
+        "ticker": "O:CVX1230120P00002500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 5,
+        "ticker": "O:CVX1230120P00005000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 7.5,
+        "ticker": "O:CVX1230120P00007500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 10,
+        "ticker": "O:CVX1230120P00010000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 12.5,
+        "ticker": "O:CVX1230120P00012500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 15,
+        "ticker": "O:CVX1230120P00015000",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2023-01-20",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 11,
+        "strike_price": 17.5,
+        "ticker": "O:CVX1230120P00017500",
+        "underlying_ticker": "CVX",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 66.39
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 65,
+        "ticker": "O:CVX210924C00065000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 70,
+        "ticker": "O:CVX210924C00070000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 75,
+        "ticker": "O:CVX210924C00075000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 80,
+        "ticker": "O:CVX210924C00080000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 85,
+        "ticker": "O:CVX210924C00085000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 90,
+        "ticker": "O:CVX210924C00090000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 91,
+        "ticker": "O:CVX210924C00091000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 92,
+        "ticker": "O:CVX210924C00092000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 93,
+        "ticker": "O:CVX210924C00093000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 94,
+        "ticker": "O:CVX210924C00094000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 95,
+        "ticker": "O:CVX210924C00095000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 96,
+        "ticker": "O:CVX210924C00096000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 97,
+        "ticker": "O:CVX210924C00097000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 98,
+        "ticker": "O:CVX210924C00098000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 99,
+        "ticker": "O:CVX210924C00099000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 100,
+        "ticker": "O:CVX210924C00100000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 101,
+        "ticker": "O:CVX210924C00101000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 102,
+        "ticker": "O:CVX210924C00102000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 103,
+        "ticker": "O:CVX210924C00103000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 104,
+        "ticker": "O:CVX210924C00104000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 105,
+        "ticker": "O:CVX210924C00105000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 106,
+        "ticker": "O:CVX210924C00106000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 107,
+        "ticker": "O:CVX210924C00107000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 108,
+        "ticker": "O:CVX210924C00108000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 109,
+        "ticker": "O:CVX210924C00109000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 110,
+        "ticker": "O:CVX210924C00110000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 111,
+        "ticker": "O:CVX210924C00111000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 112,
+        "ticker": "O:CVX210924C00112000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 113,
+        "ticker": "O:CVX210924C00113000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 114,
+        "ticker": "O:CVX210924C00114000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 115,
+        "ticker": "O:CVX210924C00115000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 120,
+        "ticker": "O:CVX210924C00120000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 65,
+        "ticker": "O:CVX210924P00065000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 70,
+        "ticker": "O:CVX210924P00070000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 75,
+        "ticker": "O:CVX210924P00075000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 80,
+        "ticker": "O:CVX210924P00080000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 85,
+        "ticker": "O:CVX210924P00085000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 90,
+        "ticker": "O:CVX210924P00090000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 91,
+        "ticker": "O:CVX210924P00091000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 92,
+        "ticker": "O:CVX210924P00092000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 93,
+        "ticker": "O:CVX210924P00093000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 94,
+        "ticker": "O:CVX210924P00094000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 95,
+        "ticker": "O:CVX210924P00095000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 96,
+        "ticker": "O:CVX210924P00096000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 97,
+        "ticker": "O:CVX210924P00097000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 98,
+        "ticker": "O:CVX210924P00098000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 99,
+        "ticker": "O:CVX210924P00099000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 100,
+        "ticker": "O:CVX210924P00100000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 101,
+        "ticker": "O:CVX210924P00101000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 102,
+        "ticker": "O:CVX210924P00102000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 103,
+        "ticker": "O:CVX210924P00103000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 104,
+        "ticker": "O:CVX210924P00104000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 105,
+        "ticker": "O:CVX210924P00105000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 106,
+        "ticker": "O:CVX210924P00106000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 107,
+        "ticker": "O:CVX210924P00107000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 108,
+        "ticker": "O:CVX210924P00108000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 109,
+        "ticker": "O:CVX210924P00109000",
+        "underlying_ticker": "CVX"
+      },
+      {
+        "cfi": "OPASPS",
+        "contract_type": "put",
+        "exercise_style": "american",
+        "expiration_date": "2021-09-24",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 110,
+        "ticker": "O:CVX210924P00110000",
+        "underlying_ticker": "CVX"
+      }
+    ],
+    "status": "OK",
+    "request_id": "283d76f657ca69dae11282b155e8775b",
+    "next_url": "https://api.massive.com/v3/reference/options/contracts?cursor=YXA9JTdCJTIySUQlMjIlM0ElMjI4NDI4MDQ2NDAxODg2MTI3MzQxJTIyJTJDJTIyU3RhcnREYXRlVXRjJTIyJTNBJTdCJTIyVGltZSUyMiUzQSUyMjIwMjEtMDgtMDVUMDAlM0EwMCUzQTAwWiUyMiUyQyUyMlZhbGlkJTIyJTNBdHJ1ZSU3RCUyQyUyMkVuZERhdGVVdGMlMjIlM0ElN0IlMjJUaW1lJTIyJTNBJTIyMjAyMS0wOS0yNFQwMCUzQTAwJTNBMDBaJTIyJTJDJTIyVmFsaWQlMjIlM0F0cnVlJTdEJTJDJTIydW5kZXJseWluZ190aWNrZXIlMjIlM0ElMjJDVlglMjIlMkMlMjJ0aWNrZXIlMjIlM0ElMjJPJTNBQ1ZYMjEwOTI0UDAwMTEwMDAwJTIyJTJDJTIyZXhwaXJhdGlvbl9kYXRlJTIyJTNBJTIyMjAyMS0wOS0yNFQwMCUzQTAwJTNBMDBaJTIyJTJDJTIyc3RyaWtlX3ByaWNlJTIyJTNBMTEwJTJDJTIyY2ZpJTIyJTNBJTIyT1BBU1BTJTIyJTJDJTIyY29udHJhY3RfdHlwZSUyMiUzQSUyMnB1dCUyMiUyQyUyMmV4ZXJjaXNlX3N0eWxlJTIyJTNBJTIyYW1lcmljYW4lMjIlMkMlMjJwcmltYXJ5X2V4Y2hhbmdlJTIyJTNBJTdCJTIyU3RyaW5nJTIyJTNBJTIyQkFUTyUyMiUyQyUyMlZhbGlkJTIyJTNBdHJ1ZSU3RCUyQyUyMnNoYXJlc19wZXJfY29udHJhY3QlMjIlM0ExMDAlMkMlMjJhZGRpdGlvbmFsX3VuZGVybHlpbmdzJTIyJTNBJTIyJTVCJTVEJTIyJTdEJmFzPSZhc19vZj0yMDIxLTA5LTIxJmxpbWl0PTEwMCZvcmRlcj1hc2Mmc29ydD10aWNrZXImdW5kZXJseWluZ190aWNrZXI9Q1ZY"
+  }
+}

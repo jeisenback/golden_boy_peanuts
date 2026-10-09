@@ -1,0 +1,1895 @@
+{
+  "url": "https://api.massive.com/v3/reference/options/contracts?underlying_ticker=USO&as_of=2021-02-23&limit=100&order=asc&sort=ticker&apiKey=Akd09GtuNfr_mwckP9MQsxj4VQ7GDfFo",
+  "status_code": 200,
+  "json": {
+    "results": [
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 0.5,
+        "ticker": "O:USO1220121C00000500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1,
+        "ticker": "O:USO1220121C00001000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1.5,
+        "ticker": "O:USO1220121C00001500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2,
+        "ticker": "O:USO1220121C00002000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2.5,
+        "ticker": "O:USO1220121C00002500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3,
+        "ticker": "O:USO1220121C00003000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3.5,
+        "ticker": "O:USO1220121C00003500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4,
+        "ticker": "O:USO1220121C00004000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4.5,
+        "ticker": "O:USO1220121C00004500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5,
+        "ticker": "O:USO1220121C00005000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5.5,
+        "ticker": "O:USO1220121C00005500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6,
+        "ticker": "O:USO1220121C00006000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6.5,
+        "ticker": "O:USO1220121C00006500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7,
+        "ticker": "O:USO1220121C00007000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7.5,
+        "ticker": "O:USO1220121C00007500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8,
+        "ticker": "O:USO1220121C00008000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8.5,
+        "ticker": "O:USO1220121C00008500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 9,
+        "ticker": "O:USO1220121C00009000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 10,
+        "ticker": "O:USO1220121C00010000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 11,
+        "ticker": "O:USO1220121C00011000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 12,
+        "ticker": "O:USO1220121C00012000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 13,
+        "ticker": "O:USO1220121C00013000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 14,
+        "ticker": "O:USO1220121C00014000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 15,
+        "ticker": "O:USO1220121C00015000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 16,
+        "ticker": "O:USO1220121C00016000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 17,
+        "ticker": "O:USO1220121C00017000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 18,
+        "ticker": "O:USO1220121C00018000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 19,
+        "ticker": "O:USO1220121C00019000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 20,
+        "ticker": "O:USO1220121C00020000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 21,
+        "ticker": "O:USO1220121C00021000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 0.5,
+        "ticker": "O:USO1220121P00000500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1,
+        "ticker": "O:USO1220121P00001000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1.5,
+        "ticker": "O:USO1220121P00001500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2,
+        "ticker": "O:USO1220121P00002000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2.5,
+        "ticker": "O:USO1220121P00002500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3,
+        "ticker": "O:USO1220121P00003000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3.5,
+        "ticker": "O:USO1220121P00003500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4,
+        "ticker": "O:USO1220121P00004000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4.5,
+        "ticker": "O:USO1220121P00004500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5,
+        "ticker": "O:USO1220121P00005000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5.5,
+        "ticker": "O:USO1220121P00005500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6,
+        "ticker": "O:USO1220121P00006000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6.5,
+        "ticker": "O:USO1220121P00006500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7,
+        "ticker": "O:USO1220121P00007000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7.5,
+        "ticker": "O:USO1220121P00007500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8,
+        "ticker": "O:USO1220121P00008000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8.5,
+        "ticker": "O:USO1220121P00008500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 9,
+        "ticker": "O:USO1220121P00009000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 10,
+        "ticker": "O:USO1220121P00010000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 11,
+        "ticker": "O:USO1220121P00011000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 12,
+        "ticker": "O:USO1220121P00012000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 13,
+        "ticker": "O:USO1220121P00013000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 14,
+        "ticker": "O:USO1220121P00014000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 15,
+        "ticker": "O:USO1220121P00015000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 16,
+        "ticker": "O:USO1220121P00016000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 17,
+        "ticker": "O:USO1220121P00017000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 18,
+        "ticker": "O:USO1220121P00018000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 19,
+        "ticker": "O:USO1220121P00019000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 20,
+        "ticker": "O:USO1220121P00020000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-01-21",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 21,
+        "ticker": "O:USO1220121P00021000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 0.5,
+        "ticker": "O:USO1221216C00000500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1,
+        "ticker": "O:USO1221216C00001000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1.5,
+        "ticker": "O:USO1221216C00001500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2,
+        "ticker": "O:USO1221216C00002000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2.5,
+        "ticker": "O:USO1221216C00002500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3,
+        "ticker": "O:USO1221216C00003000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3.5,
+        "ticker": "O:USO1221216C00003500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4,
+        "ticker": "O:USO1221216C00004000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4.5,
+        "ticker": "O:USO1221216C00004500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5,
+        "ticker": "O:USO1221216C00005000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5.5,
+        "ticker": "O:USO1221216C00005500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6,
+        "ticker": "O:USO1221216C00006000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6.5,
+        "ticker": "O:USO1221216C00006500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7,
+        "ticker": "O:USO1221216C00007000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7.5,
+        "ticker": "O:USO1221216C00007500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8,
+        "ticker": "O:USO1221216C00008000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8.5,
+        "ticker": "O:USO1221216C00008500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 9,
+        "ticker": "O:USO1221216C00009000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPN",
+        "contract_type": "call",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 10,
+        "ticker": "O:USO1221216C00010000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 0.5,
+        "ticker": "O:USO1221216P00000500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1,
+        "ticker": "O:USO1221216P00001000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 1.5,
+        "ticker": "O:USO1221216P00001500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2,
+        "ticker": "O:USO1221216P00002000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 2.5,
+        "ticker": "O:USO1221216P00002500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3,
+        "ticker": "O:USO1221216P00003000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 3.5,
+        "ticker": "O:USO1221216P00003500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4,
+        "ticker": "O:USO1221216P00004000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 4.5,
+        "ticker": "O:USO1221216P00004500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5,
+        "ticker": "O:USO1221216P00005000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 5.5,
+        "ticker": "O:USO1221216P00005500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6,
+        "ticker": "O:USO1221216P00006000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 6.5,
+        "ticker": "O:USO1221216P00006500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7,
+        "ticker": "O:USO1221216P00007000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 7.5,
+        "ticker": "O:USO1221216P00007500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8,
+        "ticker": "O:USO1221216P00008000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 8.5,
+        "ticker": "O:USO1221216P00008500",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 9,
+        "ticker": "O:USO1221216P00009000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OPASPN",
+        "contract_type": "put",
+        "correction": 1,
+        "exercise_style": "american",
+        "expiration_date": "2022-12-16",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 12,
+        "strike_price": 10,
+        "ticker": "O:USO1221216P00010000",
+        "underlying_ticker": "USO",
+        "additional_underlyings": [
+          {
+            "type": "currency",
+            "underlying": "USD",
+            "amount": 8.18
+          }
+        ]
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-02-26",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 20,
+        "ticker": "O:USO210226C00020000",
+        "underlying_ticker": "USO"
+      },
+      {
+        "cfi": "OCASPS",
+        "contract_type": "call",
+        "exercise_style": "american",
+        "expiration_date": "2021-02-26",
+        "primary_exchange": "BATO",
+        "shares_per_contract": 100,
+        "strike_price": 25,
+        "ticker": "O:USO210226C00025000",
+        "underlying_ticker": "USO"
+      }
+    ],
+    "status": "OK",
+    "request_id": "0cfbdb1352cef957669449f518fbf95f",
+    "next_url": "https://api.massive.com/v3/reference/options/contracts?cursor=YXA9JTdCJTIySUQlMjIlM0ElMjI2MzQ3NDIyNDM1ODMyNTAxNzk5JTIyJTJDJTIyU3RhcnREYXRlVXRjJTIyJTNBJTdCJTIyVGltZSUyMiUzQSUyMjIwMjEtMDEtMTNUMDAlM0EwMCUzQTAwWiUyMiUyQyUyMlZhbGlkJTIyJTNBdHJ1ZSU3RCUyQyUyMkVuZERhdGVVdGMlMjIlM0ElN0IlMjJUaW1lJTIyJTNBJTIyMjAyMS0wMi0yNlQwMCUzQTAwJTNBMDBaJTIyJTJDJTIyVmFsaWQlMjIlM0F0cnVlJTdEJTJDJTIydW5kZXJseWluZ190aWNrZXIlMjIlM0ElMjJVU08lMjIlMkMlMjJ0aWNrZXIlMjIlM0ElMjJPJTNBVVNPMjEwMjI2QzAwMDI1MDAwJTIyJTJDJTIyZXhwaXJhdGlvbl9kYXRlJTIyJTNBJTIyMjAyMS0wMi0yNlQwMCUzQTAwJTNBMDBaJTIyJTJDJTIyc3RyaWtlX3ByaWNlJTIyJTNBMjUlMkMlMjJjZmklMjIlM0ElMjJPQ0FTUFMlMjIlMkMlMjJjb250cmFjdF90eXBlJTIyJTNBJTIyY2FsbCUyMiUyQyUyMmV4ZXJjaXNlX3N0eWxlJTIyJTNBJTIyYW1lcmljYW4lMjIlMkMlMjJwcmltYXJ5X2V4Y2hhbmdlJTIyJTNBJTdCJTIyU3RyaW5nJTIyJTNBJTIyQkFUTyUyMiUyQyUyMlZhbGlkJTIyJTNBdHJ1ZSU3RCUyQyUyMnNoYXJlc19wZXJfY29udHJhY3QlMjIlM0ExMDAlMkMlMjJhZGRpdGlvbmFsX3VuZGVybHlpbmdzJTIyJTNBJTIyJTVCJTVEJTIyJTdEJmFzPSZhc19vZj0yMDIxLTAyLTIzJmxpbWl0PTEwMCZvcmRlcj1hc2Mmc29ydD10aWNrZXImdW5kZXJseWluZ190aWNrZXI9VVNP"
+  }
+}

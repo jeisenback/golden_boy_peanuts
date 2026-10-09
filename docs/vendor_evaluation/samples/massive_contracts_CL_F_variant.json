@@ -1,0 +1,9 @@
+{
+  "url": "https://api.massive.com/v3/reference/options/contracts?underlying_ticker=CL_F&limit=50&order=asc&sort=ticker&apiKey=Akd09GtuNfr_mwckP9MQsxj4VQ7GDfFo",
+  "status_code": 200,
+  "json": {
+    "results": [],
+    "status": "OK",
+    "request_id": "75ee8f7b459373ed24b0ef56b2a0584e"
+  }
+}

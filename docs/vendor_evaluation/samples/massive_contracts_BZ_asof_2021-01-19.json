@@ -1,0 +1,9 @@
+{
+  "url": "https://api.massive.com/v3/reference/options/contracts?underlying_ticker=BZ&as_of=2021-01-19&limit=100&order=asc&sort=ticker&apiKey=Akd09GtuNfr_mwckP9MQsxj4VQ7GDfFo",
+  "status_code": 200,
+  "json": {
+    "results": [],
+    "status": "OK",
+    "request_id": "7c7a1e4d994aff9360b5399e4cbbd95f"
+  }
+}
