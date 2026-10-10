@@ -122,6 +122,6 @@
 
 - Out of scope here: the signed hit and base-rate scoring belongs to plan step 5 (#164). Until it lands, `run_backtest()` still scores hits on the absolute move and cannot judge these spreads.
 - Leg and debit fields on `StrategyCandidate` are deliberately not built (spec Decision 4, recommended option).
-- The spec's formula has no cross-sector boost. This plan removes it (added in #158) with the rest of the volatility-led score; confirm in D8.
+- The spec's formula has no cross-sector boost. This plan removes it (added in #158) with the rest of the volatility-led score. Decided 2026-10-10: drop it now and revisit after the forward test in #234.
 - `_CURVE_FULL = 0.05` is set from the signal's units (a monthly spread as a fraction of the front price), not from observed data, because the repo holds no historical curve data. Recheck against the first snapshots.
 - `scripts/uat_run.py` needs no code change; its baseline-versus-Phase-3 comparison will report `None` for the baseline, which it already tolerates.
