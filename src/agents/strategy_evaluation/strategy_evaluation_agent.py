@@ -41,9 +41,9 @@ SIGNAL_ONLY_INSTRUMENTS: list[str] = ["CL=F", "BZ=F"]
 # Full universe for ingestion and feature generation (PRD Section 3.1).
 INSTRUMENTS_IN_SCOPE: list[str] = TRADEABLE_INSTRUMENTS + SIGNAL_ONLY_INSTRUMENTS
 
-# Phase 1 option structures generated per instrument (PRD Section 3.2; calendar spread deferred)
+# Option structures emitted per instrument (PRD Section 3.2). Long straddles are dropped:
+# the USO study found buying volatility loses to premium (#134); calendar spread deferred.
 _PHASE_1_STRUCTURES: list[OptionStructure] = [
-    OptionStructure.LONG_STRADDLE,
     OptionStructure.CALL_SPREAD,
     OptionStructure.PUT_SPREAD,
 ]
@@ -264,57 +264,55 @@ def _curve_steepness_label(feature_set: FeatureSet) -> str:
 
 def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     """
-    Evaluate all eligible option structures across the tradeable instruments.
+    Evaluate call and put spreads for each tradeable instrument.
 
-    For each instrument in TRADEABLE_INSTRUMENTS (USO, XLE, XOM, CVX), generates one
-    StrategyCandidate per Phase 1 structure (long_straddle, call_spread, put_spread). Candidates
-    with edge_score below _MIN_EDGE_SCORE are filtered out. Results are sorted
-    by edge_score descending and persisted to the DB (DB failures are logged and
-    do not propagate — candidates are still returned to the caller).
-
-    Phase 3 signals (insider_conviction_score, narrative_velocity,
-    tanker_disruption_index) are read from feature_set and passed through to
-    compute_edge_score() when present; a None value contributes 0.0, matching
-    Phase 1/2 behavior when they're unset (issue #209).
+    For each instrument in TRADEABLE_INSTRUMENTS (USO, XLE, XOM, CVX), scores a call
+    spread and a put spread with compute_edge_score(). Because the two are opposite
+    bets, only the side the direction signals favor can clear _MIN_EDGE_SCORE, so a run
+    emits at most one candidate per instrument, and none when the signals cancel or are
+    absent. Long straddles are not emitted. Results are sorted by edge_score descending
+    and persisted to the DB (DB failures are logged and do not propagate; candidates
+    are still returned to the caller).
 
     Args:
         feature_set: Complete FeatureSet from Feature Generation Agent.
 
     Returns:
-        List of StrategyCandidate sorted by edge_score descending.
-        Empty list if no candidates meet the minimum threshold.
+        List of StrategyCandidate sorted by edge_score descending, each with a
+        signals["direction"] of "bullish" (call spread) or "bearish" (put spread).
+        Empty list if no candidate meets the minimum threshold.
     """
     generated_at = datetime.now(tz=UTC)
     candidates: list[StrategyCandidate] = []
 
     for instrument in TRADEABLE_INSTRUMENTS:
-        edge_score = compute_edge_score(
-            instrument,
-            feature_set,
-            supply_shock_probability=feature_set.supply_shock_probability,
-            futures_curve_steepness=feature_set.futures_curve_steepness,
-            insider_conviction_score=feature_set.insider_conviction_score,
-            narrative_velocity=feature_set.narrative_velocity,
-            tanker_disruption_index=feature_set.tanker_disruption_index,
-        )
-        if edge_score < _MIN_EDGE_SCORE:
-            continue
-
-        signals: dict[str, str] = {
+        labels: dict[str, str] = {
             "volatility_gap": _vol_gap_label(instrument, feature_set),
             "sector_dispersion": _dispersion_label(feature_set),
             "supply_shock_probability": _supply_shock_label(feature_set),
             "futures_curve_steepness": _curve_steepness_label(feature_set),
         }
-
         for structure in _PHASE_1_STRUCTURES:
+            edge_score = compute_edge_score(
+                instrument,
+                feature_set,
+                structure,
+                supply_shock_probability=feature_set.supply_shock_probability,
+                futures_curve_steepness=feature_set.futures_curve_steepness,
+                insider_conviction_score=feature_set.insider_conviction_score,
+                narrative_velocity=feature_set.narrative_velocity,
+                tanker_disruption_index=feature_set.tanker_disruption_index,
+            )
+            if edge_score < _MIN_EDGE_SCORE:
+                continue
+            direction = "bullish" if structure is OptionStructure.CALL_SPREAD else "bearish"
             candidates.append(
                 StrategyCandidate(
                     instrument=instrument,
                     structure=structure,
                     expiration=_DEFAULT_EXPIRATION_DAYS,
                     edge_score=edge_score,
-                    signals=signals,
+                    signals={**labels, "direction": direction},
                     generated_at=generated_at,
                 )
             )

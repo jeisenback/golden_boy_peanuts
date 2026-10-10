@@ -3,7 +3,7 @@
 An autonomous pipeline that identifies options trading opportunities driven by oil market instability. It ingests crude prices, ETF/equity data, options chains, supply events, and news feeds — then ranks explainable options strategies by a composite edge score.
 
 **Instruments:** Signal sources: WTI (CL=F), Brent (BZ=F). Tradeable targets: USO, XLE, XOM, CVX
-**Structures:** Long straddles, call/put spreads, calendar spreads
+**Structures:** Call/put spreads (long straddles removed pending forward-test evidence; calendar spreads deferred)
 **Output schema:** `instrument`, `structure`, `expiration`, `edge_score`, `signals`, `generated_at`
 
 ---
