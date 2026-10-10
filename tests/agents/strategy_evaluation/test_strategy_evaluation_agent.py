@@ -8,6 +8,7 @@ Coverage goal (expand per GitHub Issue):
 """
 
 from datetime import UTC, datetime
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -270,6 +271,24 @@ class TestEvaluateStrategies:
     def test_cancelling_signals_yield_no_candidates(self) -> None:
         fs = _make_feature_set([], supply_shock_probability=0.5, futures_curve_steepness=0.035)
         assert evaluate_strategies(fs) == []
+
+    def test_empty_run_logs_the_inputs_and_nets(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A run with no candidates says why: raw direction inputs and each instrument's net."""
+        fs = _make_feature_set([], supply_shock_probability=0.2, futures_curve_steepness=0.01)
+        with caplog.at_level(logging.INFO):
+            assert evaluate_strategies(fs) == []
+        assert "No directional candidates" in caplog.text
+        assert "supply_shock=0.2" in caplog.text
+        assert "curve=0.01" in caplog.text
+        assert "direction_net" in caplog.text
+        assert "USO" in caplog.text
+
+    def test_run_with_candidates_does_not_log_the_empty_message(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.INFO):
+            self._evaluate(_make_feature_set([], supply_shock_probability=1.0))
+        assert "No directional candidates" not in caplog.text
 
     def test_below_threshold_filtered_out(self) -> None:
         # supply 0.2 gives net 0.07, below _MIN_EDGE_SCORE = 0.10

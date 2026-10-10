@@ -2,11 +2,12 @@
 Strategy Evaluation Agent
 
 Responsibilities (Design Doc Section 4, PRD Section 4.4):
-  - Evaluate long straddle, call spread, put spread, calendar spread
-    structures based on signals from FeatureSet
-  - Compute a composite edge_score in [0.0, 1.0] per candidate, including
-    Phase 3 signals (insider conviction, narrative velocity, tanker
-    disruption) and a cross-sector correlation boost (issue #158)
+  - Evaluate call spread and put spread structures for the tradeable
+    instruments (USO, XLE, XOM, CVX) from the FeatureSet; long straddles are
+    no longer emitted and calendar spreads are deferred (issue #134)
+  - Compute a directional edge_score in [0.0, 1.0] per candidate from a signed
+    direction net (curve, supply shock, tanker, insider), amplified by sector
+    dispersion and narrative velocity; the volatility gap does not score
   - Rank candidates by edge_score descending
   - Attach contributing signal references for explainability
   - Output StrategyCandidate list matching PRD Section 9 schema
@@ -316,6 +317,32 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
                     generated_at=generated_at,
                 )
             )
+
+    if not candidates:
+        # A quiet market and a broken input look the same in the output, so say why.
+        nets = {
+            instrument: round(
+                compute_direction_net(
+                    instrument,
+                    supply_shock_probability=feature_set.supply_shock_probability,
+                    futures_curve_steepness=feature_set.futures_curve_steepness,
+                    insider_conviction_score=feature_set.insider_conviction_score,
+                    tanker_disruption_index=feature_set.tanker_disruption_index,
+                ),
+                4,
+            )
+            for instrument in TRADEABLE_INSTRUMENTS
+        }
+        logger.info(
+            "No directional candidates: supply_shock=%s curve=%s tanker=%s insider=%s "
+            "direction_net=%s (a net must reach %.2f in either direction)",
+            feature_set.supply_shock_probability,
+            feature_set.futures_curve_steepness,
+            feature_set.tanker_disruption_index,
+            feature_set.insider_conviction_score,
+            nets,
+            _MIN_EDGE_SCORE,
+        )
 
     candidates.sort(key=lambda c: c.edge_score, reverse=True)
 
