@@ -24,6 +24,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+from src.agents.ingestion.models import OptionStructure
 from src.agents.strategy_evaluation.strategy_evaluation_agent import (
     compute_edge_score,
     evaluate_strategies,
@@ -166,7 +167,7 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     assert uso is not None, "Expected a USO long_straddle candidate"
 
     # Compute expected score via the same function to avoid magic numbers
-    expected = compute_edge_score("USO", fs)
+    expected = compute_edge_score("USO", fs, OptionStructure.CALL_SPREAD)
     assert _EDGE_SCORE_FLOOR <= expected <= _EDGE_SCORE_CEIL
     # Check expected falls inside the broad acceptance band
     assert _GOLDEN_EDGE_SCORE_MIN <= expected <= _GOLDEN_EDGE_SCORE_MAX

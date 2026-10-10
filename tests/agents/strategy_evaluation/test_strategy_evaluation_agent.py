@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+from src.agents.ingestion.models import OptionStructure
 from src.agents.strategy_evaluation.models import StrategyCandidate
 from src.agents.strategy_evaluation.strategy_evaluation_agent import (
     INSTRUMENTS_IN_SCOPE,
@@ -60,235 +61,73 @@ def _make_feature_set(
 
 
 class TestComputeEdgeScore:
-    """Tests for compute_edge_score()."""
+    """Structure-specific edge score from the signed direction net (#134)."""
 
-    def test_high_gap_high_dispersion(self) -> None:
-        """Full vol gap + full dispersion → 1.0."""
-        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=1.0)
-        score = compute_edge_score("USO", fs)
-        assert abs(score - 1.0) < 1e-9
+    @staticmethod
+    def _score(
+        structure: OptionStructure,
+        instrument: str = "USO",
+        gaps: list[VolatilityGap] | None = None,
+        sector_dispersion: float | None = None,
+        **signals: float | None,
+    ) -> float:
+        fs = _make_feature_set(gaps or [], sector_dispersion=sector_dispersion)
+        return compute_edge_score(instrument, fs, structure, **signals)
 
-    def test_full_gap_no_dispersion(self) -> None:
-        """Full vol gap, dispersion None → 0.70."""
-        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=None)
-        score = compute_edge_score("USO", fs)
-        assert abs(score - 0.70) < 1e-9
+    def test_bullish_signal_scores_call_spread_only(self) -> None:
+        call = self._score(OptionStructure.CALL_SPREAD, supply_shock_probability=1.0)
+        put = self._score(OptionStructure.PUT_SPREAD, supply_shock_probability=1.0)
+        assert call == pytest.approx(0.35)
+        assert put == 0.0
 
-    def test_low_gap(self) -> None:
-        """Half vol gap, half dispersion → 0.35 + 0.15 = 0.50."""
-        fs = _make_feature_set([_make_vg("XLE", 0.10)], sector_dispersion=0.50)
-        score = compute_edge_score("XLE", fs)
-        assert abs(score - 0.50) < 1e-9
+    def test_bearish_signal_scores_put_spread_only(self) -> None:
+        call = self._score(OptionStructure.CALL_SPREAD, futures_curve_steepness=0.05)
+        put = self._score(OptionStructure.PUT_SPREAD, futures_curve_steepness=0.05)
+        assert call == 0.0
+        assert put == pytest.approx(0.25)
 
-    def test_gap_capped_at_one(self) -> None:
-        """Vol gap larger than 0.20 caps at 1.0 contribution, so score ≤ 1.0."""
-        fs = _make_feature_set([_make_vg("XOM", 0.50)], sector_dispersion=1.0)
-        score = compute_edge_score("XOM", fs)
-        assert abs(score - 1.0) < 1e-9
-
-    def test_no_instrument_returns_zero(self) -> None:
-        """Instrument not in feature_set.volatility_gaps → 0.0."""
-        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=1.0)
-        score = compute_edge_score("XOM", fs)
-        assert score == 0.0
-
-    def test_negative_gap_returns_zero(self) -> None:
-        """Negative vol gap (IV below realized) clipped to 0 → 0.0 vol contribution."""
-        fs = _make_feature_set([_make_vg("CVX", -0.05)], sector_dispersion=None)
-        score = compute_edge_score("CVX", fs)
-        assert score == 0.0
-
-    def test_zero_dispersion(self) -> None:
-        """Full gap, zero dispersion → 0.70."""
-        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.0)
-        score = compute_edge_score("USO", fs)
-        assert abs(score - 0.70) < 1e-9
-
-    def test_score_bounded(self) -> None:
-        """Edge score must always be in [0.0, 1.0]."""
-        fs = _make_feature_set([_make_vg("USO", 1.0)], sector_dispersion=1.0)
-        score = compute_edge_score("USO", fs)
-        assert 0.0 <= score <= 1.0
-
-    # --- Phase 2 multiplier tests ---
-
-    def test_phase1_unchanged_when_none(self) -> None:
-        """When supply_shock and curve_steepness are None, score matches Phase 1."""
-        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
-        score_none = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=None,
-            futures_curve_steepness=None,
+    def test_dispersion_amplifies_the_net(self) -> None:
+        score = self._score(
+            OptionStructure.CALL_SPREAD, sector_dispersion=0.5, supply_shock_probability=1.0
         )
-        score_base = compute_edge_score("USO", fs)
-        assert score_none == score_base
+        assert score == pytest.approx(0.4025)  # 0.35 * (1 + 0.30 * 0.5)
 
-    def test_supply_shock_increases_score(self) -> None:
-        """supply_shock_probability=0.8 increases score vs None."""
-        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
-        base = compute_edge_score("USO", fs)
-        boosted = compute_edge_score("USO", fs, supply_shock_probability=0.8)
-        assert boosted > base
-
-    def test_curve_steepness_increases_score(self) -> None:
-        """Non-zero futures_curve_steepness increases edge score."""
-        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
-        base = compute_edge_score("USO", fs)
-        boosted = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
-        assert boosted > base
-
-    def test_both_multipliers_compound(self) -> None:
-        """Both multipliers together produce a higher score than either alone."""
-        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
-        shock_only = compute_edge_score("USO", fs, supply_shock_probability=0.5)
-        curve_only = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
-        both = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=0.5,
-            futures_curve_steepness=0.05,
+    def test_narrative_amplifier_is_capped_at_one(self) -> None:
+        score = self._score(
+            OptionStructure.CALL_SPREAD, supply_shock_probability=1.0, narrative_velocity=2.0
         )
-        assert both > shock_only
-        assert both > curve_only
+        assert score == pytest.approx(0.385)  # 0.35 * (1 + 0.10 * 1.0)
 
-    def test_multipliers_cap_at_one(self) -> None:
-        """Even with large multipliers, score is capped at 1.0."""
-        fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=1.0)
-        score = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=1.0,
-            futures_curve_steepness=0.5,
-        )
-        assert score == 1.0
-
-    def test_negative_curve_steepness_uses_abs(self) -> None:
-        """Negative curve steepness (backwardation) also boosts score via abs()."""
-        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
-        pos = compute_edge_score("USO", fs, futures_curve_steepness=0.05)
-        neg = compute_edge_score("USO", fs, futures_curve_steepness=-0.05)
-        assert abs(pos - neg) < 1e-9
-
-    def test_zero_effect_inputs_equivalent_to_none(self) -> None:
-        """supply_shock=0.0 and curve_steepness=0.0 match None/None behavior."""
-        fs = _make_feature_set([_make_vg("USO", 0.10)], sector_dispersion=0.2)
-        score_none = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=None,
-            futures_curve_steepness=None,
-        )
-        score_zero = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=0.0,
-            futures_curve_steepness=0.0,
-        )
-        assert score_zero == score_none
-
-    # --- Phase 3 additive signal tests (issue #158) ---
-
-    def test_phase1_phase2_unchanged_when_phase3_omitted(self) -> None:
-        """Omitting the three Phase 3 params matches passing them explicitly as None."""
-        fs = _make_feature_set(
-            [_make_vg("USO", 0.20)],
+    def test_score_is_clamped_at_one(self) -> None:
+        score = self._score(
+            OptionStructure.CALL_SPREAD,
             sector_dispersion=0.5,
-            supply_shock_probability=0.4,
-            futures_curve_steepness=0.05,
-        )
-        score_omitted = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=0.4,
-            futures_curve_steepness=0.05,
-        )
-        score_explicit_none = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=0.4,
-            futures_curve_steepness=0.05,
-            insider_conviction_score=None,
-            narrative_velocity=None,
-            tanker_disruption_index=None,
-        )
-        assert score_omitted == score_explicit_none
-
-    def test_insider_conviction_contributes_in_isolation(self) -> None:
-        """insider_conviction_score=0.5, all else zero/None → 0.5 * _INSIDER_CONVICTION_WEIGHT."""
-        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
-        score = compute_edge_score("USO", fs, insider_conviction_score=0.5)
-        assert score == pytest.approx(0.5 * 0.15)
-
-    def test_narrative_velocity_contributes_in_isolation(self) -> None:
-        """narrative_velocity=0.5, all else zero/None → 0.5 * _NARRATIVE_VELOCITY_WEIGHT."""
-        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
-        score = compute_edge_score("USO", fs, narrative_velocity=0.5)
-        assert score == pytest.approx(0.5 * 0.10)
-
-    def test_tanker_disruption_contributes_in_isolation(self) -> None:
-        """tanker_disruption_index=0.5, all else zero/None → 0.5 * _TANKER_DISRUPTION_WEIGHT."""
-        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
-        score = compute_edge_score("USO", fs, tanker_disruption_index=0.5)
-        assert score == pytest.approx(0.5 * 0.15)
-
-    def test_all_phase3_signals_combined(self) -> None:
-        """All three Phase 3 signals sum additively when combined."""
-        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=None)
-        score = compute_edge_score(
-            "USO",
-            fs,
-            insider_conviction_score=0.5,
-            narrative_velocity=0.5,
-            tanker_disruption_index=0.5,
-        )
-        expected = 0.5 * 0.15 + 0.5 * 0.10 + 0.5 * 0.15
-        assert score == pytest.approx(expected)
-
-    def test_cross_sector_boost_applied_when_both_high(self) -> None:
-        """High dispersion + high insider conviction applies the _CROSS_SECTOR_BOOST multiplier."""
-        from src.agents.strategy_evaluation.strategy_evaluation_agent import (
-            _CROSS_SECTOR_BOOST,
-        )
-
-        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.5)
-        score = compute_edge_score("USO", fs, insider_conviction_score=0.8)
-        base = 0.5 * 0.30 + 0.8 * 0.15  # disp_contribution + insider_contribution
-        expected = base * (1.0 + _CROSS_SECTOR_BOOST)
-        assert score == pytest.approx(expected)
-
-    def test_cross_sector_boost_not_applied_when_only_dispersion_high(self) -> None:
-        """High dispersion but insider conviction below threshold → no boost."""
-        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.5)
-        score = compute_edge_score("USO", fs, insider_conviction_score=0.5)
-        expected = 0.5 * 0.30 + 0.5 * 0.15  # no _CROSS_SECTOR_BOOST applied
-        assert score == pytest.approx(expected)
-
-    def test_cross_sector_boost_not_applied_when_only_conviction_high(self) -> None:
-        """High insider conviction but dispersion below threshold → no boost."""
-        fs = _make_feature_set([_make_vg("USO", 0.0)], sector_dispersion=0.05)
-        score = compute_edge_score("USO", fs, insider_conviction_score=0.9)
-        expected = 0.05 * 0.30 + 0.9 * 0.15  # no _CROSS_SECTOR_BOOST applied
-        assert score == pytest.approx(expected)
-
-    def test_score_clamped_at_one_with_all_signals_maxed(self) -> None:
-        """All Phase 1/2/3 signals at max, plus cross-sector boost, still clamps to 1.0."""
-        fs = _make_feature_set(
-            [_make_vg("USO", 1.0)],
-            sector_dispersion=1.0,
             supply_shock_probability=1.0,
-            futures_curve_steepness=1.0,
-        )
-        score = compute_edge_score(
-            "USO",
-            fs,
-            supply_shock_probability=1.0,
-            futures_curve_steepness=1.0,
-            insider_conviction_score=1.0,
-            narrative_velocity=1.0,
+            futures_curve_steepness=-0.05,
             tanker_disruption_index=1.0,
+            narrative_velocity=0.5,
         )
-        assert score == 1.0
+        assert score == 1.0  # 0.85 * 1.20 = 1.02, clamped
+
+    def test_volatility_gap_has_no_effect(self) -> None:
+        with_gap = self._score(
+            OptionStructure.CALL_SPREAD,
+            gaps=[_make_vg("USO", 0.20)],
+            supply_shock_probability=1.0,
+        )
+        without_gap = self._score(OptionStructure.CALL_SPREAD, supply_shock_probability=1.0)
+        assert with_gap == without_gap == pytest.approx(0.35)
+
+    def test_no_signals_scores_zero_without_a_volatility_gap_record(self) -> None:
+        assert self._score(OptionStructure.CALL_SPREAD) == 0.0
+        assert self._score(OptionStructure.PUT_SPREAD) == 0.0
+
+    @pytest.mark.parametrize(
+        "structure", [OptionStructure.LONG_STRADDLE, OptionStructure.CALENDAR_SPREAD]
+    )
+    def test_unsupported_structure_raises(self, structure: OptionStructure) -> None:
+        with pytest.raises(ValueError):
+            self._score(structure, supply_shock_probability=1.0)
 
 
 class TestComputeDirectionNet:
