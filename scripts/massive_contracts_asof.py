@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 import os
+import sys
 import json
 import time
 import requests
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from scripts._massive_common import strip_api_key
 
 KEY = os.environ.get("POLYGON_API_KEY")
 BASE = "https://api.massive.com/v3/reference/options/contracts"
@@ -22,7 +26,7 @@ for s in symbols:
     try:
         resp = requests.get(BASE, params=params, timeout=30)
         out = {
-            "url": resp.url,
+            "url": strip_api_key(resp.url),
             "status_code": resp.status_code,
             "headers": {k: v for k, v in resp.headers.items() if k.lower() in ("content-type", "x-rate-limit-limit", "x-rate-limit-remaining")},
         }
