@@ -62,3 +62,12 @@ def test_fetch_wti_csv_raises_on_http_error(monkeypatch: pytest.MonkeyPatch) -> 
 def test_parse_wti_csv_raises_validation_error_on_malformed_price() -> None:
     with pytest.raises(ValidationError):
         parse_wti_csv("observation_date,DCOILWTICO\n2020-04-17,abc\n")
+
+
+def test_load_wti_reads_event_window_fixture() -> None:
+    fixture = Path("backtests/fixtures/wti_event_windows.csv")
+    series = load_wti(date(2020, 1, 1), date(2023, 12, 31), csv_path=fixture)
+    assert len(series) == 100
+    for event_day in (date(2020, 3, 9), date(2022, 2, 24), date(2023, 12, 18)):
+        assert event_day in series
+    assert all(price > 0 for price in series.values())
