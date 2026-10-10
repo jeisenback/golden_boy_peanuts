@@ -54,5 +54,5 @@ def test_fetch_wti_csv_raises_on_http_error(monkeypatch: pytest.MonkeyPatch) -> 
     response = MagicMock()
     response.raise_for_status.side_effect = requests.HTTPError("503")
     with patch("src.backtest.wti_loader.requests.get", return_value=response):
-        with pytest.raises(Exception):
+        with pytest.raises(requests.HTTPError):
             fetch_wti_csv(date(2020, 4, 1), date(2020, 4, 30))
