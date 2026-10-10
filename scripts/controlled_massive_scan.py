@@ -5,10 +5,14 @@
 - Saves JSON per-symbol/per-asof into docs/vendor_evaluation/samples/controlled_scan
 """
 import os
+import sys
 import time
 import json
 import requests
 from datetime import datetime, timedelta
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from scripts._massive_common import strip_api_key
 
 KEY = os.environ.get("POLYGON_API_KEY")
 BASE = "https://api.massive.com/v3/reference/options/contracts"
@@ -53,7 +57,7 @@ for s in symbols:
                     j = r.json()
                 except Exception:
                     j = {"text": r.text}
-                out = {"url": r.url, "status_code": r.status_code, "json": j}
+                out = {"url": strip_api_key(r.url), "status_code": r.status_code, "json": j}
                 fname = os.path.join(OUT_DIR, f"{s}_asof_{as_of}.json")
                 with open(fname, "w", encoding="utf-8") as f:
                     json.dump(out, f, indent=2)
@@ -62,7 +66,11 @@ for s in symbols:
                 break
             elif r.status_code == 429:
                 if attempt > MAX_RETRIES:
-                    out = {"url": r.url, "status_code": r.status_code, "json": r.json()}
+                    out = {
+                        "url": strip_api_key(r.url),
+                        "status_code": r.status_code,
+                        "json": r.json(),
+                    }
                     fname = os.path.join(OUT_DIR, f"{s}_asof_{as_of}_429.json")
                     with open(fname, "w", encoding="utf-8") as f:
                         json.dump(out, f, indent=2)
@@ -78,7 +86,7 @@ for s in symbols:
                     j = r.json()
                 except Exception:
                     j = {"text": r.text}
-                out = {"url": r.url, "status_code": r.status_code, "json": j}
+                out = {"url": strip_api_key(r.url), "status_code": r.status_code, "json": j}
                 fname = os.path.join(OUT_DIR, f"{s}_asof_{as_of}_status_{r.status_code}.json")
                 with open(fname, "w", encoding="utf-8") as f:
                     json.dump(out, f, indent=2)
