@@ -14,6 +14,7 @@ import logging
 import math
 import pathlib as _pathlib
 import sys as _sys
+from unittest.mock import patch
 
 import pytest
 
@@ -22,6 +23,7 @@ from scripts.ovx_gap_quartiles import (  # type: ignore[import]
     _FORWARD_TRADING_DAYS,
     StudyRow,
     build_rows,
+    fetch_closes,
     implied_move_pct,
     render_report,
     summarize_quartiles,
@@ -172,3 +174,27 @@ def test_build_rows_logs_each_skipped_as_of_instead_of_swallowing_it(
     assert rows == []
     skipped = [r for r in caplog.records if "skip" in r.getMessage().lower()]
     assert skipped, "expected a log line per skipped as_of date"
+
+
+def test_fetch_closes_uses_fred_wti_for_cl_futures() -> None:
+    wti = {date(2022, 2, 24): 92.1}
+    with (
+        patch("scripts.ovx_gap_quartiles.load_wti", return_value=wti) as load_wti,
+        patch("scripts.ovx_gap_quartiles.fetch_closes_yfinance") as yfinance,
+    ):
+        result = fetch_closes("CL=F", date(2022, 1, 1), date(2022, 3, 1))
+    assert result == wti
+    load_wti.assert_called_once_with(date(2022, 1, 1), date(2022, 3, 1))
+    yfinance.assert_not_called()
+
+
+def test_fetch_closes_uses_yfinance_for_other_tickers() -> None:
+    closes = {date(2022, 2, 24): 78.7}
+    with (
+        patch("scripts.ovx_gap_quartiles.load_wti") as load_wti,
+        patch("scripts.ovx_gap_quartiles.fetch_closes_yfinance", return_value=closes) as yfinance,
+    ):
+        result = fetch_closes("USO", date(2022, 1, 1), date(2022, 3, 1))
+    assert result == closes
+    yfinance.assert_called_once_with("USO", date(2022, 1, 1), date(2022, 3, 1))
+    load_wti.assert_not_called()

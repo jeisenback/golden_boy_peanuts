@@ -18,6 +18,8 @@ baselines printed in the report.
 Days whose realized-vol window or forward horizon touch a non-positive close
 (WTI, April 2020) are excluded.
 
+Closes for CL=F come from FRED WTI spot (DCOILWTICO); other tickers use yfinance.
+
 Usage:
     python scripts/ovx_gap_quartiles.py [--start 2020-01-01] [--ticker CL=F]
                                         [--report docs/backtest_reports/<auto>.md]
@@ -41,8 +43,10 @@ from src.backtest.ovx_loader import (
     historical_volatility_gap,
     load_ovx,
 )
+from src.backtest.wti_loader import load_wti
 
 REPORT_DIR = Path("docs/backtest_reports")
+_WTI_TICKER = "CL=F"
 _LOOKBACK_DAYS = 30
 _FORWARD_TRADING_DAYS = 10
 _TRADING_DAYS_PER_YEAR = 252
@@ -274,6 +278,13 @@ def render_report(
     return "\n".join(lines) + "\n"
 
 
+def fetch_closes(ticker: str, start: date, end: date) -> dict[date, float]:
+    """Return daily closes: FRED WTI spot for CL=F, yfinance for any other ticker."""
+    if ticker == _WTI_TICKER:
+        return load_wti(start, end)
+    return fetch_closes_yfinance(ticker, start, end)
+
+
 def _default_report_path(ticker: str) -> Path:
     safe = ticker.replace("=", "").replace("^", "")
     return REPORT_DIR / f"217-ovx-gap-ratio-{safe}.md"
@@ -296,7 +307,7 @@ def main() -> int:
 
     try:
         ovx = load_ovx(start, end)
-        closes = fetch_closes_yfinance(args.ticker, start - timedelta(days=60), end)
+        closes = fetch_closes(args.ticker, start - timedelta(days=60), end)
     except Exception:
         logger.exception("ovx_gap_quartiles: live data fetch failed; no report written")
         return 1
