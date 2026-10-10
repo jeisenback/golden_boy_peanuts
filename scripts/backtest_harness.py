@@ -44,7 +44,7 @@ from src.agents.ingestion.models import (
 )
 from src.agents.strategy_evaluation.models import StrategyCandidate
 from src.agents.strategy_evaluation.strategy_evaluation_agent import (
-    INSTRUMENTS_IN_SCOPE,
+    TRADEABLE_INSTRUMENTS,
     compute_edge_score,
 )
 from src.backtest.ovx_loader import (
@@ -371,7 +371,7 @@ def replay_pipeline(
     snapshot_time = market_state.snapshot_time
     candidates: list[StrategyCandidate] = []
 
-    for instrument in INSTRUMENTS_IN_SCOPE:
+    for instrument in TRADEABLE_INSTRUMENTS:
         score = compute_edge_score(
             instrument,
             feature_set,

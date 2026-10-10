@@ -30,8 +30,16 @@ from src.core.db import get_engine
 
 logger = logging.getLogger(__name__)
 
-# Instruments in scope for Phase 1 (PRD Section 3.1)
-INSTRUMENTS_IN_SCOPE: list[str] = ["USO", "XLE", "XOM", "CVX", "CL=F", "BZ=F"]
+# Tradeable targets: the only instruments that receive strategy candidates. Historical
+# options data exists for these (vendor evaluation #170), so outcomes can be scored.
+TRADEABLE_INSTRUMENTS: list[str] = ["USO", "XLE", "XOM", "CVX"]
+
+# Signal sources: WTI and Brent futures feed every signal (prices, OVX, curve steepness,
+# supply events) but have no scoreable options history, so no candidates are emitted (#219).
+SIGNAL_ONLY_INSTRUMENTS: list[str] = ["CL=F", "BZ=F"]
+
+# Full universe for ingestion and feature generation (PRD Section 3.1).
+INSTRUMENTS_IN_SCOPE: list[str] = TRADEABLE_INSTRUMENTS + SIGNAL_ONLY_INSTRUMENTS
 
 # ---------------------------------------------------------------------------
 # Phase 1 edge score formula — static heuristic weights
@@ -288,10 +296,10 @@ def _curve_steepness_label(feature_set: FeatureSet) -> str:
 
 def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     """
-    Evaluate all eligible option structures across all in-scope instruments.
+    Evaluate all eligible option structures across the tradeable instruments.
 
-    For each instrument in INSTRUMENTS_IN_SCOPE, generates one StrategyCandidate
-    per Phase 1 structure (long_straddle, call_spread, put_spread). Candidates
+    For each instrument in TRADEABLE_INSTRUMENTS (USO, XLE, XOM, CVX), generates one
+    StrategyCandidate per Phase 1 structure (long_straddle, call_spread, put_spread). Candidates
     with edge_score below _MIN_EDGE_SCORE are filtered out. Results are sorted
     by edge_score descending and persisted to the DB (DB failures are logged and
     do not propagate — candidates are still returned to the caller).
@@ -311,7 +319,7 @@ def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     generated_at = datetime.now(tz=UTC)
     candidates: list[StrategyCandidate] = []
 
-    for instrument in INSTRUMENTS_IN_SCOPE:
+    for instrument in TRADEABLE_INSTRUMENTS:
         edge_score = compute_edge_score(
             instrument,
             feature_set,

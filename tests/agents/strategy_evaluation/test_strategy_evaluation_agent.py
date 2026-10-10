@@ -15,6 +15,9 @@ import pytest
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.strategy_evaluation.models import StrategyCandidate
 from src.agents.strategy_evaluation.strategy_evaluation_agent import (
+    INSTRUMENTS_IN_SCOPE,
+    SIGNAL_ONLY_INSTRUMENTS,
+    TRADEABLE_INSTRUMENTS,
     compute_edge_score,
     evaluate_strategies,
 )
@@ -460,11 +463,15 @@ class TestEvaluateStrategies:
             result_none = evaluate_strategies(fs_none)
         assert result[0].edge_score > result_none[0].edge_score
 
-    def test_correlated_instruments_yield_18_equal_score_candidates(self) -> None:
-        """All 6 in-scope instruments above threshold produce 18 deterministic candidates.
+    def test_correlated_instruments_yield_12_equal_score_candidates(self) -> None:
+        """All 4 tradeable instruments above threshold produce 12 deterministic candidates.
 
-        18 candidates is expected behavior when all instruments are correlated;
-        see concentration filter issue #132 for future de-duplication behavior.
+        Was 18 when CL=F and BZ=F also received candidates. Those two are signal-only
+        since #219: they have no historical options data, so their outcomes can never be
+        scored. They still feed every signal, but evaluate_strategies() emits nothing for
+        them, even when their own score is above threshold (included below to prove it).
+        12 candidates is expected when all tradeable instruments are correlated; see
+        concentration filter issue #132 for future de-duplication behavior.
         """
         instruments = ["USO", "XLE", "XOM", "CVX", "CL=F", "BZ=F"]
         fs = _make_feature_set(
@@ -475,7 +482,8 @@ class TestEvaluateStrategies:
         with patch(_PATCH_GET_ENGINE, return_value=MagicMock()), patch(_PATCH_WRITE):
             result = evaluate_strategies(fs)
 
-        assert len(result) == 18
+        assert len(result) == 12
+        assert {candidate.instrument for candidate in result} == set(TRADEABLE_INSTRUMENTS)
         assert len({candidate.edge_score for candidate in result}) == 1
 
         # All scores are equal, so sorted(desc) preserves insertion order (stable sort).
@@ -497,15 +505,16 @@ class TestEvaluateStrategies:
             ("CVX", "long_straddle"),
             ("CVX", "call_spread"),
             ("CVX", "put_spread"),
-            ("CL=F", "long_straddle"),
-            ("CL=F", "call_spread"),
-            ("CL=F", "put_spread"),
-            ("BZ=F", "long_straddle"),
-            ("BZ=F", "call_spread"),
-            ("BZ=F", "put_spread"),
         ]
         actual_order = [(candidate.instrument, candidate.structure) for candidate in result]
         assert actual_order == expected_order
+
+    def test_instrument_universe_is_tradeable_plus_signal_only(self) -> None:
+        """Scope constants stay disjoint and together equal the full universe (#219)."""
+        assert not set(TRADEABLE_INSTRUMENTS) & set(SIGNAL_ONLY_INSTRUMENTS)
+        assert INSTRUMENTS_IN_SCOPE == TRADEABLE_INSTRUMENTS + SIGNAL_ONLY_INSTRUMENTS
+        assert SIGNAL_ONLY_INSTRUMENTS == ["CL=F", "BZ=F"]
+        assert TRADEABLE_INSTRUMENTS == ["USO", "XLE", "XOM", "CVX"]
 
     def test_phase3_signals_on_feature_set_increase_edge_score(self) -> None:
         """Phase 3 signals present on the FeatureSet raise edge_score vs. them being None (#209)."""
