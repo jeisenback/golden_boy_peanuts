@@ -56,6 +56,15 @@ def parse_wti_csv(text: str) -> list[WtiObservation]:
     Parse FRED DCOILWTICO CSV text into validated observations.
 
     FRED marks non-trading days with '.'; those rows (and blanks) are dropped.
+
+    Args:
+        text: CSV text with `observation_date` and `DCOILWTICO` columns.
+
+    Returns:
+        One WtiObservation per row that has a price, in file order.
+
+    Raises:
+        pydantic.ValidationError: if a row has a malformed date or price.
     """
     observations: list[WtiObservation] = []
     for row in csv.DictReader(io.StringIO(text)):
@@ -63,9 +72,8 @@ def parse_wti_csv(text: str) -> list[WtiObservation]:
         if raw in ("", "."):
             continue
         observations.append(
-            WtiObservation(
-                observation_date=date.fromisoformat(row["observation_date"]),
-                value=float(raw),
+            WtiObservation.model_validate(
+                {"observation_date": row["observation_date"], "value": raw}
             )
         )
     return observations
@@ -84,6 +92,9 @@ def load_wti(
         end:      Last date to include.
         csv_path: Read this local FRED-format CSV instead of calling FRED
             (used by tests and offline backtests).
+
+    Returns:
+        Mapping of observation date to WTI spot price in USD per barrel.
     """
     text = csv_path.read_text(encoding="utf-8") if csv_path else fetch_wti_csv(start, end)
     return {

@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from pydantic import ValidationError
 import pytest
 import requests
 
@@ -56,3 +57,8 @@ def test_fetch_wti_csv_raises_on_http_error(monkeypatch: pytest.MonkeyPatch) -> 
     with patch("src.backtest.wti_loader.requests.get", return_value=response):
         with pytest.raises(requests.HTTPError):
             fetch_wti_csv(date(2020, 4, 1), date(2020, 4, 30))
+
+
+def test_parse_wti_csv_raises_validation_error_on_malformed_price() -> None:
+    with pytest.raises(ValidationError):
+        parse_wti_csv("observation_date,DCOILWTICO\n2020-04-17,abc\n")
