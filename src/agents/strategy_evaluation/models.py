@@ -31,3 +31,26 @@ class StrategyCandidate(BaseModel):
         ),
     )
     generated_at: datetime = Field(..., description="UTC timestamp when candidate was generated")
+
+
+class StrategyOutcome(BaseModel):
+    """
+    Actual price movement after a strategy candidate was generated (issue #130).
+
+    price_at_expiration and pct_move are nullable — populated by a reconciliation
+    job after the candidate's expiration date passes.
+    """
+
+    candidate_id: int = Field(..., gt=0, description="FK to strategy_candidates.id")
+    instrument: str = Field(..., min_length=1)
+    structure: str = Field(
+        ...,
+        min_length=1,
+        description="OptionStructure string value, e.g. 'long_straddle'",
+    )
+    generated_at: datetime
+    expiration_date: datetime
+    price_at_generation: float = Field(..., gt=0.0)
+    price_at_expiration: float | None = None
+    pct_move: float | None = None
+    recorded_at: datetime = Field(..., description="UTC timestamp when outcome was recorded")

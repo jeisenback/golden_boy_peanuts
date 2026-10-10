@@ -11,7 +11,7 @@ import logging
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from src.agents.strategy_evaluation.models import StrategyCandidate
+from src.agents.strategy_evaluation.models import StrategyCandidate, StrategyOutcome
 from src.core.db import get_engine  # noqa: F401
 
 logger = logging.getLogger(__name__)
@@ -137,3 +137,104 @@ def read_top_candidates(engine: Engine, limit: int = 10) -> list[StrategyCandida
         result.append(candidate)
 
     return result
+
+
+def write_strategy_outcome(outcome: StrategyOutcome, engine: Engine) -> int:
+    """
+    Insert or upsert a single strategy outcome record.
+
+    If a row with the same candidate_id already exists, update the price and
+    move fields (idempotent reconciliation).
+
+    Args:
+        outcome: Validated StrategyOutcome to persist.
+        engine: SQLAlchemy Engine.
+
+    Returns:
+        1 on success.
+    """
+    sql = text("""
+        INSERT INTO strategy_outcomes
+            (candidate_id, instrument, structure, generated_at,
+             expiration_date, price_at_generation, price_at_expiration,
+             pct_move, recorded_at)
+        VALUES
+            (:candidate_id, :instrument, :structure, :generated_at,
+             :expiration_date, :price_at_generation, :price_at_expiration,
+             :pct_move, :recorded_at)
+        ON CONFLICT (candidate_id) DO UPDATE SET
+            price_at_expiration = EXCLUDED.price_at_expiration,
+            pct_move            = EXCLUDED.pct_move,
+            recorded_at         = EXCLUDED.recorded_at
+        """)
+    params = {
+        "candidate_id": outcome.candidate_id,
+        "instrument": outcome.instrument,
+        "structure": outcome.structure,
+        "generated_at": outcome.generated_at,
+        "expiration_date": outcome.expiration_date,
+        "price_at_generation": outcome.price_at_generation,
+        "price_at_expiration": outcome.price_at_expiration,
+        "pct_move": outcome.pct_move,
+        "recorded_at": outcome.recorded_at,
+    }
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql, params)
+    except Exception:
+        logger.exception("write_strategy_outcome failed for candidate_id=%s", outcome.candidate_id)
+        raise
+
+    logger.info("Wrote strategy outcome for candidate_id=%s", outcome.candidate_id)
+    return 1
+
+
+def fetch_pending_outcomes(engine: Engine) -> list[dict[str, object]]:
+    """
+    Return strategy candidates past their expiration date with no recorded outcome,
+    or with a provisional outcome (price_at_expiration still NULL).
+
+    Each returned dict contains: id, instrument, structure, expiration,
+    edge_score, generated_at — enough for the reconciliation job to fetch
+    realized prices and write an outcome.
+
+    Args:
+        engine: SQLAlchemy Engine.
+
+    Returns:
+        List of dicts, one per pending candidate.
+
+    Raises:
+        sqlalchemy.exc.SQLAlchemyError: Propagates on connection failure
+            after logging the exception.
+    """
+    # Column concatenation (sc.expiration || ' days') is safe — the value
+    # comes from our own strategy_candidates table, not from user input.
+    sql = text("""
+        SELECT sc.id, sc.instrument, sc.structure, sc.expiration,
+               sc.edge_score, sc.generated_at
+        FROM strategy_candidates sc
+        LEFT JOIN strategy_outcomes so ON so.candidate_id = sc.id
+        WHERE (so.id IS NULL OR so.price_at_expiration IS NULL)
+          AND sc.generated_at + (sc.expiration || ' days')::INTERVAL < now()
+        ORDER BY sc.generated_at ASC
+        """)
+
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql).fetchall()
+    except Exception:
+        logger.exception("fetch_pending_outcomes failed")
+        raise
+
+    return [
+        {
+            "id": row[0],
+            "instrument": row[1],
+            "structure": row[2],
+            "expiration": row[3],
+            "edge_score": float(row[4]),
+            "generated_at": row[5],
+        }
+        for row in rows
+    ]

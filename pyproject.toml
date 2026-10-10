@@ -1,7 +1,7 @@
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tools", "tests"]
 
 [tool.ruff.lint]
 select = [
@@ -15,10 +15,11 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101", "ANN"]
+"tools/**/*.py" = ["ANN"]
 "src/core/compat.py" = ["UP042"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["src"]
+known-first-party = ["src", "tools"]
 force-sort-within-sections = true
 
 [tool.black]
@@ -42,6 +43,11 @@ show_error_codes = true
 
 [[tool.mypy.overrides]]
 module = "src.*"
+disallow_untyped_defs = true
+disallow_any_generics = true
+
+[[tool.mypy.overrides]]
+module = "tools.*"
 disallow_untyped_defs = true
 disallow_any_generics = true
 

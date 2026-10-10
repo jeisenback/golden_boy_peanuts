@@ -5,6 +5,10 @@ name: Daily Pipeline Run
 # Weekdays only (1-5 = Monday through Friday).
 #
 # Manual trigger available via workflow_dispatch for ad-hoc runs.
+#
+# Each run writes data/candidates/YYYY-MM-DD.json and publishes it to the `data` branch
+# (issue #218), the only durable record of candidates. Nothing is ever pushed to develop
+# or main: the job's contents: write permission is used solely by the publish step.
 
 on:
   schedule:
@@ -18,6 +22,11 @@ jobs:
   run-pipeline:
     name: Run Phase 1 Pipeline
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # publish step pushes to the `data` branch only
+    concurrency:
+      group: candidate-snapshots
+      cancel-in-progress: false
 
     services:
       postgres:
@@ -93,9 +102,14 @@ jobs:
               level=logging.INFO,
               format="%(asctime)s %(levelname)s %(name)s — %(message)s",
           )
+          from scripts.write_candidate_snapshot import write_snapshot
           from src.pipeline import run_pipeline
           candidates = run_pipeline()
+          write_snapshot(candidates)
           print(f"\nPipeline complete: {len(candidates)} candidate(s)")
           for c in sorted(candidates, key=lambda x: x.edge_score, reverse=True):
               print(f"  {c.instrument:6s} {c.structure.value:20s} edge={c.edge_score:.4f}")
           EOF
+
+      - name: Publish candidate snapshot to data branch
+        run: bash scripts/publish_candidate_snapshot.sh

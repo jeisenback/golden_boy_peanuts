@@ -38,6 +38,7 @@ class FeatureSet(BaseModel):
     narrative_velocity: float | None = Field(
         default=None, ge=0.0, description="Headline acceleration score"
     )
+    tanker_disruption_index: float | None = Field(default=None, ge=0.0, le=1.0)
     supply_shock_probability: float | None = Field(default=None, ge=0.0, le=1.0)
     feature_errors: list[str] = Field(
         default_factory=list,

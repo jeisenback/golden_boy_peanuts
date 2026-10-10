@@ -103,11 +103,16 @@ def complete(
     response = requests.post(api_url, headers=headers, json=body, timeout=120)
 
     if response.status_code >= 500:
-        # Trigger tenacity retry on server errors
+        # Trigger tenacity retry on server errors (5xx)
+        response.raise_for_status()
+
+    # For 4xx errors (client errors), fail immediately without retrying
+    # This avoids wasting retry attempts on misconfiguration, auth failures, etc.
+    if not response.ok and response.status_code < 500:
+        logger.error("Anthropic API error %d: %s", response.status_code, response.text[:500])
         response.raise_for_status()
 
     if not response.ok:
-        logger.error("Anthropic API error %d: %s", response.status_code, response.text[:500])
         response.raise_for_status()
 
     data: dict[str, Any] = response.json()
