@@ -121,6 +121,65 @@ _INSIDER_CONVICTION_HIGH_THRESHOLD: float = 0.70
 _CROSS_SECTOR_BOOST: float = 0.10
 
 
+# ---------------------------------------------------------------------------
+# Direction signals (issue #134, docs/plans/structure-selection-spec.md)
+#
+# Each signal maps to a score in [-1, 1] where positive means bullish crude, and
+# direction_net is their weighted sum (a missing signal contributes 0.0). The weights
+# are static heuristics, unvalidated until the forward test measures them.
+#
+# futures_curve_steepness is (second_month - front_month) / front_month, so a one-month
+# spread of 5% of the front price maps to full strength. This is set from the signal's
+# units, not from observed data; recheck against the first nightly snapshots.
+# ---------------------------------------------------------------------------
+_CURVE_FULL: float = 0.05
+_W_CURVE: float = 0.25
+_W_SUPPLY: float = 0.35
+_W_TANKER: float = 0.25
+_W_INSIDER: float = 0.15
+
+# Insider filings exist only for the equities; USO and XLE are ETFs with no insiders.
+_INSIDER_COVERED: frozenset[str] = frozenset({"XOM", "CVX"})
+
+
+def compute_direction_net(
+    instrument: str,
+    *,
+    supply_shock_probability: float | None,
+    futures_curve_steepness: float | None,
+    insider_conviction_score: float | None,
+    tanker_disruption_index: float | None,
+) -> float:
+    """
+    Combine the direction signals into one signed net for an instrument.
+
+    Args:
+        instrument: Ticker; insider conviction counts only for XOM and CVX.
+        supply_shock_probability: [0.0, 1.0], bullish only; None contributes 0.0.
+        futures_curve_steepness: Signed; backwardation (negative) is bullish and
+            contango (positive) is bearish, clipped at +/- _CURVE_FULL.
+        insider_conviction_score: [0.0, 1.0] with 0.5 neutral; above is bullish.
+        tanker_disruption_index: [0.0, 1.0], bullish only.
+
+    Returns:
+        Float in [-1.0, 1.0]; positive means bullish crude, 0.0 means no view.
+    """
+    curve = 0.0
+    if futures_curve_steepness is not None:
+        curve = min(max(-futures_curve_steepness / _CURVE_FULL, -1.0), 1.0)
+
+    insider = 0.0
+    if insider_conviction_score is not None and instrument in _INSIDER_COVERED:
+        insider = 2.0 * insider_conviction_score - 1.0
+
+    return (
+        _W_CURVE * curve
+        + _W_SUPPLY * (supply_shock_probability or 0.0)
+        + _W_TANKER * (tanker_disruption_index or 0.0)
+        + _W_INSIDER * insider
+    )
+
+
 def compute_edge_score(
     instrument: str,
     feature_set: FeatureSet,

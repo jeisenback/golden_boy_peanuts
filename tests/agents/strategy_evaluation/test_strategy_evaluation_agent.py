@@ -18,6 +18,7 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
     INSTRUMENTS_IN_SCOPE,
     SIGNAL_ONLY_INSTRUMENTS,
     TRADEABLE_INSTRUMENTS,
+    compute_direction_net,
     compute_edge_score,
     evaluate_strategies,
 )
@@ -288,6 +289,63 @@ class TestComputeEdgeScore:
             tanker_disruption_index=1.0,
         )
         assert score == 1.0
+
+
+class TestComputeDirectionNet:
+    """Signed direction net in [-1, 1]; positive means bullish crude (#134 spec 3.2, 3.3)."""
+
+    @staticmethod
+    def _net(instrument: str = "USO", **signals: float | None) -> float:
+        params: dict[str, float | None] = {
+            "supply_shock_probability": None,
+            "futures_curve_steepness": None,
+            "insider_conviction_score": None,
+            "tanker_disruption_index": None,
+        }
+        params.update(signals)
+        return compute_direction_net(instrument, **params)
+
+    def test_supply_shock_alone_is_bullish_at_its_weight(self) -> None:
+        assert self._net(supply_shock_probability=1.0) == pytest.approx(0.35)
+
+    def test_tanker_disruption_alone_is_bullish_at_its_weight(self) -> None:
+        assert self._net(tanker_disruption_index=1.0) == pytest.approx(0.25)
+
+    def test_backwardation_is_bullish(self) -> None:
+        assert self._net(futures_curve_steepness=-0.05) == pytest.approx(0.25)
+
+    def test_contango_is_bearish(self) -> None:
+        assert self._net(futures_curve_steepness=0.05) == pytest.approx(-0.25)
+
+    def test_extreme_curve_steepness_clips_to_full_strength(self) -> None:
+        assert self._net(futures_curve_steepness=-0.5) == pytest.approx(0.25)
+
+    def test_insider_buying_counts_for_xom(self) -> None:
+        assert self._net("XOM", insider_conviction_score=0.9) == pytest.approx(0.12)
+
+    def test_insider_selling_counts_for_cvx(self) -> None:
+        assert self._net("CVX", insider_conviction_score=0.0) == pytest.approx(-0.15)
+
+    @pytest.mark.parametrize("instrument", ["USO", "XLE"])
+    def test_insider_signal_ignored_for_etfs(self, instrument: str) -> None:
+        assert self._net(instrument, insider_conviction_score=0.9) == 0.0
+
+    def test_opposing_signals_cancel(self) -> None:
+        net = self._net(supply_shock_probability=0.5, futures_curve_steepness=0.035)
+        assert net == pytest.approx(0.0, abs=1e-9)
+
+    def test_all_signals_maxed_bullish_for_xom_is_one(self) -> None:
+        net = self._net(
+            "XOM",
+            supply_shock_probability=1.0,
+            futures_curve_steepness=-0.05,
+            insider_conviction_score=1.0,
+            tanker_disruption_index=1.0,
+        )
+        assert net == pytest.approx(1.0)
+
+    def test_no_signals_is_zero(self) -> None:
+        assert self._net() == 0.0
 
 
 class TestEvaluateStrategies:
