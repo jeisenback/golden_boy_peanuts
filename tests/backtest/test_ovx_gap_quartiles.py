@@ -10,6 +10,7 @@ Under fair pricing the mean ratio is 1.0 by construction.
 from __future__ import annotations
 
 from datetime import date, timedelta
+import logging
 import math
 import pathlib as _pathlib
 import sys as _sys
@@ -154,3 +155,20 @@ def test_render_report_names_ticker_baselines_and_verdict() -> None:
     assert "fair-pricing baseline" in text.lower()
     assert "STRADDLE THESIS ALIVE" in text
     assert "no option P&L is reconstructed" in text
+
+
+def test_build_rows_logs_each_skipped_as_of_instead_of_swallowing_it(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Too few closes for a 20-day realized-vol window -> historical_volatility_gap raises
+    # ValueError on every OVX date; those skips must be observable in the log.
+    days = _business_days(date(2024, 1, 1), 15)
+    closes = {d: 70.0 + i for i, d in enumerate(days)}
+    ovx = dict.fromkeys(days, 40.0)
+
+    with caplog.at_level(logging.DEBUG, logger="scripts.ovx_gap_quartiles"):
+        rows = build_rows("CL=F", ovx=ovx, closes=closes)
+
+    assert rows == []
+    skipped = [r for r in caplog.records if "skip" in r.getMessage().lower()]
+    assert skipped, "expected a log line per skipped as_of date"

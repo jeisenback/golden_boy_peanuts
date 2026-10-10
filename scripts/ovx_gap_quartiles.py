@@ -48,7 +48,8 @@ _FORWARD_TRADING_DAYS = 10
 _TRADING_DAYS_PER_YEAR = 252
 # Normal-distribution constants for the fair-pricing baselines shown in the report.
 _EXPECTED_ABS_Z = math.sqrt(2.0 / math.pi)  # E|Z| for Z ~ N(0,1)
-_FAIR_MEDIAN_RATIO = 0.6745 / _EXPECTED_ABS_Z  # median |Z| / E|Z|
+_HALF_NORMAL_MEDIAN = 0.6745  # median of |Z| for Z ~ N(0,1)
+_FAIR_MEDIAN_RATIO = _HALF_NORMAL_MEDIAN / _EXPECTED_ABS_Z
 _FAIR_SHARE_ABOVE_ONE = 2.0 * (1.0 - 0.5 * (1.0 + math.erf(_EXPECTED_ABS_Z / math.sqrt(2.0))))
 # Verdict bands from docs/plans/actionable-signal-plan.md, step 1 (applied to Q4 mean ratio).
 _VERDICT_ALIVE_ABOVE = 1.10
@@ -77,7 +78,17 @@ class QuartileStats(NamedTuple):
 
 
 def implied_move_pct(implied_vol: float, *, horizon_trading_days: int) -> float:
-    """Expected absolute move (%) over the horizon for an annualized vol fraction."""
+    """
+    Expected absolute move (%) over the horizon for an annualized vol fraction.
+
+    Args:
+        implied_vol: Annualized implied volatility as a fraction (OVX 32 -> 0.32).
+        horizon_trading_days: Forward horizon in trading days.
+
+    Returns:
+        sigma * sqrt(horizon / 252) * sqrt(2 / pi) * 100, the mean |move| a straddle's
+        fair premium pays for under normal returns.
+    """
     return (
         implied_vol
         * math.sqrt(horizon_trading_days / _TRADING_DAYS_PER_YEAR)
@@ -87,7 +98,18 @@ def implied_move_pct(implied_vol: float, *, horizon_trading_days: int) -> float:
 
 
 def build_rows(ticker: str, *, ovx: dict[date, float], closes: dict[date, float]) -> list[StudyRow]:
-    """One StudyRow per OVX date with a valid gap and a full forward window."""
+    """
+    One StudyRow per OVX date with a valid gap and a full forward window.
+
+    Args:
+        ticker: Instrument label passed through to the VolatilityGap record.
+        ovx: OVX closes by date (index points, e.g. 32.5).
+        closes: Daily closes by date for `ticker`; non-positive values mark bad days.
+
+    Returns:
+        Rows in ascending as_of order. Dates whose lookback or forward window touches
+        a non-positive close, or whose gap cannot be computed, are skipped and logged.
+    """
     bad_days = [d for d, c in closes.items() if c <= 0.0]
     valid_dates = sorted(d for d, c in closes.items() if c > 0.0)
     index_of = {d: i for i, d in enumerate(valid_dates)}
@@ -107,7 +129,8 @@ def build_rows(ticker: str, *, ovx: dict[date, float], closes: dict[date, float]
             continue
         try:
             vg = historical_volatility_gap(ticker, as_of, closes=closes, ovx=ovx)
-        except ValueError:
+        except ValueError as exc:
+            logger.debug("Skipping %s for %s: %s", as_of, ticker, exc)
             continue
         fwd = abs(math.log(closes[fwd_date] / closes[as_of])) * 100.0
         implied = implied_move_pct(vg.implied_vol, horizon_trading_days=_FORWARD_TRADING_DAYS)
@@ -116,7 +139,15 @@ def build_rows(ticker: str, *, ovx: dict[date, float], closes: dict[date, float]
 
 
 def summarize_quartiles(rows: list[StudyRow]) -> list[QuartileStats]:
-    """Sort rows by gap, split into four equal buckets, summarize each."""
+    """
+    Sort rows by gap, split into four equal buckets, summarize each.
+
+    Args:
+        rows: StudyRows in any order; at least four.
+
+    Returns:
+        Four QuartileStats, Q1 (most negative gap) to Q4 (widest positive gap).
+    """
     ordered = sorted(rows, key=lambda r: r.gap)
     n = len(ordered)
     out: list[QuartileStats] = []
@@ -139,7 +170,15 @@ def summarize_quartiles(rows: list[StudyRow]) -> list[QuartileStats]:
 
 
 def verdict(q4_mean_ratio: float) -> str:
-    """Map the top-quartile mean ratio onto the plan's three verdict bands."""
+    """
+    Map the top-quartile mean ratio onto the plan's three verdict bands.
+
+    Args:
+        q4_mean_ratio: Mean realized/implied ratio for the widest-gap quartile.
+
+    Returns:
+        One of three verdict strings; the leading capitalized phrase is stable for tests.
+    """
     if q4_mean_ratio > _VERDICT_ALIVE_ABOVE:
         return (
             "STRADDLE THESIS ALIVE: realized move beats the priced-in move in the top gap "
