@@ -1,6 +1,6 @@
 # Plan — From Regime Screener to Actionable Signal
 
-**Status:** APPROVED 2026-10-09 by human lead (decisions 1–3; decision 4 is a review at PR time). Issues: #217, #218, #219, #164 re-scoped.
+**Status:** APPROVED 2026-10-09 by human lead (decisions 1–3; decision 4 is a review at PR time). Issues: #217, #218, #219, #164 re-scoped, #225, #226; side issue #221 (key redaction).
 **Author:** Claude Code session, 2026-10-09
 **Scope:** ordered work plan, no sprint cadence. Each step names what it unblocks and who decides.
 
@@ -105,7 +105,7 @@ existing `strategy_outcomes` table. Hit = realized move vs implied move at gener
 Hit rate per quartile via the existing `run_backtest()`. Drop the #159 dependency and the
 new-table AC. Depends on steps 2 and 4. Size: two sessions.
 
-### Step 6. Structure-selection design spec (doc, fold into #134 as pre-work)
+### Step 6. Structure-selection design spec (#226, split from #134 on 2026-10-10)
 
 Per-structure signal profiles; ETF vs equity signal availability (USO and XLE have no
 insiders); leg and max-debit rules. Direction of the straddle weights is set by the step 1
@@ -119,7 +119,7 @@ Implementation of step 6. Depends on step 6 and a non-indeterminate step 1 verdi
 
 Replaces the constant 30 days. Independent of the gates; can run any time after step 3.
 
-### Step 9. Massive historical options loader for USO/XLE/XOM/CVX (issue not yet opened)
+### Step 9. Massive historical options loader for USO/XLE/XOM/CVX (#225)
 
 Mirrors `src/backtest/ovx_loader.py`. Needed for option P&L backtests, not for the
 forward test or step 1. Size: two sessions. Depends on nothing; low urgency.
