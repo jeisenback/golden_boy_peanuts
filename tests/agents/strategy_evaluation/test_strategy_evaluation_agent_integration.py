@@ -24,6 +24,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
+from src.agents.ingestion.models import OptionStructure
 from src.agents.strategy_evaluation.strategy_evaluation_agent import (
     compute_edge_score,
     evaluate_strategies,
@@ -33,8 +34,8 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 # Named constants for golden dataset acceptance criteria (issue #19)
-_GOLDEN_EDGE_SCORE_MIN: float = 0.38  # lower bound of acceptable USO edge_score range
-_GOLDEN_EDGE_SCORE_MAX: float = 0.58  # upper bound of acceptable USO edge_score range
+_GOLDEN_EDGE_SCORE_MIN: float = 0.45  # lower bound of acceptable USO edge_score range
+_GOLDEN_EDGE_SCORE_MAX: float = 0.55  # upper bound of acceptable USO edge_score range
 _EDGE_SCORE_FLOOR: float = 0.0  # minimum valid edge_score (schema constraint)
 _EDGE_SCORE_CEIL: float = 1.0  # maximum valid edge_score (schema constraint)
 
@@ -80,12 +81,17 @@ def _make_vg(instrument: str, gap: float) -> VolatilityGap:
 
 
 def _make_feature_set(
-    gaps: list[VolatilityGap], sector_dispersion: float | None = None
+    gaps: list[VolatilityGap],
+    sector_dispersion: float | None = None,
+    supply_shock_probability: float | None = None,
+    futures_curve_steepness: float | None = None,
 ) -> FeatureSet:
     return FeatureSet(
         snapshot_time=datetime.now(tz=UTC),
         volatility_gaps=gaps,
         sector_dispersion=sector_dispersion,
+        supply_shock_probability=supply_shock_probability,
+        futures_curve_steepness=futures_curve_steepness,
     )
 
 
@@ -98,7 +104,12 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
     - instrument, structure, expiration, signals fields present and non-null
     - generated_at is timezone-aware (UTC)
     """
-    fs = _make_feature_set([_make_vg("USO", 0.20)], sector_dispersion=0.5)
+    fs = _make_feature_set(
+        [_make_vg("USO", 0.20)],
+        sector_dispersion=0.5,
+        supply_shock_probability=0.8,
+        futures_curve_steepness=-0.03,
+    )
 
     with patch(
         "src.agents.strategy_evaluation.strategy_evaluation_agent.get_engine",
@@ -139,18 +150,25 @@ def test_evaluate_strategies_persists_candidates(pg_engine: Engine) -> None:
 
 @pytest.mark.integration
 def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
-    """Golden scenario: USO gap ~0.067 and sector_dispersion=0.5 produces
-    expected edge_score (~0.39).
+    """Golden scenario: supply shock 0.8, backwardation -0.03 and sector_dispersion=0.5
+    produce a bullish USO call spread with edge_score ~0.4945.
 
-    AC covered (issue #19):
-    - USO long_straddle candidate generated with edge_score in [0.38, 0.58]
+    net = 0.35 * 0.8 + 0.25 * 0.6 = 0.43, amplified by 1 + 0.30 * 0.5 = 1.15 (#134).
+
+    AC covered (issue #19, updated for directional scoring in #134):
+    - USO call_spread candidate generated with edge_score in [0.45, 0.55]
     - signals dict contains volatility_gap='positive' for a positive gap
     - Candidate persisted to DB with edge_score matching in-memory value
     """
     # Use a realistic Phase-1 gap and dispersion that match Feature Generation golden dataset
     gap = 0.0674
     disp = 0.5
-    fs = _make_feature_set([_make_vg("USO", gap)], sector_dispersion=disp)
+    fs = _make_feature_set(
+        [_make_vg("USO", gap)],
+        sector_dispersion=disp,
+        supply_shock_probability=0.8,
+        futures_curve_steepness=-0.03,
+    )
 
     with patch(
         "src.agents.strategy_evaluation.strategy_evaluation_agent.get_engine",
@@ -158,15 +176,21 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     ):
         candidates = evaluate_strategies(fs)
 
-    # Find USO long_straddle candidate
+    # Find USO call_spread candidate
     uso = next(
-        (c for c in candidates if c.instrument == "USO" and c.structure.value == "long_straddle"),
+        (c for c in candidates if c.instrument == "USO" and c.structure.value == "call_spread"),
         None,
     )
-    assert uso is not None, "Expected a USO long_straddle candidate"
+    assert uso is not None, "Expected a USO call_spread candidate"
 
     # Compute expected score via the same function to avoid magic numbers
-    expected = compute_edge_score("USO", fs)
+    expected = compute_edge_score(
+        "USO",
+        fs,
+        OptionStructure.CALL_SPREAD,
+        supply_shock_probability=fs.supply_shock_probability,
+        futures_curve_steepness=fs.futures_curve_steepness,
+    )
     assert _EDGE_SCORE_FLOOR <= expected <= _EDGE_SCORE_CEIL
     # Check expected falls inside the broad acceptance band
     assert _GOLDEN_EDGE_SCORE_MIN <= expected <= _GOLDEN_EDGE_SCORE_MAX

@@ -55,6 +55,8 @@ def _make_market_only_feature_set() -> FeatureSet:
             )
         ],
         sector_dispersion=0.10,
+        # Market-derived direction signal: available even when event detection is down.
+        futures_curve_steepness=-0.03,
     )
 
 
@@ -111,7 +113,9 @@ class TestRunPipeline:
         assert all(isinstance(candidate, StrategyCandidate) for candidate in result)
         assert "degraded mode" in caplog.text
         assert all(candidate.signals["supply_shock_probability"] == "none" for candidate in result)
-        assert all(candidate.signals["futures_curve_steepness"] == "flat" for candidate in result)
+        assert all(
+            candidate.signals["futures_curve_steepness"] == "backwardation" for candidate in result
+        )
 
     def test_non_recoverable_exception_propagates(self) -> None:
         """Non-recoverable exceptions (e.g. AttributeError) propagate."""

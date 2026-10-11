@@ -2,11 +2,12 @@
 Strategy Evaluation Agent
 
 Responsibilities (Design Doc Section 4, PRD Section 4.4):
-  - Evaluate long straddle, call spread, put spread, calendar spread
-    structures based on signals from FeatureSet
-  - Compute a composite edge_score in [0.0, 1.0] per candidate, including
-    Phase 3 signals (insider conviction, narrative velocity, tanker
-    disruption) and a cross-sector correlation boost (issue #158)
+  - Evaluate call spread and put spread structures for the tradeable
+    instruments (USO, XLE, XOM, CVX) from the FeatureSet; long straddles are
+    no longer emitted and calendar spreads are deferred (issue #134)
+  - Compute a directional edge_score in [0.0, 1.0] per candidate from a signed
+    direction net (curve, supply shock, tanker, insider), amplified by sector
+    dispersion and narrative velocity; the volatility gap does not score
   - Rank candidates by edge_score descending
   - Attach contributing signal references for explainability
   - Output StrategyCandidate list matching PRD Section 9 schema
@@ -41,32 +42,9 @@ SIGNAL_ONLY_INSTRUMENTS: list[str] = ["CL=F", "BZ=F"]
 # Full universe for ingestion and feature generation (PRD Section 3.1).
 INSTRUMENTS_IN_SCOPE: list[str] = TRADEABLE_INSTRUMENTS + SIGNAL_ONLY_INSTRUMENTS
 
-# ---------------------------------------------------------------------------
-# Phase 1 edge score formula — static heuristic weights
-#
-# Two signals are available in Phase 1:
-#   1. volatility_gap  — IV premium over realized vol for the instrument
-#   2. sector_dispersion — price spread across XOM, CVX, USO, XLE
-#
-# Normalization:
-#   vol_gap_norm  = clip(gap / _VOL_GAP_FULL_WEIGHT, 0.0, 1.0)
-#                   A 20% IV premium (gap = 0.20) maps to 1.0; larger gaps cap at 1.0.
-#   disp_norm     = sector_dispersion (already in [0.0, 1.0] from compute_sector_dispersion)
-#
-# Weighted sum:
-#   edge_score = vol_gap_norm x _VOL_GAP_WEIGHT + disp_norm x _DISPERSION_WEIGHT
-#
-# If a signal is None (not computed), it contributes 0.0 — not an error.
-#
-# Phase 1 heuristic — weights to be tuned in Phase 3 via ML.
-# ---------------------------------------------------------------------------
-_VOL_GAP_FULL_WEIGHT: float = 0.20  # gap value that maps to full (1.0) contribution
-_VOL_GAP_WEIGHT: float = 0.70  # volatility gap share of total score
-_DISPERSION_WEIGHT: float = 0.30  # sector dispersion share of total score
-
-# Phase 1 option structures generated per instrument (PRD Section 3.2; calendar spread deferred)
+# Option structures emitted per instrument (PRD Section 3.2). Long straddles are dropped:
+# the USO study found buying volatility loses to premium (#134); calendar spread deferred.
 _PHASE_1_STRUCTURES: list[OptionStructure] = [
-    OptionStructure.LONG_STRADDLE,
     OptionStructure.CALL_SPREAD,
     OptionStructure.PUT_SPREAD,
 ]
@@ -87,43 +65,74 @@ _DISPERSION_MEDIUM_THRESHOLD: float = 0.05  # CV > 5%  = medium dispersion
 _SUPPLY_SHOCK_HIGH_THRESHOLD: float = 0.60  # probability > 60% = high
 _SUPPLY_SHOCK_MEDIUM_THRESHOLD: float = 0.30  # probability > 30% = medium
 
-# Phase 2 multiplier weights for supply shock and futures curve steepness
-_SUPPLY_SHOCK_WEIGHT: float = 0.30
-_CURVE_STEEPNESS_WEIGHT: float = 0.15
 
 # ---------------------------------------------------------------------------
-# Phase 3 additive signals (issue #158)
+# Direction signals (issue #134, docs/plans/structure-selection-spec.md)
 #
-# Unlike the Phase 2 multipliers above, the three Phase 3 signals join the
-# base score additively (per this feature's AC), alongside vol_gap and
-# sector_dispersion:
+# Each signal maps to a score in [-1, 1] where positive means bullish crude, and
+# direction_net is their weighted sum (a missing signal contributes 0.0). The weights
+# are static heuristics, unvalidated until the forward test measures them.
 #
-#   base = vol_gap_contribution + disp_contribution
-#        + insider_conviction_score * _INSIDER_CONVICTION_WEIGHT
-#        + narrative_velocity * _NARRATIVE_VELOCITY_WEIGHT
-#        + tanker_disruption_index * _TANKER_DISRUPTION_WEIGHT
-#
-# A None signal contributes 0.0, matching the existing Phase 1/2 convention.
-#
-# Cross-sector correlation: when sector_dispersion is high (broad sector
-# stress) AND insider_conviction_score is high (insiders buying into that
-# stress), the two reinforce each other — apply a small multiplicative
-# boost on top of the additive base and Phase 2 multipliers.
+# futures_curve_steepness is (second_month - front_month) / front_month, so a one-month
+# spread of 5% of the front price maps to full strength. This is set from the signal's
+# units, not from observed data; recheck against the first nightly snapshots.
 # ---------------------------------------------------------------------------
-_INSIDER_CONVICTION_WEIGHT: float = 0.15
-_NARRATIVE_VELOCITY_WEIGHT: float = 0.10
-_TANKER_DISRUPTION_WEIGHT: float = 0.15
+_CURVE_FULL: float = 0.05
+_W_CURVE: float = 0.25
+_W_SUPPLY: float = 0.35
+_W_TANKER: float = 0.25
+_W_INSIDER: float = 0.15
 
-# "High" conviction cutoff for the cross-sector boost condition (conviction scale is [0.0, 1.0])
-_INSIDER_CONVICTION_HIGH_THRESHOLD: float = 0.70
+# Amplifier: magnitude-only signals scale the net but never set its direction.
+_W_DISPERSION: float = 0.30
+_W_NARRATIVE: float = 0.10
 
-# Cross-sector boost multiplier applied when both conditions above hold
-_CROSS_SECTOR_BOOST: float = 0.10
+# Insider filings exist only for the equities; USO and XLE are ETFs with no insiders.
+_INSIDER_COVERED: frozenset[str] = frozenset({"XOM", "CVX"})
+
+
+def compute_direction_net(
+    instrument: str,
+    *,
+    supply_shock_probability: float | None,
+    futures_curve_steepness: float | None,
+    insider_conviction_score: float | None,
+    tanker_disruption_index: float | None,
+) -> float:
+    """
+    Combine the direction signals into one signed net for an instrument.
+
+    Args:
+        instrument: Ticker; insider conviction counts only for XOM and CVX.
+        supply_shock_probability: [0.0, 1.0], bullish only; None contributes 0.0.
+        futures_curve_steepness: Signed; backwardation (negative) is bullish and
+            contango (positive) is bearish, clipped at +/- _CURVE_FULL.
+        insider_conviction_score: [0.0, 1.0] with 0.5 neutral; above is bullish.
+        tanker_disruption_index: [0.0, 1.0], bullish only.
+
+    Returns:
+        Float in [-1.0, 1.0]; positive means bullish crude, 0.0 means no view.
+    """
+    curve = 0.0
+    if futures_curve_steepness is not None:
+        curve = min(max(-futures_curve_steepness / _CURVE_FULL, -1.0), 1.0)
+
+    insider = 0.0
+    if insider_conviction_score is not None and instrument in _INSIDER_COVERED:
+        insider = 2.0 * insider_conviction_score - 1.0
+
+    return (
+        _W_CURVE * curve
+        + _W_SUPPLY * (supply_shock_probability or 0.0)
+        + _W_TANKER * (tanker_disruption_index or 0.0)
+        + _W_INSIDER * insider
+    )
 
 
 def compute_edge_score(
     instrument: str,
     feature_set: FeatureSet,
+    option_structure: OptionStructure,
     supply_shock_probability: float | None = None,
     futures_curve_steepness: float | None = None,
     insider_conviction_score: float | None = None,
@@ -131,96 +140,56 @@ def compute_edge_score(
     tanker_disruption_index: float | None = None,
 ) -> float:
     """
-    Compute a composite edge score for a given instrument from the FeatureSet.
+    Compute the edge score of one directional spread for an instrument.
 
-    Phase 1 base score: weighted sum of volatility gap and sector dispersion.
-    Phase 2 multipliers: supply shock probability and futures curve steepness
-    amplify the base score when present.
-    Phase 3 additive signals: insider conviction, narrative velocity, and
-    tanker disruption join the base score as additional weighted terms.
-    A cross-sector correlation boost applies on top when sector dispersion
-    and insider conviction are both high.
+    The direction net (see compute_direction_net) is the score for a call spread when
+    positive and for a put spread when negative; the other side scores 0.0. Sector
+    dispersion and narrative velocity then amplify it:
 
-    Formula:
-        base = vol_gap_norm * _VOL_GAP_WEIGHT + disp_norm * _DISPERSION_WEIGHT
-             + insider_conviction * _INSIDER_CONVICTION_WEIGHT
-             + narrative_velocity * _NARRATIVE_VELOCITY_WEIGHT
-             + tanker_disruption * _TANKER_DISRUPTION_WEIGHT
-        score = base * (1 + _SUPPLY_SHOCK_WEIGHT * supply_shock)
-              * (1 + _CURVE_STEEPNESS_WEIGHT * |curve_steepness|)
-        if sector_dispersion > _DISPERSION_HIGH_THRESHOLD
-           and insider_conviction > _INSIDER_CONVICTION_HIGH_THRESHOLD:
-            score *= (1 + _CROSS_SECTOR_BOOST)
-        return min(score, 1.0)
+        amplifier = 1 + _W_DISPERSION * sector_dispersion
+                      + _W_NARRATIVE * min(narrative_velocity, 1.0)
+        score     = min(1.0, side_net * amplifier)
 
-    When any Phase 2/3 signal is None, it contributes 0.0 (additive signals)
-    or has a 1.0 (no-op) multiplier (Phase 2 signals), preserving Phase 1
-    behavior when only Phase 1 signals are supplied.
+    The volatility gap carries no weight: the USO study found it does not predict
+    which days buying volatility pays (docs/backtest_reports/217-ovx-gap-ratio-USO.md).
 
     Args:
         instrument: Ticker symbol of the instrument to evaluate.
-        feature_set: Computed signals from Feature Generation Agent.
-        supply_shock_probability: Float in [0.0, 1.0], or None if unavailable.
-            Pydantic validation on FeatureSet.supply_shock_probability enforces range.
-        futures_curve_steepness: Unbounded float (WTI futures curve slope; contango > 0).
-            None if unavailable.
-        insider_conviction_score: Float in [0.0, 1.0] from compute_insider_conviction_score,
-            or None if unavailable.
-        narrative_velocity: Float in [0.0, 1.0] from compute_narrative_velocity,
-            or None if unavailable.
-        tanker_disruption_index: Float in [0.0, 1.0] from compute_tanker_disruption_index,
-            or None if unavailable.
+        feature_set: Supplies sector_dispersion for the amplifier.
+        option_structure: CALL_SPREAD or PUT_SPREAD.
+        supply_shock_probability: [0.0, 1.0], or None if unavailable.
+        futures_curve_steepness: Signed (second - front) / front; positive is contango.
+        insider_conviction_score: [0.0, 1.0] with 0.5 neutral, or None. XOM and CVX only.
+        narrative_velocity: Non-negative headline acceleration, or None.
+        tanker_disruption_index: [0.0, 1.0], or None.
 
     Returns:
-        Float in [0.0, 1.0]. Higher = stronger signal confluence.
-        Returns 0.0 if the instrument has no volatility_gap record in the FeatureSet.
+        Float in [0.0, 1.0]; 0.0 when the signals point the other way or are absent.
+
+    Raises:
+        ValueError: if option_structure is not CALL_SPREAD or PUT_SPREAD.
     """
-    # --- Volatility gap contribution ---
-    vol_gap_record = next(
-        (vg for vg in feature_set.volatility_gaps if vg.instrument == instrument),
-        None,
+    if option_structure not in (OptionStructure.CALL_SPREAD, OptionStructure.PUT_SPREAD):
+        raise ValueError(
+            f"Directional scoring supports call and put spreads, got {option_structure}"
+        )
+
+    net = compute_direction_net(
+        instrument,
+        supply_shock_probability=supply_shock_probability,
+        futures_curve_steepness=futures_curve_steepness,
+        insider_conviction_score=insider_conviction_score,
+        tanker_disruption_index=tanker_disruption_index,
     )
-    if vol_gap_record is None:
+    side_net = net if option_structure is OptionStructure.CALL_SPREAD else -net
+    if side_net <= 0.0:
         return 0.0
 
-    vol_gap_norm = min(max(vol_gap_record.gap / _VOL_GAP_FULL_WEIGHT, 0.0), 1.0)
-    vol_gap_contribution = vol_gap_norm * _VOL_GAP_WEIGHT
-
-    # --- Sector dispersion contribution ---
-    disp_norm = feature_set.sector_dispersion if feature_set.sector_dispersion is not None else 0.0
-    disp_contribution = disp_norm * _DISPERSION_WEIGHT
-
-    # --- Phase 3 additive signal contributions ---
-    insider_contribution = (insider_conviction_score or 0.0) * _INSIDER_CONVICTION_WEIGHT
-    narrative_contribution = (narrative_velocity or 0.0) * _NARRATIVE_VELOCITY_WEIGHT
-    tanker_contribution = (tanker_disruption_index or 0.0) * _TANKER_DISRUPTION_WEIGHT
-
-    base_score = (
-        vol_gap_contribution
-        + disp_contribution
-        + insider_contribution
-        + narrative_contribution
-        + tanker_contribution
+    dispersion = feature_set.sector_dispersion or 0.0
+    amplifier = (
+        1.0 + _W_DISPERSION * dispersion + _W_NARRATIVE * min(narrative_velocity or 0.0, 1.0)
     )
-
-    # --- Phase 2 multipliers ---
-    shock_multiplier = 1.0 + _SUPPLY_SHOCK_WEIGHT * (supply_shock_probability or 0.0)
-    curve_multiplier = 1.0 + _CURVE_STEEPNESS_WEIGHT * abs(futures_curve_steepness or 0.0)
-
-    score = base_score * shock_multiplier * curve_multiplier
-
-    # --- Cross-sector correlation boost (issue #158) ---
-    disp = feature_set.sector_dispersion
-    if (
-        disp is not None
-        and disp > _DISPERSION_HIGH_THRESHOLD
-        and insider_conviction_score is not None
-        and insider_conviction_score > _INSIDER_CONVICTION_HIGH_THRESHOLD
-    ):
-        boost_multiplier = 1.0 + _CROSS_SECTOR_BOOST
-        score *= boost_multiplier
-
-    return min(score, 1.0)
+    return min(side_net * amplifier, 1.0)
 
 
 def _vol_gap_label(instrument: str, feature_set: FeatureSet) -> str:
@@ -296,60 +265,84 @@ def _curve_steepness_label(feature_set: FeatureSet) -> str:
 
 def evaluate_strategies(feature_set: FeatureSet) -> list[StrategyCandidate]:
     """
-    Evaluate all eligible option structures across the tradeable instruments.
+    Evaluate call and put spreads for each tradeable instrument.
 
-    For each instrument in TRADEABLE_INSTRUMENTS (USO, XLE, XOM, CVX), generates one
-    StrategyCandidate per Phase 1 structure (long_straddle, call_spread, put_spread). Candidates
-    with edge_score below _MIN_EDGE_SCORE are filtered out. Results are sorted
-    by edge_score descending and persisted to the DB (DB failures are logged and
-    do not propagate — candidates are still returned to the caller).
-
-    Phase 3 signals (insider_conviction_score, narrative_velocity,
-    tanker_disruption_index) are read from feature_set and passed through to
-    compute_edge_score() when present; a None value contributes 0.0, matching
-    Phase 1/2 behavior when they're unset (issue #209).
+    For each instrument in TRADEABLE_INSTRUMENTS (USO, XLE, XOM, CVX), scores a call
+    spread and a put spread with compute_edge_score(). Because the two are opposite
+    bets, only the side the direction signals favor can clear _MIN_EDGE_SCORE, so a run
+    emits at most one candidate per instrument, and none when the signals cancel or are
+    absent. Long straddles are not emitted. Results are sorted by edge_score descending
+    and persisted to the DB (DB failures are logged and do not propagate; candidates
+    are still returned to the caller).
 
     Args:
         feature_set: Complete FeatureSet from Feature Generation Agent.
 
     Returns:
-        List of StrategyCandidate sorted by edge_score descending.
-        Empty list if no candidates meet the minimum threshold.
+        List of StrategyCandidate sorted by edge_score descending, each with a
+        signals["direction"] of "bullish" (call spread) or "bearish" (put spread).
+        Empty list if no candidate meets the minimum threshold.
     """
     generated_at = datetime.now(tz=UTC)
     candidates: list[StrategyCandidate] = []
 
     for instrument in TRADEABLE_INSTRUMENTS:
-        edge_score = compute_edge_score(
-            instrument,
-            feature_set,
-            supply_shock_probability=feature_set.supply_shock_probability,
-            futures_curve_steepness=feature_set.futures_curve_steepness,
-            insider_conviction_score=feature_set.insider_conviction_score,
-            narrative_velocity=feature_set.narrative_velocity,
-            tanker_disruption_index=feature_set.tanker_disruption_index,
-        )
-        if edge_score < _MIN_EDGE_SCORE:
-            continue
-
-        signals: dict[str, str] = {
+        labels: dict[str, str] = {
             "volatility_gap": _vol_gap_label(instrument, feature_set),
             "sector_dispersion": _dispersion_label(feature_set),
             "supply_shock_probability": _supply_shock_label(feature_set),
             "futures_curve_steepness": _curve_steepness_label(feature_set),
         }
-
         for structure in _PHASE_1_STRUCTURES:
+            edge_score = compute_edge_score(
+                instrument,
+                feature_set,
+                structure,
+                supply_shock_probability=feature_set.supply_shock_probability,
+                futures_curve_steepness=feature_set.futures_curve_steepness,
+                insider_conviction_score=feature_set.insider_conviction_score,
+                narrative_velocity=feature_set.narrative_velocity,
+                tanker_disruption_index=feature_set.tanker_disruption_index,
+            )
+            if edge_score < _MIN_EDGE_SCORE:
+                continue
+            direction = "bullish" if structure is OptionStructure.CALL_SPREAD else "bearish"
             candidates.append(
                 StrategyCandidate(
                     instrument=instrument,
                     structure=structure,
                     expiration=_DEFAULT_EXPIRATION_DAYS,
                     edge_score=edge_score,
-                    signals=signals,
+                    signals={**labels, "direction": direction},
                     generated_at=generated_at,
                 )
             )
+
+    if not candidates:
+        # A quiet market and a broken input look the same in the output, so say why.
+        nets = {
+            instrument: round(
+                compute_direction_net(
+                    instrument,
+                    supply_shock_probability=feature_set.supply_shock_probability,
+                    futures_curve_steepness=feature_set.futures_curve_steepness,
+                    insider_conviction_score=feature_set.insider_conviction_score,
+                    tanker_disruption_index=feature_set.tanker_disruption_index,
+                ),
+                4,
+            )
+            for instrument in TRADEABLE_INSTRUMENTS
+        }
+        logger.info(
+            "No directional candidates: supply_shock=%s curve=%s tanker=%s insider=%s "
+            "direction_net=%s (a net must reach %.2f in either direction)",
+            feature_set.supply_shock_probability,
+            feature_set.futures_curve_steepness,
+            feature_set.tanker_disruption_index,
+            feature_set.insider_conviction_score,
+            nets,
+            _MIN_EDGE_SCORE,
+        )
 
     candidates.sort(key=lambda c: c.edge_score, reverse=True)
 

@@ -19,6 +19,7 @@ import sys as _sys
 
 import pytest
 
+from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.ingestion.models import (
     InstrumentType,
     MarketState,
@@ -33,6 +34,7 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[2]))
 from scripts.backtest_harness import (  # type: ignore[import]
     _EDGE_SCORE_ASSERTION_THRESHOLD,
     FIXTURES_DIR,
+    _legacy_vol_regime_score,
     load_market_state_from_fixture,
     replay_pipeline,
     write_backtest_report,
@@ -240,6 +242,43 @@ class TestMissingFixtureGracefulFallback:
 # ---------------------------------------------------------------------------
 
 
+class TestLegacyVolRegimeScore:
+    """The pre-#134 volatility-regime score, frozen inside the harness (decision D7)."""
+
+    @staticmethod
+    def _fs(gap: float | None, dispersion: float | None = None) -> FeatureSet:
+        gaps = []
+        if gap is not None:
+            gaps = [
+                VolatilityGap(
+                    instrument="USO",
+                    realized_vol=0.20,
+                    implied_vol=0.20 + gap,
+                    gap=gap,
+                    computed_at=_SNAP,
+                )
+            ]
+        return FeatureSet(snapshot_time=_SNAP, volatility_gaps=gaps, sector_dispersion=dispersion)
+
+    def test_gap_and_dispersion_weighted_seventy_thirty(self) -> None:
+        score = _legacy_vol_regime_score("USO", self._fs(0.20, 0.5), None, None)
+        assert score == pytest.approx(0.85)  # 0.70 * 1.0 + 0.30 * 0.5
+
+    def test_gap_beyond_twenty_points_is_capped(self) -> None:
+        score = _legacy_vol_regime_score("USO", self._fs(0.50, 0.0), None, None)
+        assert score == pytest.approx(0.70)
+
+    def test_missing_volatility_gap_record_scores_zero(self) -> None:
+        assert _legacy_vol_regime_score("USO", self._fs(None, 0.9), None, None) == 0.0
+
+    def test_supply_shock_and_curve_multiply_the_base(self) -> None:
+        score = _legacy_vol_regime_score("USO", self._fs(0.10, 0.0), 1.0, -0.04)
+        assert score == pytest.approx(0.35 * 1.30 * 1.006)  # base 0.35, abs(curve) used
+
+    def test_score_is_clamped_at_one(self) -> None:
+        assert _legacy_vol_regime_score("USO", self._fs(0.20, 1.0), 1.0, 1.0) == 1.0
+
+
 class TestWriteBacktestReport:
     def test_report_file_is_created(self, tmp_path: Path) -> None:
         """write_backtest_report creates a .md file in the specified directory."""
@@ -264,6 +303,13 @@ class TestWriteBacktestReport:
         report_path = write_backtest_report("2020-03-09", "Test Event", candidates, tmp_path)
         content = report_path.read_text(encoding="utf-8")
         assert "PASS" in content
+
+    def test_report_marks_the_legacy_scorer(self, tmp_path: Path) -> None:
+        """Reports say they come from the legacy volatility-regime score, not production."""
+        ms = _make_high_iv_market_state()
+        candidates = replay_pipeline(_EVENT_DATE, ms)
+        report_path = write_backtest_report("2020-03-09", "Test Event", candidates, tmp_path)
+        assert "legacy volatility-regime" in report_path.read_text(encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------

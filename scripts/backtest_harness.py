@@ -43,10 +43,7 @@ from src.agents.ingestion.models import (
     RawPriceRecord,
 )
 from src.agents.strategy_evaluation.models import StrategyCandidate
-from src.agents.strategy_evaluation.strategy_evaluation_agent import (
-    TRADEABLE_INSTRUMENTS,
-    compute_edge_score,
-)
+from src.agents.strategy_evaluation.strategy_evaluation_agent import TRADEABLE_INSTRUMENTS
 from src.backtest.ovx_loader import (
     historical_volatility_gap,
     load_closes_csv,
@@ -340,6 +337,48 @@ def _build_feature_set(
 
 
 # ---------------------------------------------------------------------------
+# Legacy volatility-regime score (frozen copy of the pre-#134 edge score)
+#
+# Production now ranks directional call and put spreads from direction signals (#134).
+# These fixtures carry only implied vol and prices, so they cannot exercise that score,
+# and inventing historical direction inputs would be a fabricated backtest. The replay
+# therefore keeps the old volatility-led score, so the three known-event assertions
+# still run. Reports are labelled accordingly. Do not use this for production ranking:
+# the USO study found a high volatility gap does not predict when buying volatility pays.
+# ---------------------------------------------------------------------------
+_LEGACY_VOL_GAP_FULL: float = 0.20  # gap that maps to full strength
+_LEGACY_VOL_GAP_WEIGHT: float = 0.70
+_LEGACY_DISPERSION_WEIGHT: float = 0.30
+_LEGACY_SUPPLY_SHOCK_WEIGHT: float = 0.30
+_LEGACY_CURVE_WEIGHT: float = 0.15
+
+
+def _legacy_vol_regime_score(
+    instrument: str,
+    feature_set: FeatureSet,
+    supply_shock_probability: float | None,
+    futures_curve_steepness: float | None,
+) -> float:
+    """
+    Pre-#134 edge score: volatility gap and dispersion, scaled by supply shock and curve.
+
+    base  = clip(gap / 0.20, 0, 1) * 0.70 + sector_dispersion * 0.30
+    score = min(1.0, base * (1 + 0.30 * supply_shock) * (1 + 0.15 * abs(curve)))
+
+    Returns 0.0 when the instrument has no volatility-gap record.
+    """
+    record = next((v for v in feature_set.volatility_gaps if v.instrument == instrument), None)
+    if record is None:
+        return 0.0
+    gap_norm = min(max(record.gap / _LEGACY_VOL_GAP_FULL, 0.0), 1.0)
+    dispersion = feature_set.sector_dispersion or 0.0
+    base = gap_norm * _LEGACY_VOL_GAP_WEIGHT + dispersion * _LEGACY_DISPERSION_WEIGHT
+    shock = 1.0 + _LEGACY_SUPPLY_SHOCK_WEIGHT * (supply_shock_probability or 0.0)
+    curve = 1.0 + _LEGACY_CURVE_WEIGHT * abs(futures_curve_steepness or 0.0)
+    return min(base * shock * curve, 1.0)
+
+
+# ---------------------------------------------------------------------------
 # Replay pipeline (no DB writes to live tables)
 # ---------------------------------------------------------------------------
 
@@ -372,11 +411,11 @@ def replay_pipeline(
     candidates: list[StrategyCandidate] = []
 
     for instrument in TRADEABLE_INSTRUMENTS:
-        score = compute_edge_score(
+        score = _legacy_vol_regime_score(
             instrument,
             feature_set,
-            supply_shock_probability=feature_set.supply_shock_probability,
-            futures_curve_steepness=feature_set.futures_curve_steepness,
+            feature_set.supply_shock_probability,
+            feature_set.futures_curve_steepness,
         )
         if score < _MIN_EDGE_SCORE:
             continue
@@ -455,6 +494,8 @@ def write_backtest_report(
         f"# Backtest Report — {event_name}",
         "",
         f"**Event date:** {event_date}  ",
+        "**Scorer:** legacy volatility-regime score (pre-#134), not the production "
+        "directional score  ",
         f"**Candidates generated:** {len(candidates)}  ",
         f"**Edge > {_EDGE_SCORE_ASSERTION_THRESHOLD:.0%} assertion:** "
         f"{'PASS ✓' if assertion_passed else 'FAIL ✗'}  ",
