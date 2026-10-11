@@ -25,8 +25,8 @@ USO_GAP: float = 0.1
 SECTOR_DISPERSION: float = 0.1
 SUPPLY_SHOCK_PROBABILITY: float = 0.8
 CURVE_STEEPNESS: float = -0.03  # backwardation
-EDGE_SCORE_LOW: float = 0.40  # expected 0.4429 (#134 directional scoring)
-EDGE_SCORE_HIGH: float = 0.50
+EDGE_SCORE_LOW: float = 0.25  # expected 0.2884 (#134 directional scoring, curve weight 0 per #240)
+EDGE_SCORE_HIGH: float = 0.33
 
 _SCHEMA_PATH = pathlib.Path(__file__).parents[2] / "db" / "schema.sql"
 
@@ -36,8 +36,8 @@ def test_strategy_evaluation_writes_candidates_and_golden_range() -> None:
     """Integration test: run evaluation against real Postgres and assert DB rows.
 
     Seeds a minimal FeatureSet with supply_shock_probability=0.8, backwardation of -0.03
-    and sector_dispersion=0.1, which gives a USO call spread edge_score of about 0.4429:
-    net 0.35 * 0.8 + 0.25 * 0.6 = 0.43, amplified by 1 + 0.30 * 0.1 (#134).
+    and sector_dispersion=0.1, which gives a USO call spread edge_score of about 0.2884:
+    net 0.35 * 0.8 = 0.28 (the curve has weight 0, #240), amplified by 1 + 0.30 * 0.1 (#134).
     """
     with PostgresContainer("postgres:15-alpine") as pg:
         db_url = pg.get_connection_url()

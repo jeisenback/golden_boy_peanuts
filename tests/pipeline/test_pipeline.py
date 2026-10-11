@@ -55,7 +55,8 @@ def _make_market_only_feature_set() -> FeatureSet:
             )
         ],
         sector_dispersion=0.10,
-        # Market-derived direction signal: available even when event detection is down.
+        # Market-derived signal available when event detection is down. The curve has weight 0
+        # (#240), so it reaches the output only as a label.
         futures_curve_steepness=-0.03,
     )
 
@@ -96,7 +97,11 @@ class TestRunPipeline:
         self,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        """Event detection exception logs degraded mode and still returns candidates."""
+        """Event detection failure logs degraded mode; the run completes with no direction view.
+
+        Without events there is no supply shock, and tanker and insider signals are not wired
+        (#236), so no direction signal survives and no candidates are emitted.
+        """
         ms = _make_market_state()
         fs = _make_market_only_feature_set()
 
@@ -109,13 +114,8 @@ class TestRunPipeline:
                 result = run_pipeline()
 
         mock_fg.assert_called_once_with(ms, events=[])
-        assert result
-        assert all(isinstance(candidate, StrategyCandidate) for candidate in result)
+        assert result == []
         assert "degraded mode" in caplog.text
-        assert all(candidate.signals["supply_shock_probability"] == "none" for candidate in result)
-        assert all(
-            candidate.signals["futures_curve_steepness"] == "backwardation" for candidate in result
-        )
 
     def test_non_recoverable_exception_propagates(self) -> None:
         """Non-recoverable exceptions (e.g. AttributeError) propagate."""

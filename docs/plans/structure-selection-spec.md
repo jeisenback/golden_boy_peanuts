@@ -71,6 +71,12 @@ put_spread  score = min(1, max(-direction_net, 0) * amplifier)
 Starting weights, all heuristic and unvalidated: curve 0.25, supply 0.35, tanker 0.25, insider 0.15
 (sum 1.0); dispersion 0.30, narrative 0.10 (the existing values). `_MIN_EDGE_SCORE` stays at 0.10.
 
+**Amendment (#240):** the curve weight is 0.0, not 0.25. A 1986 to 2024 backtest of the curve against
+30-day forward WTI spot returns found the opposite of the mapping above: deep contango (steepness of at
+least +2%) preceded stronger returns (significant at the episode level), and deep backwardation preceded
+weaker returns (not significant). The mapping and the other weights are unchanged, so the maximum net is
+0.75, and the curve is still reported in `signals` so the forward test can validate or flip it.
+
 Consequences:
 - For one instrument only one side can be above zero, so a run emits **at most one spread per instrument,
   at most 4 candidates**, not 8. A call and a put spread are opposite bets, and ranking both on the same

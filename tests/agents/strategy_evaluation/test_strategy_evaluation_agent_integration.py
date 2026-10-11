@@ -34,8 +34,8 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
 os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 # Named constants for golden dataset acceptance criteria (issue #19)
-_GOLDEN_EDGE_SCORE_MIN: float = 0.45  # lower bound of acceptable USO edge_score range
-_GOLDEN_EDGE_SCORE_MAX: float = 0.55  # upper bound of acceptable USO edge_score range
+_GOLDEN_EDGE_SCORE_MIN: float = 0.30  # lower bound of acceptable USO edge_score range
+_GOLDEN_EDGE_SCORE_MAX: float = 0.35  # upper bound of acceptable USO edge_score range
 _EDGE_SCORE_FLOOR: float = 0.0  # minimum valid edge_score (schema constraint)
 _EDGE_SCORE_CEIL: float = 1.0  # maximum valid edge_score (schema constraint)
 
@@ -156,7 +156,8 @@ def test_golden_dataset_us0_edge_score_range(pg_engine: Engine) -> None:
     net = 0.35 * 0.8 + 0.25 * 0.6 = 0.43, amplified by 1 + 0.30 * 0.5 = 1.15 (#134).
 
     AC covered (issue #19, updated for directional scoring in #134):
-    - USO call_spread candidate generated with edge_score in [0.45, 0.55]
+    - USO call_spread candidate generated with edge_score in [0.30, 0.35]
+      (0.322 = 0.35 * 0.8 * 1.15; the curve has weight 0, #240)
     - signals dict contains volatility_gap='positive' for a positive gap
     - Candidate persisted to DB with edge_score matching in-memory value
     """
