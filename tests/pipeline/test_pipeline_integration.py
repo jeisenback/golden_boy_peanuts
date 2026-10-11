@@ -50,6 +50,10 @@ os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 # ---------------------------------------------------------------------------
 _PATCH_FG_ENGINE = "src.agents.feature_generation.feature_generation_agent.get_engine"
 _PATCH_SE_ENGINE = "src.agents.strategy_evaluation.strategy_evaluation_agent.get_engine"
+# Fixed second-month price so the curve signal never depends on a live yfinance call.
+_PATCH_SECOND_MONTH = (
+    "src.agents.feature_generation.feature_generation_agent._fetch_second_month_price"
+)
 
 # ---------------------------------------------------------------------------
 # Schema paths and supplemental DDL
@@ -98,7 +102,10 @@ _PRICE_ROW_SPACING_MINUTES: int = 1  # minute gap between consecutive seed price
 # ---------------------------------------------------------------------------
 # Acceptance thresholds
 # ---------------------------------------------------------------------------
-_USO_EDGE_SCORE_MIN: float = 0.30  # AC: edge_score > 0.30
+_SECOND_MONTH_PRICE: float = _WTI_PRICE * 0.96  # steepness (72 - 75) / 75 = -0.04
+# Directional scoring (#134): net 0.25 * 0.8 = 0.20, amplified by 1 + 0.30 * dispersion,
+# gives about 0.227 for a USO call spread.
+_USO_EDGE_SCORE_MIN: float = 0.20  # AC: edge_score > 0.20
 _MIN_CANDIDATE_ROWS: int = 2  # AC: at least 2 StrategyCandidate rows
 # PRD Section 9 fields: instrument, structure, expiration, edge_score, signals, generated_at
 _PRD_FIELD_COUNT: int = 6
@@ -399,6 +406,7 @@ def test_full_pipeline_strategy_candidates_written_to_db(pg_engine: Engine) -> N
     with (
         patch(_PATCH_FG_ENGINE, return_value=pg_engine),
         patch(_PATCH_SE_ENGINE, return_value=pg_engine),
+        patch(_PATCH_SECOND_MONTH, return_value=_SECOND_MONTH_PRICE),
     ):
         feature_set = run_feature_generation(market_state, events=[])
         candidates = evaluate_strategies(feature_set)
@@ -433,12 +441,12 @@ def test_full_pipeline_strategy_candidates_written_to_db(pg_engine: Engine) -> N
 
 
 @pytest.mark.integration
-def test_full_pipeline_uso_long_straddle_edge_score(pg_engine: Engine) -> None:
+def test_full_pipeline_uso_call_spread_edge_score(pg_engine: Engine) -> None:
     """
-    Golden dataset AC: USO long_straddle candidate has edge_score > 0.30.
+    Golden dataset AC: USO call_spread candidate has edge_score > 0.20.
 
-    Uses the golden dataset (USO realized vol ≈ 15%, ATM IV = 22%, gap ≈ +6.74%)
-    and asserts the USO long_straddle candidate meets the Phase 1 acceptance threshold.
+    Uses the golden dataset with a fixed -4% second-month spread (backwardation) and no
+    events. The volatility gap no longer scores (#134); the curve drives a bullish call spread.
     """
     _seed_prices(pg_engine, "USO", "etf", _USO_PRICES)
     _seed_prices(pg_engine, "XLE", "etf", _XLE_PRICES)
@@ -448,19 +456,19 @@ def test_full_pipeline_uso_long_straddle_edge_score(pg_engine: Engine) -> None:
     with (
         patch(_PATCH_FG_ENGINE, return_value=pg_engine),
         patch(_PATCH_SE_ENGINE, return_value=pg_engine),
+        patch(_PATCH_SECOND_MONTH, return_value=_SECOND_MONTH_PRICE),
     ):
         feature_set = run_feature_generation(market_state, events=[])
         candidates = evaluate_strategies(feature_set)
 
-    uso_straddle = next(
-        (c for c in candidates if c.instrument == "USO" and c.structure.value == "long_straddle"),
+    uso_call = next(
+        (c for c in candidates if c.instrument == "USO" and c.structure.value == "call_spread"),
         None,
     )
-    assert uso_straddle is not None, "No USO long_straddle candidate produced"
-    assert uso_straddle.edge_score > _USO_EDGE_SCORE_MIN, (
-        f"USO long_straddle edge_score {uso_straddle.edge_score:.4f}"
-        f" is not > {_USO_EDGE_SCORE_MIN}"
-    )
+    assert uso_call is not None, "No USO call_spread candidate produced"
+    assert (
+        uso_call.edge_score > _USO_EDGE_SCORE_MIN
+    ), f"USO call_spread edge_score {uso_call.edge_score:.4f} is not > {_USO_EDGE_SCORE_MIN}"
 
 
 @pytest.mark.integration
