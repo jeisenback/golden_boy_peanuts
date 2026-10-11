@@ -10,12 +10,14 @@ Validates:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.alternative_data.models import AlternativeDataState
 from src.agents.event_detection.event_detection_agent import EventDetectionError
 from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
@@ -28,6 +30,21 @@ _PATCH_INGESTION = "src.pipeline.run_ingestion"
 _PATCH_EVENT_DETECTION = "src.pipeline.run_event_detection"
 _PATCH_FEATURE_GENERATION = "src.pipeline.run_feature_generation"
 _PATCH_EVALUATE = "src.pipeline.evaluate_strategies"
+_PATCH_ALT_DATA = "src.pipeline.run_alternative_data_ingestion"
+
+
+def _make_alt_state() -> AlternativeDataState:
+    return AlternativeDataState(snapshot_time=datetime.now(tz=UTC))
+
+
+_ALT_STATE = _make_alt_state()
+
+
+@pytest.fixture(autouse=True)
+def _no_alt_data_network() -> Iterator[MagicMock]:
+    """Keep every pipeline test off the network: alternative-data ingestion is stubbed."""
+    with patch(_PATCH_ALT_DATA, return_value=_ALT_STATE) as mock_alt:
+        yield mock_alt
 
 
 def _make_market_state() -> MarketState:
@@ -91,7 +108,7 @@ class TestRunPipeline:
         ):
             run_pipeline()
 
-        mock_fg.assert_called_once_with(ms, events=events)
+        mock_fg.assert_called_once_with(ms, events=events, alternative_data_state=_ALT_STATE)
 
     def test_degraded_mode_on_event_detection_failure(
         self,
@@ -113,9 +130,68 @@ class TestRunPipeline:
             with caplog.at_level(logging.WARNING):
                 result = run_pipeline()
 
-        mock_fg.assert_called_once_with(ms, events=[])
+        mock_fg.assert_called_once_with(ms, events=[], alternative_data_state=_ALT_STATE)
         assert result == []
         assert "degraded mode" in caplog.text
+
+    def test_alternative_data_state_passed_to_feature_generation(
+        self, _no_alt_data_network: MagicMock
+    ) -> None:
+        """run_alternative_data_ingestion() output flows into feature generation (#236)."""
+        ms = _make_market_state()
+        with (
+            patch(_PATCH_INGESTION, return_value=ms),
+            patch(_PATCH_EVENT_DETECTION, return_value=[]),
+            patch(_PATCH_FEATURE_GENERATION, return_value=_make_feature_set()) as mock_fg,
+            patch(_PATCH_EVALUATE, return_value=[]),
+        ):
+            run_pipeline()
+
+        _no_alt_data_network.assert_called_once_with()
+        assert mock_fg.call_args.kwargs["alternative_data_state"] is _ALT_STATE
+
+    def test_degraded_mode_on_alternative_data_failure(
+        self,
+        _no_alt_data_network: MagicMock,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Alternative-data failure logs a warning and the pipeline continues with None (#236)."""
+        _no_alt_data_network.side_effect = RuntimeError("feeds down")
+        ms = _make_market_state()
+        with (
+            patch(_PATCH_INGESTION, return_value=ms),
+            patch(_PATCH_EVENT_DETECTION, return_value=[]),
+            patch(_PATCH_FEATURE_GENERATION, return_value=_make_feature_set()) as mock_fg,
+            patch(_PATCH_EVALUATE, return_value=[]),
+            caplog.at_level(logging.WARNING),
+        ):
+            run_pipeline()
+
+        mock_fg.assert_called_once_with(ms, events=[], alternative_data_state=None)
+        assert "Alternative data ingestion failed (degraded mode)" in caplog.text
+        assert "feeds down" in caplog.text
+
+    def test_alternative_data_signals_reach_strategy_evaluation(self) -> None:
+        """The FeatureSet that feature generation returns, with the three signals, is what
+        evaluate_strategies() receives (#236)."""
+        fs = FeatureSet(
+            snapshot_time=datetime.now(tz=UTC),
+            tanker_disruption_index=0.6,
+            insider_conviction_score=0.9,
+            narrative_velocity=0.4,
+        )
+        with (
+            patch(_PATCH_INGESTION, return_value=_make_market_state()),
+            patch(_PATCH_EVENT_DETECTION, return_value=[]),
+            patch(_PATCH_FEATURE_GENERATION, return_value=fs),
+            patch(_PATCH_EVALUATE, return_value=[]) as mock_eval,
+        ):
+            run_pipeline()
+
+        passed = mock_eval.call_args.args[0]
+        assert passed.tanker_disruption_index == pytest.approx(0.6)
+        assert passed.insider_conviction_score == pytest.approx(0.9)
+        assert passed.narrative_velocity == pytest.approx(0.4)
 
     def test_non_recoverable_exception_propagates(self) -> None:
         """Non-recoverable exceptions (e.g. AttributeError) propagate."""
@@ -158,4 +234,4 @@ class TestRunPipeline:
         ):
             run_pipeline()
 
-        mock_fg.assert_called_once_with(ms, events=[])
+        mock_fg.assert_called_once_with(ms, events=[], alternative_data_state=_ALT_STATE)

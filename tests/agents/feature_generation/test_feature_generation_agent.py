@@ -444,6 +444,15 @@ _PATCH_COMPUTE_CURVE = (
 _PATCH_COMPUTE_SUPPLY = (
     "src.agents.feature_generation.feature_generation_agent.compute_supply_shock_probability"
 )
+_PATCH_COMPUTE_TANKER = (
+    "src.agents.feature_generation.feature_generation_agent.compute_tanker_disruption_index"
+)
+_PATCH_COMPUTE_INSIDER = (
+    "src.agents.feature_generation.feature_generation_agent.compute_insider_conviction_score"
+)
+_PATCH_COMPUTE_NARRATIVE = (
+    "src.agents.feature_generation.feature_generation_agent.compute_narrative_velocity"
+)
 
 
 class TestRunFeatureGeneration:
@@ -530,6 +539,68 @@ class TestRunFeatureGeneration:
         assert result.sector_dispersion is None
         assert result.futures_curve_steepness is None
         assert result.supply_shock_probability is None
+
+    def test_alternative_data_signals_populate_feature_set(self) -> None:
+        """With an AlternativeDataState, the three alternative-data signals reach the FeatureSet."""
+        alt_state = AlternativeDataState(snapshot_time=datetime.now(tz=UTC))
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),
+            patch(_PATCH_COMPUTE_SECTOR, return_value=None),
+            patch(_PATCH_COMPUTE_CURVE, return_value=None),
+            patch(_PATCH_COMPUTE_SUPPLY, return_value=None),
+            patch(_PATCH_COMPUTE_TANKER, return_value=0.4) as tanker,
+            patch(_PATCH_COMPUTE_INSIDER, return_value=0.8) as insider,
+            patch(_PATCH_COMPUTE_NARRATIVE, return_value=0.3) as narrative,
+        ):
+            result = run_feature_generation(
+                self._base_state(), [], alternative_data_state=alt_state
+            )
+
+        assert result.tanker_disruption_index == pytest.approx(0.4)
+        assert result.insider_conviction_score == pytest.approx(0.8)
+        assert result.narrative_velocity == pytest.approx(0.3)
+        assert result.feature_errors == []
+        for compute in (tanker, insider, narrative):
+            compute.assert_called_once_with(alt_state)
+
+    def test_alternative_data_signals_are_none_without_a_state(self) -> None:
+        """No AlternativeDataState (degraded mode) leaves the three signals None, no errors."""
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),
+            patch(_PATCH_COMPUTE_SECTOR, return_value=None),
+            patch(_PATCH_COMPUTE_CURVE, return_value=None),
+            patch(_PATCH_COMPUTE_SUPPLY, return_value=None),
+            patch(_PATCH_COMPUTE_TANKER) as tanker,
+        ):
+            result = run_feature_generation(self._base_state(), [])
+
+        assert result.tanker_disruption_index is None
+        assert result.insider_conviction_score is None
+        assert result.narrative_velocity is None
+        assert result.feature_errors == []
+        tanker.assert_not_called()
+
+    def test_one_alternative_data_signal_failing_does_not_block_the_others(self) -> None:
+        alt_state = AlternativeDataState(snapshot_time=datetime.now(tz=UTC))
+        with (
+            patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),
+            patch(_PATCH_COMPUTE_SECTOR, return_value=None),
+            patch(_PATCH_COMPUTE_CURVE, return_value=None),
+            patch(_PATCH_COMPUTE_SUPPLY, return_value=None),
+            patch(_PATCH_COMPUTE_TANKER, side_effect=RuntimeError("bad shipping row")),
+            patch(_PATCH_COMPUTE_INSIDER, return_value=0.8),
+            patch(_PATCH_COMPUTE_NARRATIVE, return_value=0.3),
+        ):
+            result = run_feature_generation(
+                self._base_state(), [], alternative_data_state=alt_state
+            )
+
+        assert result.tanker_disruption_index is None
+        assert result.insider_conviction_score == pytest.approx(0.8)
+        assert result.narrative_velocity == pytest.approx(0.3)
+        assert len(result.feature_errors) == 1
+        assert "compute_tanker_disruption_index failed" in result.feature_errors[0]
+        assert "bad shipping row" in result.feature_errors[0]
 
     def test_snapshot_time_matches_market_state(self) -> None:
         """FeatureSet.snapshot_time equals market_state.snapshot_time."""

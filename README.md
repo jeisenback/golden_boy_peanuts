@@ -5,7 +5,7 @@ An autonomous pipeline that identifies options trading opportunities driven by o
 **Instruments:** Signal sources: WTI (CL=F), Brent (BZ=F). Tradeable targets: USO, XLE, XOM, CVX
 **Structures:** Call/put spreads (long straddles removed pending forward-test evidence; calendar spreads deferred)
 
-> Note: the nightly feature set currently supplies only the futures-curve and supply-shock direction inputs, and the curve carries weight 0 until its mapping is validated (#240), so only supply shock moves the score. Tanker, insider and narrative signals are not yet wired into it, so a quiet market produces no candidates. Empty runs log the inputs behind that (`No directional candidates: ...`).
+> Note: the curve carries weight 0 until its mapping is validated (#240), so supply shock is the main direction input. The nightly run also ingests the free alternative-data feeds (SEC EDGAR insider trades, Reddit and Stocktwits narrative; #236): insider conviction moves XOM and CVX, and narrative velocity amplifies an existing view. Quiver and MarineTraffic stay off unless their API keys are set, so the tanker signal is `None`. A quiet market with no supply-shock event still produces no candidates. Empty runs log the inputs behind that (`No directional candidates: ...`).
 **Output schema:** `instrument`, `structure`, `expiration`, `edge_score`, `signals`, `generated_at`
 
 ---

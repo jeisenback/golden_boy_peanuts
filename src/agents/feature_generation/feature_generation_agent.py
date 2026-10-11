@@ -573,6 +573,7 @@ def compute_tanker_disruption_index(alternative_data_state: AlternativeDataState
 def run_feature_generation(
     market_state: MarketState,
     events: list[DetectedEvent],
+    alternative_data_state: AlternativeDataState | None = None,
 ) -> FeatureSet:
     """
     Compute the full FeatureSet for one evaluation cycle.
@@ -584,6 +585,9 @@ def run_feature_generation(
     Args:
         market_state: Current validated market snapshot.
         events: Detected events from Event Detection Agent.
+        alternative_data_state: Output of run_alternative_data_ingestion() (issue #236). When
+            None (ingestion failed or was skipped) the tanker, insider and narrative signals
+            stay None and no error is recorded for them.
 
     Returns:
         FeatureSet with all successfully computed signals.
@@ -594,6 +598,9 @@ def run_feature_generation(
     sector_dispersion: float | None = None
     futures_curve_steepness: float | None = None
     supply_shock_probability: float | None = None
+    tanker_disruption_index: float | None = None
+    insider_conviction_score: float | None = None
+    narrative_velocity: float | None = None
 
     try:
         volatility_gaps = compute_volatility_gap(market_state)
@@ -623,12 +630,37 @@ def run_feature_generation(
         logger.warning(msg)
         feature_errors.append(msg)
 
+    if alternative_data_state is not None:
+        try:
+            tanker_disruption_index = compute_tanker_disruption_index(alternative_data_state)
+        except Exception as exc:
+            msg = f"compute_tanker_disruption_index failed: {exc}"
+            logger.warning(msg)
+            feature_errors.append(msg)
+
+        try:
+            insider_conviction_score = compute_insider_conviction_score(alternative_data_state)
+        except Exception as exc:
+            msg = f"compute_insider_conviction_score failed: {exc}"
+            logger.warning(msg)
+            feature_errors.append(msg)
+
+        try:
+            narrative_velocity = compute_narrative_velocity(alternative_data_state)
+        except Exception as exc:
+            msg = f"compute_narrative_velocity failed: {exc}"
+            logger.warning(msg)
+            feature_errors.append(msg)
+
     feature_set = FeatureSet(
         snapshot_time=market_state.snapshot_time,
         volatility_gaps=volatility_gaps,
         sector_dispersion=sector_dispersion,
         futures_curve_steepness=futures_curve_steepness,
         supply_shock_probability=supply_shock_probability,
+        tanker_disruption_index=tanker_disruption_index,
+        insider_conviction_score=insider_conviction_score,
+        narrative_velocity=narrative_velocity,
         feature_errors=feature_errors,
     )
 
