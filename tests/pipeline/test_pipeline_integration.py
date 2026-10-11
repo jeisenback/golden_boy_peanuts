@@ -38,6 +38,7 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
+from src.agents.event_detection.models import DetectedEvent, EventIntensity, EventType
 from src.agents.feature_generation.feature_generation_agent import run_feature_generation
 from src.agents.ingestion.models import InstrumentType, MarketState, OptionRecord, RawPriceRecord
 from src.agents.strategy_evaluation.strategy_evaluation_agent import evaluate_strategies
@@ -103,12 +104,32 @@ _PRICE_ROW_SPACING_MINUTES: int = 1  # minute gap between consecutive seed price
 # Acceptance thresholds
 # ---------------------------------------------------------------------------
 _SECOND_MONTH_PRICE: float = _WTI_PRICE * 0.96  # steepness (72 - 75) / 75 = -0.04
-# Directional scoring (#134): net 0.25 * 0.8 = 0.20, amplified by 1 + 0.30 * dispersion,
-# gives about 0.227 for a USO call spread.
+# Directional scoring (#134, curve weight 0 per #240): a supply disruption event of probability
+# 0.8 gives net 0.35 * 0.8 = 0.28, amplified by 1 + 0.30 * dispersion, for every instrument.
 _USO_EDGE_SCORE_MIN: float = 0.20  # AC: edge_score > 0.20
 _MIN_CANDIDATE_ROWS: int = 2  # AC: at least 2 StrategyCandidate rows
 # PRD Section 9 fields: instrument, structure, expiration, edge_score, signals, generated_at
 _PRD_FIELD_COUNT: int = 6
+
+
+def _supply_disruption_events() -> list[DetectedEvent]:
+    """One high-intensity supply disruption: supply shock probability 1.0 * 1.0 * 0.8 = 0.8.
+
+    The futures curve carries no weight (#240), so a supply shock is the only direction input
+    these tests can provide.
+    """
+    return [
+        DetectedEvent(
+            event_id="pipeline-it-001",
+            event_type=EventType.SUPPLY_DISRUPTION,
+            description="Supply disruption for the pipeline integration test",
+            source="test",
+            confidence_score=0.8,
+            intensity=EventIntensity.HIGH,
+            detected_at=datetime.now(tz=UTC),
+            affected_instruments=["CL=F"],
+        )
+    ]
 
 
 def _build_prices(
@@ -408,7 +429,7 @@ def test_full_pipeline_strategy_candidates_written_to_db(pg_engine: Engine) -> N
         patch(_PATCH_SE_ENGINE, return_value=pg_engine),
         patch(_PATCH_SECOND_MONTH, return_value=_SECOND_MONTH_PRICE),
     ):
-        feature_set = run_feature_generation(market_state, events=[])
+        feature_set = run_feature_generation(market_state, events=_supply_disruption_events())
         candidates = evaluate_strategies(feature_set)
 
     assert (
@@ -445,8 +466,9 @@ def test_full_pipeline_uso_call_spread_edge_score(pg_engine: Engine) -> None:
     """
     Golden dataset AC: USO call_spread candidate has edge_score > 0.20.
 
-    Uses the golden dataset with a fixed -4% second-month spread (backwardation) and no
-    events. The volatility gap no longer scores (#134); the curve drives a bullish call spread.
+    Uses the golden dataset with one supply disruption event (probability 0.8) and a fixed -4%
+    second-month spread. The volatility gap no longer scores (#134) and the curve has weight 0
+    (#240); the supply shock drives a bullish call spread.
     """
     _seed_prices(pg_engine, "USO", "etf", _USO_PRICES)
     _seed_prices(pg_engine, "XLE", "etf", _XLE_PRICES)
@@ -458,7 +480,7 @@ def test_full_pipeline_uso_call_spread_edge_score(pg_engine: Engine) -> None:
         patch(_PATCH_SE_ENGINE, return_value=pg_engine),
         patch(_PATCH_SECOND_MONTH, return_value=_SECOND_MONTH_PRICE),
     ):
-        feature_set = run_feature_generation(market_state, events=[])
+        feature_set = run_feature_generation(market_state, events=_supply_disruption_events())
         candidates = evaluate_strategies(feature_set)
 
     uso_call = next(
