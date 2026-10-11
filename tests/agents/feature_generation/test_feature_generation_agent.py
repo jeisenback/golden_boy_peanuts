@@ -581,6 +581,7 @@ class TestRunFeatureGeneration:
         tanker.assert_not_called()
 
     def test_one_alternative_data_signal_failing_does_not_block_the_others(self) -> None:
+        """A failing alternative-data compute lands in feature_errors; the others still run."""
         alt_state = AlternativeDataState(snapshot_time=datetime.now(tz=UTC))
         with (
             patch(_PATCH_COMPUTE_VOL_GAP, return_value=[]),

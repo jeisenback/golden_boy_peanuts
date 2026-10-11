@@ -112,7 +112,9 @@ def run_pipeline() -> list[StrategyCandidate]:
         alternative_data_state = run_alternative_data_ingestion()
     except Exception as exc:
         logger.warning(
-            "Alternative data ingestion failed (degraded mode); continuing without it: %s", exc
+            "Alternative data ingestion failed (degraded mode); continuing without it: %s",
+            exc,
+            exc_info=True,
         )
     if alternative_data_state is not None:
         logger.info(
