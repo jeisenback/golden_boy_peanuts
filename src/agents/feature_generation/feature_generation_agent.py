@@ -55,9 +55,6 @@ _MEAN_PRICE_ZERO: float = 0.0
 # Front-month WTI futures instrument in market_state.prices
 _FRONT_MONTH_INSTRUMENT: str = "CL=F"
 
-# Second-month WTI futures ticker for yfinance fetch
-_SECOND_MONTH_TICKER: str = "CLG=F"
-
 # compute_insider_conviction_score: buy/sell trade_type weights (issue #155).
 # Buy value counts fully toward conviction; sell value counts at a reduced
 # weight so heavy insider selling still pulls the score down, but less
@@ -116,28 +113,48 @@ def _month_code_for(month: int) -> str:
     return codes[(month - 1) % 12]
 
 
-def _resolve_second_month_ticker(lookahead_months: int = 6) -> str | None:
-    """Try to resolve a valid second-month WTI ticker by probing nearby month codes.
+def _contract_ticker(year: int, month: int) -> str:
+    """Return the explicit Yahoo ticker for a WTI contract, e.g. CLZ26.NYM for Dec 2026.
 
-    Attempts up to `lookahead_months` months ahead from current UTC month and
-    returns the first ticker whose yfinance `fast_info.last_price` is present.
-    Returns None if no candidate yields a price.
+    Yahoo serves only the continuous front contract as CL=F; explicit delivery months use
+    the CL<month code><yy>.NYM form. The older CL<code>=F form returns no data (issue #238).
     """
-    now = datetime.now(UTC)
-    for i in range(1, lookahead_months + 1):
-        candidate_month = ((now.month - 1 + i) % 12) + 1
-        code = _month_code_for(candidate_month)
-        ticker = f"CL{code}=F"
-        try:
-            info = yf.Ticker(ticker).fast_info
-            price = getattr(info, "last_price", None)
-            if price is not None:
-                return ticker
-        except Exception as exc:  # avoid bare except; log and continue
-            logger.debug(
-                "_resolve_second_month_ticker: yfinance probe failed for %s: %s", ticker, exc
-            )
-            continue
+    return f"CL{_month_code_for(month)}{year % 100:02d}.NYM"
+
+
+def _has_price(ticker: str) -> bool:
+    """True if yfinance has a last price for the ticker; expired contracts have none."""
+    try:
+        return getattr(yf.Ticker(ticker).fast_info, "last_price", None) is not None
+    except Exception as exc:  # yfinance raises KeyError for a contract with no data
+        logger.debug("_has_price: yfinance probe failed for %s: %s", ticker, exc)
+        return False
+
+
+def _resolve_second_month_ticker(
+    lookahead_months: int = 6, now: datetime | None = None
+) -> str | None:
+    """Resolve the second-month WTI contract ticker.
+
+    Contracts that have expired return no data, so the first contract month with a price,
+    scanning forward from next month, is the front month, and the month after it is the
+    second month. WTI contracts stop trading in the month before delivery, so the front
+    rolls forward around the 20th of each month.
+
+    Args:
+        lookahead_months: How many months ahead to scan for the front contract.
+        now: Clock override for tests; defaults to the current UTC time.
+
+    Returns:
+        The second-month ticker such as "CLZ26.NYM", or None if no contract in the scan
+        window has a price.
+    """
+    current = now or datetime.now(UTC)
+    for offset in range(1, lookahead_months + 1):
+        index = current.year * 12 + (current.month - 1) + offset
+        if _has_price(_contract_ticker(index // 12, index % 12 + 1)):
+            second = index + 1
+            return _contract_ticker(second // 12, second % 12 + 1)
     return None
 
 
@@ -149,21 +166,17 @@ def _fetch_second_month_price(ticker: str | None = None) -> float:
     before propagating to compute_futures_curve_steepness.
 
     Args:
-        ticker: yfinance ticker symbol for the second-month contract.
+        ticker: Explicit yfinance contract ticker; resolved dynamically when omitted.
 
     Returns:
         Last price as a float.
 
     Raises:
-        RuntimeError: If yfinance returns no price data.
+        RuntimeError: If no second-month contract can be resolved or it has no price.
     """
-    # If caller did not provide a ticker, attempt dynamic resolution first.
-    if not ticker:
-        resolved = _resolve_second_month_ticker()
-        if resolved:
-            ticker = resolved
-        else:
-            ticker = _SECOND_MONTH_TICKER  # fallback-only default
+    ticker = ticker or _resolve_second_month_ticker()
+    if ticker is None:
+        raise RuntimeError("could not resolve a second-month WTI contract on yfinance")
 
     info = yf.Ticker(ticker).fast_info
     price: float | None = getattr(info, "last_price", None)
@@ -212,9 +225,7 @@ def compute_futures_curve_steepness(market_state: MarketState) -> float | None:
         second_price = _fetch_second_month_price()
     except Exception as exc:
         logger.warning(
-            "Failed to fetch second-month price (%s): %s — "
-            "cannot compute futures curve steepness",
-            _SECOND_MONTH_TICKER,
+            "Failed to fetch second-month price: %s — cannot compute futures curve steepness",
             exc,
         )
         return None
