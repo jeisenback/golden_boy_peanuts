@@ -113,17 +113,36 @@ def _month_code_for(month: int) -> str:
     return codes[(month - 1) % 12]
 
 
+_MONTHS_PER_YEAR: int = 12  # calendar months; used to step a (year, month) as one index
+_DEFAULT_LOOKAHEAD_MONTHS: int = 6  # months scanned ahead for the front contract; WTI trades
+# about a month before delivery, so the front is never more than a couple of months out
+
+
 def _contract_ticker(year: int, month: int) -> str:
     """Return the explicit Yahoo ticker for a WTI contract, e.g. CLZ26.NYM for Dec 2026.
 
     Yahoo serves only the continuous front contract as CL=F; explicit delivery months use
     the CL<month code><yy>.NYM form. The older CL<code>=F form returns no data (issue #238).
+
+    Args:
+        year: Four-digit delivery year, for example 2026.
+        month: Delivery month, 1 to 12.
+
+    Returns:
+        The contract ticker, for example "CLZ26.NYM" for December 2026.
     """
     return f"CL{_month_code_for(month)}{year % 100:02d}.NYM"
 
 
 def _has_price(ticker: str) -> bool:
-    """True if yfinance has a last price for the ticker; expired contracts have none."""
+    """Report whether yfinance has a last price for a contract; expired contracts have none.
+
+    Args:
+        ticker: Explicit contract ticker such as "CLZ26.NYM".
+
+    Returns:
+        True when a last price exists, False when there is none or the lookup fails.
+    """
     try:
         return getattr(yf.Ticker(ticker).fast_info, "last_price", None) is not None
     except Exception as exc:  # yfinance raises KeyError for a contract with no data
@@ -132,7 +151,7 @@ def _has_price(ticker: str) -> bool:
 
 
 def _resolve_second_month_ticker(
-    lookahead_months: int = 6, now: datetime | None = None
+    lookahead_months: int = _DEFAULT_LOOKAHEAD_MONTHS, now: datetime | None = None
 ) -> str | None:
     """Resolve the second-month WTI contract ticker.
 
@@ -151,10 +170,10 @@ def _resolve_second_month_ticker(
     """
     current = now or datetime.now(UTC)
     for offset in range(1, lookahead_months + 1):
-        index = current.year * 12 + (current.month - 1) + offset
-        if _has_price(_contract_ticker(index // 12, index % 12 + 1)):
+        index = current.year * _MONTHS_PER_YEAR + (current.month - 1) + offset
+        if _has_price(_contract_ticker(index // _MONTHS_PER_YEAR, index % _MONTHS_PER_YEAR + 1)):
             second = index + 1
-            return _contract_ticker(second // 12, second % 12 + 1)
+            return _contract_ticker(second // _MONTHS_PER_YEAR, second % _MONTHS_PER_YEAR + 1)
     return None
 
 

@@ -93,6 +93,9 @@ def test_fetch_raises_instead_of_guessing_a_symbol_when_unresolved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(fga, "_resolve_second_month_ticker", lambda: None)
+    # @with_retry() (src/core/retry.py) wraps this function in a tenacity Retrying object, exposed
+    # as `.retry`. Replacing its `sleep` skips the exponential backoff so the test stays fast;
+    # the retry attempts themselves still run.
     monkeypatch.setattr(_fetch_second_month_price.retry, "sleep", lambda _seconds: None)
     with pytest.raises(RuntimeError, match="second-month"):
         _fetch_second_month_price()
