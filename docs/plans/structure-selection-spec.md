@@ -50,7 +50,7 @@ Each signal is mapped to a score `s` in [-1, 1], where positive means bullish cr
 | `futures_curve_steepness` | signed, positive = contango | backwardation bullish, contango bearish | all four | `s = clip(-steepness / _CURVE_FULL, -1, 1)` |
 | `supply_shock_probability` | [0, 1] | bullish only | all four | no bearish counterpart exists |
 | `tanker_disruption_index` | [0, 1] | bullish only | all four | supply disruption |
-| `insider_conviction_score` | [0, 1], 0.5 neutral | above 0.5 bullish, below bearish | XOM, CVX only | `s = 2c - 1`; USO and XLE have no insiders |
+| `insider_conviction_score` | [0, 1], 2/3 neutral (#237) | above 2/3 bullish, below bearish | XOM, CVX only | `s = (c - 2/3) / (2/3)` for `c <= 2/3`, else `(c - 2/3) / (1/3)`; USO and XLE have no insiders |
 | `narrative_velocity` | 0 or more | none | all four | magnitude only |
 | `sector_dispersion` | [0, 1] | none | all four | magnitude only |
 | `volatility_gap` | signed | none | per instrument | demoted to a label in `signals`; weight 0 |
@@ -70,6 +70,10 @@ put_spread  score = min(1, max(-direction_net, 0) * amplifier)
 
 Starting weights, all heuristic and unvalidated: curve 0.25, supply 0.35, tanker 0.25, insider 0.15
 (sum 1.0); dispersion 0.30, narrative 0.10 (the existing values). `_MIN_EDGE_SCORE` stays at 0.10.
+
+**Amendment (#237):** the insider neutral point is 2/3, not 0.5. The score weights sells at half the
+value of buys (`_BUY_WEIGHT` 1.0, `_SELL_WEIGHT` 0.5), so equal-dollar buying and selling scores 2/3. The
+mapping is now centered there, so balanced insider activity adds nothing to the direction net.
 
 **Amendment (#240):** the curve weight is 0.0, not 0.25. A 1986 to 2024 backtest of the curve against
 30-day forward WTI spot returns found the opposite of the mapping above: deep contango (steepness of at

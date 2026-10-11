@@ -13,6 +13,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.agents.alternative_data.models import AlternativeDataState, InsiderTrade
+from src.agents.feature_generation import feature_generation_agent
+from src.agents.feature_generation.feature_generation_agent import compute_insider_conviction_score
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.ingestion.models import OptionStructure
 from src.agents.strategy_evaluation import strategy_evaluation_agent
@@ -173,7 +176,41 @@ class TestComputeDirectionNet:
         assert self._net(futures_curve_steepness=-0.5) == pytest.approx(0.25)
 
     def test_insider_buying_counts_for_xom(self) -> None:
-        assert self._net("XOM", insider_conviction_score=0.9) == pytest.approx(0.12)
+        # (0.9 - 2/3) / (1 - 2/3) = 0.7 of full strength, times the 0.15 insider weight.
+        assert self._net("XOM", insider_conviction_score=0.9) == pytest.approx(0.105)
+
+    def test_equal_dollar_buys_and_sells_are_neutral(self) -> None:
+        """Equal-dollar buying and selling scores 2/3, not 0.5, and must add nothing (#237)."""
+        trades = [
+            InsiderTrade(
+                instrument="XOM",
+                trade_date=datetime(2026, 10, 1, tzinfo=UTC),
+                trade_type=trade_type,
+                shares=100,
+                value_usd=1_000_000.0,
+                officer_name="Exec",
+                source="test",
+            )
+            for trade_type in ("buy", "sell")
+        ]
+        score = compute_insider_conviction_score(
+            AlternativeDataState(
+                snapshot_time=datetime(2026, 10, 1, tzinfo=UTC), insider_trades=trades
+            )
+        )
+        assert score is not None
+        assert self._net("XOM", insider_conviction_score=score) == pytest.approx(0.0, abs=1e-9)
+
+    def test_insider_neutral_point_matches_the_feature_generation_weights(self) -> None:
+        """The neutral constant must follow the buy and sell weights used to build the score."""
+        expected = feature_generation_agent._BUY_WEIGHT / (
+            feature_generation_agent._BUY_WEIGHT + feature_generation_agent._SELL_WEIGHT
+        )
+        assert strategy_evaluation_agent._INSIDER_NEUTRAL == pytest.approx(expected)
+
+    def test_insider_selling_below_neutral_is_bearish_in_proportion(self) -> None:
+        # (0.5 - 2/3) / (2/3) = -0.25 of full strength: sells outweigh half-weighted buys.
+        assert self._net("CVX", insider_conviction_score=0.5) == pytest.approx(-0.0375)
 
     def test_insider_selling_counts_for_cvx(self) -> None:
         assert self._net("CVX", insider_conviction_score=0.0) == pytest.approx(-0.15)

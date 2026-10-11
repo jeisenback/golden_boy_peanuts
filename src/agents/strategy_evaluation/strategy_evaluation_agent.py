@@ -97,6 +97,27 @@ _W_NARRATIVE: float = 0.10
 # Insider filings exist only for the equities; USO and XLE are ETFs with no insiders.
 _INSIDER_COVERED: frozenset[str] = frozenset({"XOM", "CVX"})
 
+# The insider conviction score is weighted buys / (weighted buys + weighted sells) with sells
+# at half weight (_BUY_WEIGHT 1.0, _SELL_WEIGHT 0.5 in feature generation), so equal-dollar
+# buying and selling scores 2/3, not 0.5. That is the neutral point (issue #237); a test pins
+# it to those weights.
+_INSIDER_NEUTRAL: float = 2.0 / 3.0
+
+
+def _insider_direction(score: float) -> float:
+    """Map an insider conviction score to [-1, 1], with _INSIDER_NEUTRAL mapping to 0.0.
+
+    Args:
+        score: Insider conviction score in [0.0, 1.0].
+
+    Returns:
+        -1.0 at a score of 0.0 (all selling), 0.0 at _INSIDER_NEUTRAL, +1.0 at 1.0 (all buying),
+        linear on each side.
+    """
+    if score <= _INSIDER_NEUTRAL:
+        return (score - _INSIDER_NEUTRAL) / _INSIDER_NEUTRAL
+    return (score - _INSIDER_NEUTRAL) / (1.0 - _INSIDER_NEUTRAL)
+
 
 def compute_direction_net(
     instrument: str,
@@ -115,7 +136,8 @@ def compute_direction_net(
         futures_curve_steepness: Signed; backwardation (negative) is bullish and
             contango (positive) is bearish, clipped at +/- _CURVE_FULL. Carries weight
             _W_CURVE, currently 0.0, so it does not move the net (issue #240).
-        insider_conviction_score: [0.0, 1.0] with 0.5 neutral; above is bullish.
+        insider_conviction_score: [0.0, 1.0] with _INSIDER_NEUTRAL (2/3, equal-dollar buys and
+            sells) neutral; above is bullish, below is bearish.
         tanker_disruption_index: [0.0, 1.0], bullish only.
 
     Returns:
@@ -128,7 +150,7 @@ def compute_direction_net(
 
     insider = 0.0
     if insider_conviction_score is not None and instrument in _INSIDER_COVERED:
-        insider = 2.0 * insider_conviction_score - 1.0
+        insider = _insider_direction(insider_conviction_score)
 
     return (
         _W_CURVE * curve
@@ -168,7 +190,8 @@ def compute_edge_score(
         option_structure: CALL_SPREAD or PUT_SPREAD.
         supply_shock_probability: [0.0, 1.0], or None if unavailable.
         futures_curve_steepness: Signed (second - front) / front; positive is contango.
-        insider_conviction_score: [0.0, 1.0] with 0.5 neutral, or None. XOM and CVX only.
+        insider_conviction_score: [0.0, 1.0] with 2/3 neutral (see _INSIDER_NEUTRAL), or None.
+            XOM and CVX only.
         narrative_velocity: Non-negative headline acceleration, or None.
         tanker_disruption_index: [0.0, 1.0], or None.
 
