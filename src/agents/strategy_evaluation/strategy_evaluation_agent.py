@@ -76,9 +76,16 @@ _SUPPLY_SHOCK_MEDIUM_THRESHOLD: float = 0.30  # probability > 30% = medium
 # futures_curve_steepness is (second_month - front_month) / front_month, so a one-month
 # spread of 5% of the front price maps to full strength. This is set from the signal's
 # units, not from observed data; recheck against the first nightly snapshots.
+#
+# _W_CURVE is 0.0 (issue #240): a 1986-2024 backtest of the curve against 30-day forward
+# WTI spot returns found the opposite of the backwardation-bullish mapping (deep contango
+# preceded stronger returns, significantly; deep backwardation preceded weaker returns, not
+# significantly). The mapping and the other weights are kept, and the curve is still
+# reported in `signals`, so the forward test can validate or flip it. Do not set a
+# non-zero weight without evidence.
 # ---------------------------------------------------------------------------
 _CURVE_FULL: float = 0.05
-_W_CURVE: float = 0.25
+_W_CURVE: float = 0.0
 _W_SUPPLY: float = 0.35
 _W_TANKER: float = 0.25
 _W_INSIDER: float = 0.15
@@ -106,12 +113,14 @@ def compute_direction_net(
         instrument: Ticker; insider conviction counts only for XOM and CVX.
         supply_shock_probability: [0.0, 1.0], bullish only; None contributes 0.0.
         futures_curve_steepness: Signed; backwardation (negative) is bullish and
-            contango (positive) is bearish, clipped at +/- _CURVE_FULL.
+            contango (positive) is bearish, clipped at +/- _CURVE_FULL. Carries weight
+            _W_CURVE, currently 0.0, so it does not move the net (issue #240).
         insider_conviction_score: [0.0, 1.0] with 0.5 neutral; above is bullish.
         tanker_disruption_index: [0.0, 1.0], bullish only.
 
     Returns:
-        Float in [-1.0, 1.0]; positive means bullish crude, 0.0 means no view.
+        Float in [-1.0, 1.0]; positive means bullish crude, 0.0 means no view. With the
+        curve weight at 0.0 the practical range is [-0.75, 0.75].
     """
     curve = 0.0
     if futures_curve_steepness is not None:

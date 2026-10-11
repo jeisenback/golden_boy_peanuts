@@ -15,6 +15,7 @@ import pytest
 
 from src.agents.feature_generation.models import FeatureSet, VolatilityGap
 from src.agents.ingestion.models import OptionStructure
+from src.agents.strategy_evaluation import strategy_evaluation_agent
 from src.agents.strategy_evaluation.models import StrategyCandidate
 from src.agents.strategy_evaluation.strategy_evaluation_agent import (
     INSTRUMENTS_IN_SCOPE,
@@ -28,6 +29,12 @@ from src.agents.strategy_evaluation.strategy_evaluation_agent import (
 # Patch target for DB calls inside evaluate_strategies
 _PATCH_GET_ENGINE = "src.agents.strategy_evaluation.strategy_evaluation_agent.get_engine"
 _PATCH_WRITE = "src.agents.strategy_evaluation.strategy_evaluation_agent.write_strategy_candidates"
+
+
+@pytest.fixture
+def curve_weighted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give the curve its original 0.25 weight so the mapping stays tested (#240 sets it to 0)."""
+    monkeypatch.setattr(strategy_evaluation_agent, "_W_CURVE", 0.25)
 
 
 def _make_vg(instrument: str, gap: float) -> VolatilityGap:
@@ -81,6 +88,7 @@ class TestComputeEdgeScore:
         assert call == pytest.approx(0.35)
         assert put == 0.0
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_bearish_signal_scores_put_spread_only(self) -> None:
         call = self._score(OptionStructure.CALL_SPREAD, futures_curve_steepness=0.05)
         put = self._score(OptionStructure.PUT_SPREAD, futures_curve_steepness=0.05)
@@ -99,6 +107,7 @@ class TestComputeEdgeScore:
         )
         assert score == pytest.approx(0.385)  # 0.35 * (1 + 0.10 * 1.0)
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_score_is_clamped_at_one(self) -> None:
         score = self._score(
             OptionStructure.CALL_SPREAD,
@@ -151,12 +160,15 @@ class TestComputeDirectionNet:
     def test_tanker_disruption_alone_is_bullish_at_its_weight(self) -> None:
         assert self._net(tanker_disruption_index=1.0) == pytest.approx(0.25)
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_backwardation_is_bullish(self) -> None:
         assert self._net(futures_curve_steepness=-0.05) == pytest.approx(0.25)
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_contango_is_bearish(self) -> None:
         assert self._net(futures_curve_steepness=0.05) == pytest.approx(-0.25)
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_extreme_curve_steepness_clips_to_full_strength(self) -> None:
         assert self._net(futures_curve_steepness=-0.5) == pytest.approx(0.25)
 
@@ -170,10 +182,12 @@ class TestComputeDirectionNet:
     def test_insider_signal_ignored_for_etfs(self, instrument: str) -> None:
         assert self._net(instrument, insider_conviction_score=0.9) == 0.0
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_opposing_signals_cancel(self) -> None:
         net = self._net(supply_shock_probability=0.5, futures_curve_steepness=0.035)
         assert net == pytest.approx(0.0, abs=1e-9)
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_all_signals_maxed_bullish_for_xom_is_one(self) -> None:
         net = self._net(
             "XOM",
@@ -186,6 +200,13 @@ class TestComputeDirectionNet:
 
     def test_no_signals_is_zero(self) -> None:
         assert self._net() == 0.0
+
+    @pytest.mark.parametrize("steepness", [-0.5, -0.05, 0.0, 0.05, 0.5])
+    def test_curve_has_no_effect_at_the_shipped_weight(self, steepness: float) -> None:
+        """The curve weight is 0 until the mapping is validated (#240)."""
+        assert self._net(supply_shock_probability=0.5, futures_curve_steepness=steepness) == (
+            self._net(supply_shock_probability=0.5)
+        )
 
 
 class TestEvaluateStrategies:
@@ -223,6 +244,7 @@ class TestEvaluateStrategies:
             assert hasattr(candidate, field)
         assert candidate.generated_at.tzinfo is not None
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_bullish_signals_yield_four_call_spreads_in_universe_order(self) -> None:
         fs = _make_feature_set(
             self._all_gaps(),
@@ -246,6 +268,7 @@ class TestEvaluateStrategies:
         instruments = {c.instrument for c in self._evaluate(fs)}
         assert instruments == set(TRADEABLE_INSTRUMENTS)
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_bearish_signals_yield_four_put_spreads(self) -> None:
         result = self._evaluate(_make_feature_set([], futures_curve_steepness=0.05))
         assert [(c.instrument, c.structure) for c in result] == [
@@ -268,6 +291,7 @@ class TestEvaluateStrategies:
         fs = _make_feature_set([], supply_shock_probability=0.5, insider_conviction_score=0.0)
         assert [c.instrument for c in self._evaluate(fs)] == ["USO", "XLE"]
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_cancelling_signals_yield_no_candidates(self) -> None:
         fs = _make_feature_set([], supply_shock_probability=0.5, futures_curve_steepness=0.035)
         assert evaluate_strategies(fs) == []
@@ -294,6 +318,11 @@ class TestEvaluateStrategies:
         # supply 0.2 gives net 0.07, below _MIN_EDGE_SCORE = 0.10
         assert evaluate_strategies(_make_feature_set([], supply_shock_probability=0.2)) == []
 
+    @pytest.mark.parametrize("steepness", [-0.05, 0.05])
+    def test_curve_alone_yields_no_candidates_at_the_shipped_weight(self, steepness: float) -> None:
+        """A curve-only view produces nothing while the curve weight is 0 (#240)."""
+        assert evaluate_strategies(_make_feature_set([], futures_curve_steepness=steepness)) == []
+
     def test_empty_feature_set_returns_empty(self) -> None:
         assert evaluate_strategies(_make_feature_set([], sector_dispersion=1.0)) == []
 
@@ -313,6 +342,7 @@ class TestEvaluateStrategies:
         ):
             assert key in candidate.signals
 
+    @pytest.mark.usefixtures("curve_weighted")
     def test_direction_label_matches_structure(self) -> None:
         bull = self._evaluate(_make_feature_set([], supply_shock_probability=1.0))[0]
         bear = self._evaluate(_make_feature_set([], futures_curve_steepness=0.05))[0]
@@ -337,11 +367,15 @@ class TestEvaluateStrategies:
         assert result[0].signals["supply_shock_probability"] == "none"
 
     def test_curve_steepness_label_contango(self) -> None:
-        result = self._evaluate(_make_feature_set([], futures_curve_steepness=0.03))
+        result = self._evaluate(
+            _make_feature_set([], supply_shock_probability=1.0, futures_curve_steepness=0.03)
+        )
         assert result[0].signals["futures_curve_steepness"] == "contango"
 
     def test_curve_steepness_label_backwardation(self) -> None:
-        result = self._evaluate(_make_feature_set([], futures_curve_steepness=-0.03))
+        result = self._evaluate(
+            _make_feature_set([], supply_shock_probability=1.0, futures_curve_steepness=-0.03)
+        )
         assert result[0].signals["futures_curve_steepness"] == "backwardation"
 
     def test_curve_steepness_label_flat(self) -> None:
