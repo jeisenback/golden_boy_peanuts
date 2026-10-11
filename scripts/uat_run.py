@@ -195,7 +195,9 @@ def main() -> int:
     pipeline.run_ingestion = lambda: MarketState(
         snapshot_time=detected.detected_at, prices=[], options=[], ingestion_errors=[]
     )
-    pipeline.run_feature_generation = lambda market_state, events: fs
+    # Alternative-data feeds are not part of this UAT run; keep it off the network.
+    pipeline.run_alternative_data_ingestion = lambda: None  # type: ignore[assignment,return-value]
+    pipeline.run_feature_generation = lambda market_state, events, alternative_data_state=None: fs
 
     candidates = pipeline.run_pipeline()
 
