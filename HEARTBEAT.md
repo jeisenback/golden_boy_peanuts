@@ -574,3 +574,17 @@ This closes the Phase 3 signal-computation dependency chain (#154 → #155/#156/
 - The Issue Refinement Agent labels milestone-less issues `blocked`; that label had to be removed by hand on #214.
 - #211 (#162 Phase 3 UAT) also merged 2026-09-20; issue #162 still awaits human review of the UAT report per its own AC.
 - HEARTBEAT still lists Sprint 9 target close as 2026-03-28 (stale). Untracked and uncommitted: `scripts/massive_price_probe.py`, `docs/uat_reports/112-uat-report-2026-09-19.md`.
+
+## Sprint Notes (2026-10-20, session 1)
+
+**#251 audit follow-up — insider filing fields.** Branch `claude/insider-filing-date-6WgIJ` from `develop` @ `0c22d97`. Dedicated issue not yet opened (gh unavailable in this environment; issue text handed to human lead). Commits reference #251 as the originating issue.
+
+- Audit of the production insider pipeline against the #251 cluster-buy study found `insider_trades` keys only on Form 4 `transactionDate`; the filing date EFTS returns as `file_date` was discarded in `_efts_search()`. Any backtest on the table carries 0-2 business days of look-ahead. The #251 session confirmed its own build keys on filing date, so the study is unaffected; the production table was.
+- Scope approved by human lead: `filing_date` + `accession_no` + `insider_role` (all three already in hand from EFTS / Form 4 XML). SEC `acceptance_datetime` deferred — needs an extra fetch per filing.
+- `models.py`: `EftsSource.file_date`; `InsiderTrade.filing_date / accession_no / insider_role`, all nullable (Quiver rows and pre-migration rows have none).
+- `alternative_data_agent.py`: `_parse_filing_date()` (malformed → WARNING + None), `_parse_owner_role()` (officerTitle > director > ten_percent_owner > other > None), plumbed through `_efts_search` → `fetch_edgar_insider_trades` → `_parse_form4_xml` (keyword-only args, additive).
+- `db.py`: INSERT persists the three columns. `db/schema.sql` + `db/migrations/add_insider_filing_fields.sql` (ALTER ADD COLUMN IF NOT EXISTS ×3, index on `(instrument, filing_date DESC)`). **HUMAN SIGN-OFF REQUIRED before applying the migration.**
+- Tests: 6 new unit tests, 4 extended (fixture now carries `reportingOwnerRelationship`; happy-path asserts `filing_date > trade_date`); 1 new integration round-trip incl. NULL row.
+- `local_check.sh` all 5 stages pass — 525 unit tests (519 on base). Environment note: the bare `pytest`/`mypy`/`black` on this container's PATH are uv tool venvs without project deps; the gate was run with `PATH=/usr/local/bin:$PATH` to use the pip-installed ones. No script change.
+- Out of scope, need separate issues (both surfaced by the #251 session reading production): EFTS 10-hit / 90-day cap truncates the sample; no role filter on the conviction score. Also `_USER_AGENT` still carries the `.example` placeholder on develop — being handled in the #251 session.
+- Earlier in session: three findings posted to #251 were answered — study keys on filing date (no look-ahead), T2 frozen to test the production ratio, ~25% of tickers lack Yahoo price data (survivorship to be reported), only 5 XOM/CVX cluster events in 20 years (too few to test).
