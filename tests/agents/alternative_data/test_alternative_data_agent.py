@@ -51,6 +51,11 @@ from src.agents.alternative_data.models import (
 _EFTS_URL = "https://efts.sec.gov/LATEST/search-index"
 _ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
 
+# The fixture filing: traded 2024-01-15, accepted by EDGAR 2024-01-17 (2-day lag).
+_ACCESSION_NO = "0001610717-24-000004"
+_FILING_DATE = datetime(2024, 1, 17, tzinfo=UTC)
+_TRADE_DATE = datetime(2024, 1, 15, tzinfo=UTC)
+
 
 def _make_efts_response(ticker: str, cik: str = "34088") -> dict:
     """Minimal EFTS JSON with one Form 4 hit."""
@@ -87,6 +92,13 @@ _FORM4_XML_BUY = """<?xml version="1.0"?>
     <reportingOwnerId>
       <rptOwnerName>DOE JOHN</rptOwnerName>
     </reportingOwnerId>
+    <reportingOwnerRelationship>
+      <isDirector>0</isDirector>
+      <isOfficer>1</isOfficer>
+      <isTenPercentOwner>0</isTenPercentOwner>
+      <isOther>0</isOther>
+      <officerTitle>Chief Financial Officer</officerTitle>
+    </reportingOwnerRelationship>
   </reportingOwner>
   <nonDerivativeTable>
     <nonDerivativeTransaction>
@@ -145,6 +157,24 @@ class TestParseForm4Xml:
         assert t.value_usd == pytest.approx(55_000.0)
         assert t.officer_name == "DOE JOHN"
         assert t.source == "edgar"
+        assert t.insider_role == "Chief Financial Officer"
+        # No filing context passed → both None; the parser never invents them.
+        assert t.filing_date is None
+        assert t.accession_no is None
+
+    def test_filing_date_and_accession_stamped_on_every_trade(self) -> None:
+        """filing_date and accession_no come from the caller and land on each trade,
+        while trade_date still comes from the XML — the two dates stay distinct."""
+        trades = _parse_form4_xml(
+            _FORM4_XML_BUY, "XOM", filing_date=_FILING_DATE, accession_no=_ACCESSION_NO
+        )
+
+        assert len(trades) == 1
+        t = trades[0]
+        assert t.filing_date == _FILING_DATE
+        assert t.accession_no == _ACCESSION_NO
+        assert t.trade_date == _TRADE_DATE
+        assert t.filing_date > t.trade_date
 
     def test_parses_sell_transaction(self) -> None:
         trades = _parse_form4_xml(_FORM4_XML_SELL, "XOM")
@@ -189,6 +219,25 @@ class TestParseForm4Xml:
         trades = _parse_form4_xml(xml, "CVX")
         assert len(trades) == 1
         assert trades[0].officer_name is None
+        assert trades[0].insider_role is None
+
+    def test_director_flag_without_title_yields_director(self) -> None:
+        """No officerTitle, isDirector=true → role falls back to 'director'."""
+        xml = _FORM4_XML_BUY.replace(
+            "<officerTitle>Chief Financial Officer</officerTitle>", ""
+        ).replace("<isDirector>0</isDirector>", "<isDirector>true</isDirector>")
+        trades = _parse_form4_xml(xml, "XOM")
+        assert len(trades) == 1
+        assert trades[0].insider_role == "director"
+
+    def test_no_relationship_flags_set_yields_none_role(self) -> None:
+        """Relationship block present but every flag 0 and no title → None."""
+        xml = _FORM4_XML_BUY.replace(
+            "<officerTitle>Chief Financial Officer</officerTitle>", ""
+        ).replace("<isOfficer>1</isOfficer>", "<isOfficer>0</isOfficer>")
+        trades = _parse_form4_xml(xml, "XOM")
+        assert len(trades) == 1
+        assert trades[0].insider_role is None
 
     def test_invalid_date_skipped_with_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         import logging
@@ -216,9 +265,20 @@ class TestEftsSearch:
 
         assert len(hits) == 1
         assert hits[0]["_id"] == "0001610717-24-000004"
+        assert hits[0]["_source"]["file_date"] == "2024-01-17"
         # Verify User-Agent header was sent
         _, kwargs = mock_get.call_args
         assert "User-Agent" in kwargs.get("headers", {})
+
+    def test_missing_file_date_carried_as_none(self) -> None:
+        """EFTS hit without file_date still parses; the hit carries file_date=None."""
+        payload = _make_efts_response("XOM")
+        del payload["hits"]["hits"][0]["_source"]["file_date"]
+        with patch("requests.get", return_value=_mock_resp(payload)):
+            hits = _efts_search("XOM", "2024-01-01")
+
+        assert len(hits) == 1
+        assert hits[0]["_source"]["file_date"] is None
 
     def test_empty_hits_returns_empty_list(self) -> None:
         empty = {"hits": {"hits": []}}
@@ -261,6 +321,7 @@ class TestEftsBoundaryModelValidation:
         assert len(parsed.hits.hits) == 1
         assert parsed.hits.hits[0].id == "0001610717-24-000004"
         assert parsed.hits.hits[0].source.entity_id == "0000034088"
+        assert parsed.hits.hits[0].source.file_date == "2024-01-17"
 
     def test_missing_top_level_hits_raises(self) -> None:
         """EFTS response missing 'hits' key entirely raises ValidationError."""
@@ -377,6 +438,40 @@ class TestFetchEdgarInsiderTrades:
         assert trades[0].instrument == "XOM"
         assert trades[0].trade_type == "buy"
         assert trades[0].shares == 500
+        # The filing context flows EFTS → fetch → parser end-to-end.
+        assert trades[0].filing_date == _FILING_DATE
+        assert trades[0].accession_no == _ACCESSION_NO
+        assert trades[0].insider_role == "Chief Financial Officer"
+        assert trades[0].trade_date == _TRADE_DATE
+
+    def test_missing_file_date_yields_none_filing_date(self) -> None:
+        """EFTS hit without file_date → trade still returned with filing_date=None."""
+        payload = _make_efts_response("XOM")
+        del payload["hits"]["hits"][0]["_source"]["file_date"]
+        side_effects = self._make_get_side_effect(payload, _FILING_INDEX, _FORM4_XML_BUY)
+        with patch("requests.get", side_effect=side_effects):
+            trades = fetch_edgar_insider_trades(["XOM"])
+
+        assert len(trades) == 1
+        assert trades[0].filing_date is None
+        assert trades[0].accession_no == _ACCESSION_NO
+
+    def test_malformed_file_date_logs_warning_and_yields_none(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Unparseable file_date → WARNING, filing_date=None, trade still returned."""
+        import logging
+
+        payload = _make_efts_response("XOM")
+        payload["hits"]["hits"][0]["_source"]["file_date"] = "2024/01/17"
+        side_effects = self._make_get_side_effect(payload, _FILING_INDEX, _FORM4_XML_BUY)
+        with patch("requests.get", side_effect=side_effects):
+            with caplog.at_level(logging.WARNING):
+                trades = fetch_edgar_insider_trades(["XOM"])
+
+        assert len(trades) == 1
+        assert trades[0].filing_date is None
+        assert any("invalid file_date" in r.message.lower() for r in caplog.records)
 
     def test_empty_efts_returns_empty_list(self) -> None:
         empty_efts = {"hits": {"hits": []}}
@@ -513,6 +608,10 @@ class TestFetchQuiverEnrichment:
         assert buy.value_usd == round(5000 * 110.00, 2)
         assert buy.officer_name == "Jane Smith"
         assert buy.trade_date == datetime(2024, 6, 1, tzinfo=UTC)
+        # Quiver carries no filing metadata; the fields stay None rather than guessed.
+        assert buy.filing_date is None
+        assert buy.accession_no is None
+        assert buy.insider_role is None
 
         sell = result[1]
         assert sell.trade_type == "sell"

@@ -114,6 +114,9 @@ _TX_CODE_MAP: dict[str, str] = {
     "M": "exercise",  # Option exercise
 }
 
+# Form 4 relationship flags (isDirector, isOfficer, ...) are "1"/"0" or "true"/"false"
+_TRUE_FLAGS: frozenset[str] = frozenset({"1", "true"})
+
 # ---------------------------------------------------------------------------
 # Quiver Quantitative constants
 # ---------------------------------------------------------------------------
@@ -186,6 +189,8 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
                 )
                 continue
 
+            filing_date = _parse_filing_date(src.get("file_date"), ticker, accession_no)
+
             try:
                 xml_text = _fetch_form4_xml(raw_cik, accession_no)
             except requests.exceptions.RequestException:
@@ -211,7 +216,9 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
 
             # _parse_form4_xml handles ET.ParseError internally and returns [].
             # Unexpected exceptions propagate so the caller (tenacity) can retry.
-            trades = _parse_form4_xml(xml_text, ticker)
+            trades = _parse_form4_xml(
+                xml_text, ticker, filing_date=filing_date, accession_no=accession_no
+            )
             all_trades.extend(trades)
 
     return all_trades
@@ -220,6 +227,64 @@ def fetch_edgar_insider_trades(instruments: list[str]) -> list[InsiderTrade]:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _parse_filing_date(raw: object, ticker: str, accession_no: str) -> datetime | None:
+    """
+    Parse an EFTS ``file_date`` string (YYYY-MM-DD) into a UTC datetime.
+
+    Args:
+        raw:          Value of ``_source.file_date`` from an EFTS hit; may be None.
+        ticker:       Ticker symbol, for log context.
+        accession_no: Accession number, for log context.
+
+    Returns:
+        UTC datetime, or None when the value is absent or malformed. A malformed
+        value logs a WARNING so the gap is visible rather than silent.
+    """
+    if raw is None:
+        return None
+    try:
+        return datetime.strptime(str(raw).strip(), "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        logger.warning(
+            "fetch_edgar_insider_trades: invalid file_date %r for ticker=%s accession=%s",
+            raw,
+            ticker,
+            accession_no,
+        )
+        return None
+
+
+def _parse_owner_role(root: ET.Element) -> str | None:
+    """
+    Derive the reporting owner's role from Form 4 ``reportingOwnerRelationship``.
+
+    Precedence: ``officerTitle`` text when present; otherwise ``"director"``,
+    ``"ten_percent_owner"`` or ``"other"`` when the matching flag is set;
+    otherwise None.
+
+    Args:
+        root: Parsed Form 4 XML root element.
+
+    Returns:
+        Role string, or None when the relationship block is absent or empty.
+    """
+    rel = root.find(".//reportingOwner/reportingOwnerRelationship")
+    if rel is None:
+        return None
+    title_elem = rel.find("officerTitle")
+    if title_elem is not None and title_elem.text and title_elem.text.strip():
+        return title_elem.text.strip()
+    for tag, role in (
+        ("isDirector", "director"),
+        ("isTenPercentOwner", "ten_percent_owner"),
+        ("isOther", "other"),
+    ):
+        flag = rel.find(tag)
+        if flag is not None and (flag.text or "").strip().lower() in _TRUE_FLAGS:
+            return role
+    return None
 
 
 def _efts_search(ticker: str, start_dt: str) -> list[dict[str, Any]]:
@@ -251,7 +316,10 @@ def _efts_search(ticker: str, start_dt: str) -> list[dict[str, Any]]:
     resp.raise_for_status()
     parsed = EftsSearchResponse.model_validate(resp.json())
     hits: list[dict[str, Any]] = [
-        {"_id": h.id, "_source": {"entity_id": h.source.entity_id}}
+        {
+            "_id": h.id,
+            "_source": {"entity_id": h.source.entity_id, "file_date": h.source.file_date},
+        }
         for h in parsed.hits.hits[:_MAX_HITS_PER_INSTRUMENT]
     ]
     return hits
@@ -295,7 +363,13 @@ def _fetch_form4_xml(cik: str, accession_no: str) -> str | None:
     return xml_resp.text
 
 
-def _parse_form4_xml(xml_text: str, instrument: str) -> list[InsiderTrade]:
+def _parse_form4_xml(
+    xml_text: str,
+    instrument: str,
+    *,
+    filing_date: datetime | None = None,
+    accession_no: str | None = None,
+) -> list[InsiderTrade]:
     """
     Parse Form 4 XML into InsiderTrade records.
 
@@ -304,8 +378,11 @@ def _parse_form4_xml(xml_text: str, instrument: str) -> list[InsiderTrade]:
     skipped. Malformed dates or amounts log a WARNING and skip the transaction.
 
     Args:
-        xml_text:   Raw Form 4 XML string.
-        instrument: Ticker symbol to attach to each InsiderTrade.
+        xml_text:     Raw Form 4 XML string.
+        instrument:   Ticker symbol to attach to each InsiderTrade.
+        filing_date:  Date EDGAR accepted the filing (EFTS ``file_date``); stamped
+                      on every trade parsed from this document. None when unknown.
+        accession_no: EDGAR accession number of the filing; stamped on every trade.
 
     Returns:
         List of InsiderTrade records. Empty list on parse error or no
@@ -325,6 +402,7 @@ def _parse_form4_xml(xml_text: str, instrument: str) -> list[InsiderTrade]:
     owner_elem = root.find(".//reportingOwner/reportingOwnerId/rptOwnerName")
     if owner_elem is not None and owner_elem.text:
         officer_name = owner_elem.text.strip()
+    insider_role = _parse_owner_role(root)
 
     trades: list[InsiderTrade] = []
     for tx in root.findall(".//nonDerivativeTable/nonDerivativeTransaction"):
@@ -381,6 +459,9 @@ def _parse_form4_xml(xml_text: str, instrument: str) -> list[InsiderTrade]:
                 value_usd=value_usd,
                 officer_name=officer_name,
                 source="edgar",
+                filing_date=filing_date,
+                accession_no=accession_no,
+                insider_role=insider_role,
             )
         )
 
@@ -483,6 +564,10 @@ def _parse_quiver_row(row: QuiverInsiderRow, instrument: str) -> InsiderTrade | 
 
     Rows with unmapped transaction types or unparseable dates are
     logged as WARNING and return None.
+
+    Quiver exposes no filing date, accession number or insider role, so
+    ``filing_date``, ``accession_no`` and ``insider_role`` are left None
+    rather than inferred.
 
     Args:
         row:        Validated ``QuiverInsiderRow`` from the API response.

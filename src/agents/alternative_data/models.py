@@ -49,6 +49,13 @@ class InsiderTrade(BaseModel):
     Maps to the insider_trades table schema (db/schema.sql).
     Missing or optional fields are allowed to be None — partial
     filings are persisted rather than dropped (ESOD §6).
+
+    trade_date is the Form 4 ``transactionDate`` — when the insider traded.
+    filing_date is the date EDGAR accepted the filing (EFTS ``file_date``) —
+    the earliest the trade was public. Backtests must key on filing_date;
+    trade_date alone carries 0-2 business days of look-ahead. filing_date,
+    accession_no and insider_role are None for Quiver rows and when the
+    upstream field is absent.
     """
 
     instrument: str
@@ -58,6 +65,9 @@ class InsiderTrade(BaseModel):
     value_usd: float | None = None
     officer_name: str | None = None
     source: str = "edgar"
+    filing_date: datetime | None = None
+    accession_no: str | None = None
+    insider_role: str | None = None
 
 
 class Sentiment(StrEnum):
@@ -96,6 +106,7 @@ class EftsSource(BaseModel):
     """_source object inside an EFTS hit."""
 
     entity_id: str
+    file_date: str | None = None  # YYYY-MM-DD; date EDGAR accepted the filing
 
 
 class EftsHit(BaseModel):

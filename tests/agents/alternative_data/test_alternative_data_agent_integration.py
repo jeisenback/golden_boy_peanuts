@@ -105,6 +105,9 @@ def _make_insider_trade(
     instrument: str = "XOM",
     trade_type: str = "buy",
     value_usd: float | None = 50_000.0,
+    filing_date: datetime | None = None,
+    accession_no: str | None = None,
+    insider_role: str | None = None,
 ) -> InsiderTrade:
     return InsiderTrade(
         instrument=instrument,
@@ -114,6 +117,9 @@ def _make_insider_trade(
         value_usd=value_usd,
         officer_name="Jane Smith",
         source="edgar",
+        filing_date=filing_date,
+        accession_no=accession_no,
+        insider_role=insider_role,
     )
 
 
@@ -210,6 +216,45 @@ def test_write_insider_trades_null_value_usd(pg_engine: Engine) -> None:
     with pg_engine.connect() as conn:
         value_usd = conn.execute(text("SELECT value_usd FROM insider_trades LIMIT 1")).scalar()
     assert value_usd is None
+
+
+@pytest.mark.integration
+def test_write_insider_trades_persists_filing_fields(pg_engine: Engine) -> None:
+    """filing_date, accession_no and insider_role round-trip; a row without them
+    persists NULLs (Quiver rows and pre-migration ingests)."""
+    filing_date = datetime(2024, 1, 17, tzinfo=UTC)
+    records = [
+        _make_insider_trade(
+            "XOM",
+            "buy",
+            filing_date=filing_date,
+            accession_no="0001610717-24-000004",
+            insider_role="Chief Financial Officer",
+        ),
+        _make_insider_trade("CVX", "sell"),  # no filing metadata
+    ]
+
+    count = write_insider_trades(records, pg_engine)
+
+    assert count == 2
+
+    with pg_engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT instrument, filing_date, accession_no, insider_role "
+                "FROM insider_trades ORDER BY instrument"
+            )
+        ).fetchall()
+
+    by_instrument = {r[0]: r for r in rows}
+    xom = by_instrument["XOM"]
+    assert xom[1] == filing_date
+    assert xom[2] == "0001610717-24-000004"
+    assert xom[3] == "Chief Financial Officer"
+    cvx = by_instrument["CVX"]
+    assert cvx[1] is None
+    assert cvx[2] is None
+    assert cvx[3] is None
 
 
 # ---------------------------------------------------------------------------

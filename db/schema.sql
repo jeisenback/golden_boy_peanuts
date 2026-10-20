@@ -178,6 +178,11 @@ CREATE INDEX IF NOT EXISTS idx_detected_events_detected_at
 -- One row per trade filing. (instrument, officer_name, trade_date) is not
 -- UNIQUE because the same officer may file multiple transactions on the same
 -- day for the same instrument (e.g., multiple grants/sales in a single Form 4).
+-- trade_date is the Form 4 transactionDate (when the insider traded).
+-- filing_date is when EDGAR accepted the filing — the earliest the trade was
+-- public. Backtests must key on filing_date. filing_date, accession_no and
+-- insider_role are NULL for Quiver rows and rows ingested before the columns
+-- existed (db/migrations/add_insider_filing_fields.sql).
 -- Hypertable candidate: partition by trade_date.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS insider_trades (
@@ -189,11 +194,17 @@ CREATE TABLE IF NOT EXISTS insider_trades (
     value_usd     NUMERIC(18, 2),
     officer_name  TEXT,
     source        TEXT            NOT NULL,
-    fetched_at    TIMESTAMPTZ     NOT NULL
+    fetched_at    TIMESTAMPTZ     NOT NULL,
+    filing_date   TIMESTAMPTZ,
+    accession_no  TEXT,
+    insider_role  TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_insider_trades_instrument_trade_date
     ON insider_trades (instrument, trade_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_insider_trades_instrument_filing_date
+    ON insider_trades (instrument, filing_date DESC);
 
 
 -- -----------------------------------------------------------------------------

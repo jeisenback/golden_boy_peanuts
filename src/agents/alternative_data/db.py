@@ -79,10 +79,10 @@ def write_insider_trades(records: list[InsiderTrade], engine: Engine) -> int:
     sql = text("""
         INSERT INTO insider_trades
             (instrument, trade_date, trade_type, shares, value_usd, officer_name,
-             source, fetched_at)
+             source, fetched_at, filing_date, accession_no, insider_role)
         VALUES
             (:instrument, :trade_date, :trade_type, :shares, :value_usd, :officer_name,
-             :source, :fetched_at)
+             :source, :fetched_at, :filing_date, :accession_no, :insider_role)
         """)
     rows = [
         {
@@ -94,6 +94,9 @@ def write_insider_trades(records: list[InsiderTrade], engine: Engine) -> int:
             "officer_name": r.officer_name,
             "source": r.source,
             "fetched_at": fetched_at,
+            "filing_date": r.filing_date,
+            "accession_no": r.accession_no,
+            "insider_role": r.insider_role,
         }
         for r in records
     ]
