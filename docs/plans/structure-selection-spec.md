@@ -81,6 +81,11 @@ least +2%) preceded stronger returns (significant at the episode level), and dee
 weaker returns (not significant). The mapping and the other weights are unchanged, so the maximum net is
 0.75, and the curve is still reported in `signals` so the forward test can validate or flip it.
 
+**Amendment (#254):** the insider weight is 0.0, not 0.15. Insider cluster purchases netted -1.7% at 63
+days and the production formula's winner/loser spread was +0.14% (#251). The mapping and the 2/3
+recentering are unchanged, so with the curve also at 0 the maximum net is 0.60, and the insider score is
+still computed by feature generation so a later pre-registered test can set a weight.
+
 Consequences:
 - For one instrument only one side can be above zero, so a run emits **at most one spread per instrument,
   at most 4 candidates**, not 8. A call and a put spread are opposite bets, and ranking both on the same

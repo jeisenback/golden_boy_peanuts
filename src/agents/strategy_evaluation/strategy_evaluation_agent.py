@@ -83,12 +83,17 @@ _SUPPLY_SHOCK_MEDIUM_THRESHOLD: float = 0.30  # probability > 30% = medium
 # significantly). The mapping and the other weights are kept, and the curve is still
 # reported in `signals`, so the forward test can validate or flip it. Do not set a
 # non-zero weight without evidence.
+#
+# _W_INSIDER is 0.0 (issue #254): neither insider test found support. Cluster purchases
+# netted -1.7% at 63 days (#251, H1), and the production formula separated winners from
+# losers by only +0.14% (#251, T2). The mapping and the recentering at _INSIDER_NEUTRAL are
+# kept, and the score is still computed upstream. Do not set a non-zero weight without evidence.
 # ---------------------------------------------------------------------------
 _CURVE_FULL: float = 0.05
 _W_CURVE: float = 0.0
 _W_SUPPLY: float = 0.35
 _W_TANKER: float = 0.25
-_W_INSIDER: float = 0.15
+_W_INSIDER: float = 0.0
 
 # Amplifier: magnitude-only signals scale the net but never set its direction.
 _W_DISPERSION: float = 0.30
@@ -137,12 +142,13 @@ def compute_direction_net(
             contango (positive) is bearish, clipped at +/- _CURVE_FULL. Carries weight
             _W_CURVE, currently 0.0, so it does not move the net (issue #240).
         insider_conviction_score: [0.0, 1.0] with _INSIDER_NEUTRAL (2/3, equal-dollar buys and
-            sells) neutral; above is bullish, below is bearish.
+            sells) neutral; above is bullish, below is bearish. Carries weight _W_INSIDER,
+            currently 0.0, so it does not move the net (issue #254).
         tanker_disruption_index: [0.0, 1.0], bullish only.
 
     Returns:
         Float in [-1.0, 1.0]; positive means bullish crude, 0.0 means no view. With the
-        curve weight at 0.0 the practical range is [-0.75, 0.75].
+        curve and insider weights at 0.0 the practical range is [-0.60, 0.60].
     """
     curve = 0.0
     if futures_curve_steepness is not None:

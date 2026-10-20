@@ -40,6 +40,12 @@ def curve_weighted(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(strategy_evaluation_agent, "_W_CURVE", 0.25)
 
 
+@pytest.fixture
+def insider_weighted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Give insiders their original 0.15 weight so the mapping stays tested (#251 sets it to 0)."""
+    monkeypatch.setattr(strategy_evaluation_agent, "_W_INSIDER", 0.15)
+
+
 def _make_vg(instrument: str, gap: float) -> VolatilityGap:
     return VolatilityGap(
         instrument=instrument,
@@ -175,10 +181,12 @@ class TestComputeDirectionNet:
     def test_extreme_curve_steepness_clips_to_full_strength(self) -> None:
         assert self._net(futures_curve_steepness=-0.5) == pytest.approx(0.25)
 
+    @pytest.mark.usefixtures("insider_weighted")
     def test_insider_buying_counts_for_xom(self) -> None:
         # (0.9 - 2/3) / (1 - 2/3) = 0.7 of full strength, times the 0.15 insider weight.
         assert self._net("XOM", insider_conviction_score=0.9) == pytest.approx(0.105)
 
+    @pytest.mark.usefixtures("insider_weighted")
     def test_equal_dollar_buys_and_sells_are_neutral(self) -> None:
         """Equal-dollar buying and selling scores 2/3, not 0.5, and must add nothing (#237)."""
         trades = [
@@ -208,14 +216,17 @@ class TestComputeDirectionNet:
         )
         assert strategy_evaluation_agent._INSIDER_NEUTRAL == pytest.approx(expected)
 
+    @pytest.mark.usefixtures("insider_weighted")
     def test_insider_selling_below_neutral_is_bearish_in_proportion(self) -> None:
         # (0.5 - 2/3) / (2/3) = -0.25 of full strength: sells outweigh half-weighted buys.
         assert self._net("CVX", insider_conviction_score=0.5) == pytest.approx(-0.0375)
 
+    @pytest.mark.usefixtures("insider_weighted")
     def test_insider_selling_counts_for_cvx(self) -> None:
         assert self._net("CVX", insider_conviction_score=0.0) == pytest.approx(-0.15)
 
     @pytest.mark.parametrize("instrument", ["USO", "XLE"])
+    @pytest.mark.usefixtures("insider_weighted")
     def test_insider_signal_ignored_for_etfs(self, instrument: str) -> None:
         assert self._net(instrument, insider_conviction_score=0.9) == 0.0
 
@@ -224,7 +235,7 @@ class TestComputeDirectionNet:
         net = self._net(supply_shock_probability=0.5, futures_curve_steepness=0.035)
         assert net == pytest.approx(0.0, abs=1e-9)
 
-    @pytest.mark.usefixtures("curve_weighted")
+    @pytest.mark.usefixtures("curve_weighted", "insider_weighted")
     def test_all_signals_maxed_bullish_for_xom_is_one(self) -> None:
         net = self._net(
             "XOM",
@@ -244,6 +255,11 @@ class TestComputeDirectionNet:
         assert self._net(supply_shock_probability=0.5, futures_curve_steepness=steepness) == (
             self._net(supply_shock_probability=0.5)
         )
+
+    @pytest.mark.parametrize("score", [0.0, 0.5, 2.0 / 3.0, 0.9, 1.0])
+    def test_insider_has_no_effect_at_the_shipped_weight(self, score: float) -> None:
+        """The insider weight is 0 until a pre-registered test supports it (#251)."""
+        assert self._net("XOM", insider_conviction_score=score) == self._net("XOM")
 
 
 class TestEvaluateStrategies:
@@ -267,6 +283,7 @@ class TestEvaluateStrategies:
         assert result
         assert all(isinstance(item, StrategyCandidate) for item in result)
 
+    @pytest.mark.usefixtures("insider_weighted")
     def test_candidates_sorted_by_edge_score_desc(self) -> None:
         # XOM and CVX also get insider buying (net 0.47); USO and XLE do not (net 0.35).
         fs = _make_feature_set([], supply_shock_probability=1.0, insider_conviction_score=0.9)
@@ -323,6 +340,7 @@ class TestEvaluateStrategies:
         assert len(instruments) == len(set(instruments))
         assert all(c.structure != "long_straddle" for c in result)
 
+    @pytest.mark.usefixtures("insider_weighted")
     def test_insider_selling_removes_equities_but_not_etfs(self) -> None:
         # XOM and CVX net 0.35 * 0.5 - 0.15 = 0.025, below the 0.10 threshold.
         fs = _make_feature_set([], supply_shock_probability=0.5, insider_conviction_score=0.0)
